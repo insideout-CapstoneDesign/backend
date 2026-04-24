@@ -3,7 +3,7 @@ name: 'Issue: 기능 요청 이슈'
 about: PR을 위하여 본인이 작업할 내용에 대한 이슈를 작성합니다.
 title: "[feat] 로그인 기능 구현"
 labels: "✨ Feature"
-assignees: sekong11
+assignees: ''
 
 ---
 

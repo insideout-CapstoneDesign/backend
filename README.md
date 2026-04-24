@@ -7,7 +7,7 @@
 - feat/...: 실제 작업 브랜치 (develop에서 분기점 생성 후 다시 dev으로 머지)
 
 ## 1️⃣ Commit Message Convention
-### 📌 <prefix>: <subject> (#<issue_number>)
+### Prefix: <subject> (#<issue_number>)
 예시)
 - feat: 구글 로그인 API 기능 구현 (#11)
 - fix: A* 알고리즘 무한 루프 버그 수정 (#10)

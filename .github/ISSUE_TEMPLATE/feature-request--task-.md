@@ -1,11 +1,14 @@
 ---
-name: 'Issue: 기능 요청 이슈'
-about: PR을 위하여 본인이 작업할 내용에 대한 이슈를 작성합니다.
-title: "[도메인명] 구현할 내용"
+name: Feature Request (Task)
+about: 구체적인 기능 구현을 정의할 때 사용합니다.
+title: "[Prefix] 구현할 내용"
 labels: "✨ Feature"
 assignees: ''
 
 ---
+
+## Epic
+> Related #에픽번호
 
 ## ✨어떤 기능인가요?
 >추가하려는 기능에 대한 간단한 설명을 해주세요

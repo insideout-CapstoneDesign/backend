@@ -1,0 +1,29 @@
+spring:
+  config:
+    import:
+      - optional:classpath:db.properties
+      - optional:classpath:security.yml
+
+  application:
+    name: backend
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        highlight_sql: true
+        format_sql: true
+        use_sql_comments: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE

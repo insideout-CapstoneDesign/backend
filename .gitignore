@@ -42,10 +42,7 @@ out/
 **/.DS_Store
 **/._.DS_Store
 
-src/main/resources/application.yml
-src/main/resources/application-*.yml
-!src/main/resources/application.yml
-!src/test/resources/application.yml
+src/main/resources/application-local.yml
 .env
 .db.local.env
 *.local.sql

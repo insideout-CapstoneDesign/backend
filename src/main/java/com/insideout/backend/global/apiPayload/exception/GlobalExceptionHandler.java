@@ -24,9 +24,7 @@ public class GlobalExceptionHandler {
         BaseErrorCode errorCode = e.getErrorCode();
         log.error("Custom Exception: {}", errorCode.getMessage());
 
-        return ResponseEntity
-                .status(errorCode.getStatus())
-                .body(ApiResponse.onFailure(errorCode));
+        return ApiResponse.onFailureEntity(errorCode);
     }
 
     // Validation 예외 처리 (MethodArgumentNotValidException)
@@ -40,18 +38,14 @@ public class GlobalExceptionHandler {
         );
 
         // GeneralErrorCode.BAD_REQUEST 등을 사용하여 응답
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.onFailure(GeneralErrorCode.BAD_REQUEST, errors));
+        return ApiResponse.onFailureEntity(GeneralErrorCode.BAD_REQUEST, errors);
     }
 
     // JSON 파싱 에러 (HttpMessageNotReadableException)
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
         log.error("HTTP Message Not Readable: {}", e.getMessage());
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.onFailure(GeneralErrorCode.BAD_REQUEST));
+        return ApiResponse.onFailureEntity(GeneralErrorCode.BAD_REQUEST);
     }
 
     // 그 외 정의되지 않은 모든 예외 (500)
@@ -60,8 +54,7 @@ public class GlobalExceptionHandler {
         log.error("Internal Server Error: ", e); // 전체 스택트레이스 로그 기록
 
         BaseErrorCode errorCode = GeneralErrorCode.INTERNAL_SERVER_ERROR;
-        return ResponseEntity
-                .status(errorCode.getStatus())
-                .body(ApiResponse.onFailure(errorCode, e.getMessage())); // 에러 메시지를 result에 담아줌
+        // 에러 메시지를 포함해서 반환
+        return ApiResponse.onFailureEntity(GeneralErrorCode.INTERNAL_SERVER_ERROR);
     }
 }

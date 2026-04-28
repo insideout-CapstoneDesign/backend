@@ -7,6 +7,7 @@ spring:
 
   config:
     import:
+      - optional:classpath:db.properties
       - optional:classpath:security.yml
 
   jpa:

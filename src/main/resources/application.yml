@@ -1,18 +1,15 @@
 spring:
-  config:
-    import:
-      - optional:classpath:db.properties
-      - optional:classpath:security.yml
+  profiles:
+    active: local
 
   application:
     name: backend
 
-  datasource:
-    driver-class-name: org.postgresql.Driver
+  config:
+    import:
+      - optional:classpath:security.yml
 
   jpa:
-    hibernate:
-      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -22,8 +19,3 @@ spring:
 
 server:
   port: 8080
-
-logging:
-  level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE

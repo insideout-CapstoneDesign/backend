@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
 
         Map<String, String> errors = new HashMap<>();
         e.getBindingResult().getFieldErrors().forEach(error ->
-                errors.put(error.getField(), error.getDefaultMessage())
+                errors.putIfAbsent(error.getField(), error.getDefaultMessage())
         );
 
         // GeneralErrorCode.BAD_REQUEST 등을 사용하여 응답

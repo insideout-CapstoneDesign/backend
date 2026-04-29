@@ -1,10 +1,12 @@
 package com.insideout.backend.global.security.jwt;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.util.Date;
+import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +17,7 @@ public class JwtTokenProvider {
 	private static final String ACCESS = "access";
 	private static final String REFRESH = "refresh";
 
-	private final Key key;
+	private final SecretKey key;
 	private final long accessTokenExpirationMs;
 	private final long refreshTokenExpirationMs;
 
@@ -37,6 +39,23 @@ public class JwtTokenProvider {
 		return generateToken(subject, refreshTokenExpirationMs, REFRESH);
 	}
 
+	public boolean validateToken(String token) {
+		try {
+			parseClaims(token);
+			return true;
+		} catch (JwtException | IllegalArgumentException e) {
+			return false;
+		}
+	}
+
+	public String getSubject(String token) {
+		return parseClaims(token).getSubject();
+	}
+
+	public String getTokenType(String token) {
+		return parseClaims(token).get(TOKEN_TYPE_CLAIM, String.class);
+	}
+
 	private String generateToken(String subject, long expirationMs, String tokenType) {
 		Date now = new Date();
 		Date expiry = new Date(now.getTime() + expirationMs);
@@ -48,5 +67,13 @@ public class JwtTokenProvider {
 			.claim(TOKEN_TYPE_CLAIM, tokenType)
 			.signWith(key)
 			.compact();
+	}
+
+	private Claims parseClaims(String token) {
+		return Jwts.parser()
+			.verifyWith(key)
+			.build()
+			.parseSignedClaims(token)
+			.getPayload();
 	}
 }

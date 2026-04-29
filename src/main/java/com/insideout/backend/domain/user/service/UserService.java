@@ -12,6 +12,7 @@ import com.insideout.backend.domain.user.repository.UserRepository;
 import com.insideout.backend.global.security.jwt.JwtTokenProvider;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,7 +42,19 @@ public class UserService {
 			.globalRole(GlobalRole.END_USER)
 			.build();
 
-		User saved = userRepository.save(user);
+			User saved;
+			try {
+				saved = userRepository.saveAndFlush(user);
+			} catch (DataIntegrityViolationException e) {
+				// 선조회 이후 동시 요청 경합으로 unique 제약 위반이 날 수 있어 DB 예외를 도메인 예외로 변환한다.
+				if (userRepository.existsByEmail(request.email())) {
+					throw new UserException(UserErrorCode.EMAIL_ALREADY_EXISTS);
+				}
+				if (userRepository.existsByDisplayName(request.displayName())) {
+					throw new UserException(UserErrorCode.DISPLAY_NAME_ALREADY_EXISTS);
+				}
+				throw e;
+			}
 
 		return new SignupResponse(
 			saved.getId(),
@@ -51,14 +64,14 @@ public class UserService {
 		);
 	}
 
-	@Transactional(readOnly = true)
-	public LoginResponse login(LoginRequest request) {
-		User user = userRepository.findByEmail(request.email())
-			.orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));
+		@Transactional(readOnly = true)
+		public LoginResponse login(LoginRequest request) {
+			User user = userRepository.findByEmail(request.email())
+				.orElseThrow(() -> new UserException(UserErrorCode.LOGIN_FAILED));
 
-		if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-			throw new UserException(UserErrorCode.INVALID_PASSWORD);
-		}
+			if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+				throw new UserException(UserErrorCode.LOGIN_FAILED);
+			}
 
 		String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail());
 		String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());

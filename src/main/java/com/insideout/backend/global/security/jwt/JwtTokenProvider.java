@@ -1,7 +1,6 @@
 package com.insideout.backend.global.security.jwt;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -11,6 +10,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class JwtTokenProvider {
+
+	private static final String TOKEN_TYPE_CLAIM = "tokenType";
+	private static final String ACCESS = "access";
+	private static final String REFRESH = "refresh";
 
 	private final Key key;
 	private final long accessTokenExpirationMs;
@@ -27,22 +30,23 @@ public class JwtTokenProvider {
 	}
 
 	public String generateAccessToken(String subject) {
-		return generateToken(subject, accessTokenExpirationMs);
+		return generateToken(subject, accessTokenExpirationMs, ACCESS);
 	}
 
 	public String generateRefreshToken(String subject) {
-		return generateToken(subject, refreshTokenExpirationMs);
+		return generateToken(subject, refreshTokenExpirationMs, REFRESH);
 	}
 
-	private String generateToken(String subject, long expirationMs) {
+	private String generateToken(String subject, long expirationMs, String tokenType) {
 		Date now = new Date();
 		Date expiry = new Date(now.getTime() + expirationMs);
 
 		return Jwts.builder()
-			.setSubject(subject)
-			.setIssuedAt(now)
-			.setExpiration(expiry)
-			.signWith(key, SignatureAlgorithm.HS256)
+			.subject(subject)
+			.issuedAt(now)
+			.expiration(expiry)
+			.claim(TOKEN_TYPE_CLAIM, tokenType)
+			.signWith(key)
 			.compact();
 	}
 }

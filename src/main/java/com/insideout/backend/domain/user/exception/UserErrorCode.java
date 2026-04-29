@@ -14,6 +14,11 @@ public enum UserErrorCode implements BaseErrorCode {
         "USER409_1",
         "이미 사용 중인 이메일입니다."
     ),
+    DISPLAY_NAME_ALREADY_EXISTS(
+        HttpStatus.CONFLICT,
+        "USER409_2",
+        "이미 사용 중인 닉네임입니다."
+    ),
     USER_NOT_FOUND(
         HttpStatus.NOT_FOUND,
         "USER404_1",

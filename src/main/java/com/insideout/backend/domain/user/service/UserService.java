@@ -25,11 +25,14 @@ public class UserService {
 	private final JwtTokenProvider jwtTokenProvider;
 
 
-	@Transactional
-	public SignupResponse signup(SignupRequest request) {
-		if (userRepository.existsByEmail(request.email())) {
-			throw new UserException(UserErrorCode.EMAIL_ALREADY_EXISTS);
-		}
+		@Transactional
+		public SignupResponse signup(SignupRequest request) {
+			if (userRepository.existsByEmail(request.email())) {
+				throw new UserException(UserErrorCode.EMAIL_ALREADY_EXISTS);
+			}
+			if (userRepository.existsByDisplayName(request.displayName())) {
+				throw new UserException(UserErrorCode.DISPLAY_NAME_ALREADY_EXISTS);
+			}
 
 		User user = User.builder()
 			.email(request.email())

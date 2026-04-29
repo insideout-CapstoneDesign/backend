@@ -39,6 +39,10 @@ public class JwtTokenProvider {
 		return generateToken(subject, refreshTokenExpirationMs, REFRESH);
 	}
 
+	public Claims getValidatedClaims(String token) {
+		return parseClaims(token);
+	}
+
 	public boolean validateToken(String token) {
 		try {
 			parseClaims(token);

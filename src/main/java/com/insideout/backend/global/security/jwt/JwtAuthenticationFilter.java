@@ -1,5 +1,7 @@
 package com.insideout.backend.global.security.jwt;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +15,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
@@ -36,23 +39,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		if (authorization != null && authorization.startsWith(BEARER_PREFIX)) {
 			String token = authorization.substring(BEARER_PREFIX.length());
 
-			if (jwtTokenProvider.validateToken(token)
-				&& ACCESS_TOKEN_TYPE.equals(jwtTokenProvider.getTokenType(token))
-				&& SecurityContextHolder.getContext().getAuthentication() == null) {
+			try {
+				Claims claims = jwtTokenProvider.getValidatedClaims(token);
+				String tokenType = claims.get("tokenType", String.class);
+				String subject = claims.getSubject();
 
-				String subject = jwtTokenProvider.getSubject(token);
+				if (ACCESS_TOKEN_TYPE.equals(tokenType)
+					&& StringUtils.hasText(subject)
+					&& SecurityContextHolder.getContext().getAuthentication() == null) {
 
-				UsernamePasswordAuthenticationToken authentication =
-					new UsernamePasswordAuthenticationToken(
-						subject,
-						null,
-						Collections.emptyList()
+					UsernamePasswordAuthenticationToken authentication =
+						new UsernamePasswordAuthenticationToken(
+							subject,
+							null,
+							Collections.emptyList()
+						);
+					authentication.setDetails(
+						new WebAuthenticationDetailsSource().buildDetails(request)
 					);
-				authentication.setDetails(
-					new WebAuthenticationDetailsSource().buildDetails(request)
-				);
-
-				SecurityContextHolder.getContext().setAuthentication(authentication);
+					SecurityContextHolder.getContext().setAuthentication(authentication);
+				}
+			} catch (JwtException | IllegalArgumentException ignored) {
+				// 유효하지 않은 토큰은 인증을 세팅하지 않고 다음 필터로 진행한다.
 			}
 		}
 

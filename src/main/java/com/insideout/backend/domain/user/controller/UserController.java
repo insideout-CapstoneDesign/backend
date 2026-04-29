@@ -1,6 +1,8 @@
 package com.insideout.backend.domain.user.controller;
 
+import com.insideout.backend.domain.user.dto.request.LoginRequest;
 import com.insideout.backend.domain.user.dto.request.SignupRequest;
+import com.insideout.backend.domain.user.dto.response.LoginResponse;
 import com.insideout.backend.domain.user.dto.response.SignupResponse;
 import com.insideout.backend.domain.user.service.UserService;
 import jakarta.validation.Valid;
@@ -20,4 +22,11 @@ public class UserController {
 	public SignupResponse signup(@Valid @RequestBody SignupRequest request) {
 		return userService.signup(request);
 	}
+
+	@PostMapping("/login")
+	@ResponseStatus(HttpStatus.OK)
+	public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+		return userService.login(request);
+	}
+
 }

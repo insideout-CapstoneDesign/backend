@@ -4,6 +4,9 @@
 -- 3) 길이 체크 제약 추가
 
 -- 10자 초과 닉네임은 우선 10자로 자른다.
+ALTER TABLE app_user
+    DROP CONSTRAINT IF EXISTS uq_app_user_display_name;
+
 UPDATE app_user
 SET display_name = LEFT(display_name, 10)
 WHERE CHAR_LENGTH(display_name) > 10;
@@ -24,9 +27,6 @@ SET display_name = CONCAT(
 FROM ranked
 WHERE u.id = ranked.id
   AND ranked.rn > 1;
-
-ALTER TABLE app_user
-    DROP CONSTRAINT IF EXISTS uq_app_user_display_name;
 
 ALTER TABLE app_user
     ADD CONSTRAINT uq_app_user_display_name UNIQUE (display_name);

@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -61,8 +62,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 					);
 					SecurityContextHolder.getContext().setAuthentication(authentication);
 				}
-			} catch (JwtException | IllegalArgumentException ignored) {
-				// 유효하지 않은 토큰은 인증을 세팅하지 않고 다음 필터로 진행한다.
+			} catch (JwtException | IllegalArgumentException | UsernameNotFoundException ignored) {
+				// 유효하지 않거나 계정이 없는 토큰은 인증을 세팅하지 않고 다음 필터로 진행한다.
 			}
 		}
 

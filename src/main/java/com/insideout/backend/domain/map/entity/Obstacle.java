@@ -16,6 +16,7 @@ import org.locationtech.jts.geom.Geometry;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -133,6 +134,11 @@ public class Obstacle {
     public Obstacle(UUID tenantId, Building building, Floor floor, String kind, Geometry geomPx, List<UUID> affectedEdgeIds, BigDecimal extraCost, boolean isBlocking, OffsetDateTime activeFrom, OffsetDateTime activeTo, String note) {
         BigDecimal finalExtraCost = extraCost != null ? extraCost : BigDecimal.ZERO;
 
+        // 필수 필드 null 선검증 (DB nullable=false 콜럼과 동기화)
+        Objects.requireNonNull(tenantId, "tenantId must not be null");
+        Objects.requireNonNull(building, "building must not be null");
+        Objects.requireNonNull(kind, "kind must not be null");
+
         if (finalExtraCost.signum() < 0) {
             throw new MapException(MapErrorCode.NEGATIVE_EXTRA_COST);
         }
@@ -140,7 +146,7 @@ public class Obstacle {
             throw new MapException(MapErrorCode.INVALID_ACTIVE_PERIOD);
         }
         // floor.getTenantId()는 UUID 직접 필드이므로 생성자에서 안전하게 검증 가능
-        if (tenantId != null && floor != null && floor.getTenantId() != null
+        if (floor != null && floor.getTenantId() != null
                 && !tenantId.equals(floor.getTenantId())) {
             throw new MapException(MapErrorCode.OBSTACLE_TENANT_MISMATCH);
         }

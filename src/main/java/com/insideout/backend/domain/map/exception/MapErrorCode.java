@@ -48,6 +48,16 @@ public enum MapErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "MAP400_8",
         "Zone의 tenantId가 mapVersion 또는 floor의 tenantId와 일치하지 않습니다."
+    ),
+    OBSTACLE_TENANT_MISMATCH(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_9",
+        "장애물의 tenantId가 floor 또는 building의 tenant와 일치하지 않습니다."
+    ),
+    OBSTACLE_BUILDING_MISMATCH(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_10",
+        "장애물의 floor가 해당 building에 속하지 않습니다."
     );
 
     private final HttpStatus status;

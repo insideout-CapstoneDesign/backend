@@ -12,6 +12,7 @@ import org.locationtech.jts.geom.Polygon;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -97,12 +98,12 @@ public class Zone {
     //              throw new MapException(MapErrorCode.ZONE_TENANT_MISMATCH);
     @Builder
     public Zone(UUID tenantId, MapVersion mapVersion, Floor floor, ZoneKind kind, String name, Polygon geomPx, Map<String, Object> properties) {
-        this.tenantId = tenantId;
-        this.mapVersion = mapVersion;
-        this.floor = floor;
-        this.kind = kind;
+        this.tenantId = Objects.requireNonNull(tenantId, "tenantId must not be null");
+        this.mapVersion = Objects.requireNonNull(mapVersion, "mapVersion must not be null");
+        this.floor = Objects.requireNonNull(floor, "floor must not be null");
+        this.kind = Objects.requireNonNull(kind, "kind must not be null");
         this.name = name;
-        this.geomPx = geomPx;
+        this.geomPx = Objects.requireNonNull(geomPx, "geomPx must not be null");
         this.properties = properties != null ? properties : Map.of();
     }
 }

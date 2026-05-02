@@ -120,6 +120,25 @@ public class Node {
     //       if (!floor.getBuilding().getId().equals(mapVersion.getBuilding().getId())) {
     //           throw new MapException(MapErrorCode.BUILDING_MISMATCH);
     //       }
+
+//    // NodeService 또는 NodeFactory 내부 (트랜잭션 컨텍스트 안)
+//    public Node createNode(CreateNodeRequest request) {
+//        MapVersion mapVersion = mapVersionRepository.findById(request.mapVersionId())
+//                .orElseThrow(...);
+//        Floor floor = floorRepository.findById(request.floorId())
+//                .orElseThrow(...);
+//
+//        // Building 일관성 검증 — 두 엔티티가 이미 로드된 상태이므로 안전
+//        if (!floor.getBuilding().getId().equals(mapVersion.getBuilding().getId())) {
+//            throw new MapException(MapErrorCode.BUILDING_MISMATCH);
+//        }
+//
+//        return nodeRepository.save(Node.builder()
+//                .mapVersion(mapVersion)
+//                .floor(floor)
+//        ...
+//        .build());
+//    }
     @Builder
     public Node(UUID tenantId, MapVersion mapVersion, Floor floor, String kindCode, Point geomPx, Point geomWgs84, String nameKo, Map<String, Object> properties, String source, UUID aiDetectionId) {
         this.tenantId = tenantId;

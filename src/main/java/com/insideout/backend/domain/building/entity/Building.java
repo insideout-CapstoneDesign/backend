@@ -9,6 +9,9 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Polygon;
+import jakarta.validation.constraints.Min;
+import com.insideout.backend.domain.building.exception.BuildingErrorCode;
+import com.insideout.backend.domain.building.exception.BuildingException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -63,6 +66,7 @@ public class Building {
     /**
      * 건물 내부에 접근할 수 있는 주출입구/부출입구의 개수.
      */
+    @Min(0)
     @Column(name = "entrance_count", nullable = false)
     private int entranceCount;
 
@@ -99,6 +103,9 @@ public class Building {
 
     @Builder
     public Building(Tenant tenant, String name, String address, Polygon footprint, int entranceCount, Map<String, Object> meta, String externalApiId) {
+        if (entranceCount < 0) {
+            throw new BuildingException(BuildingErrorCode.NEGATIVE_ENTRANCE_COUNT);
+        }
         this.tenant = tenant;
         this.name = name;
         this.address = address;

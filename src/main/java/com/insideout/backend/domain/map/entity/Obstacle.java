@@ -2,6 +2,8 @@ package com.insideout.backend.domain.map.entity;
 
 import com.insideout.backend.domain.building.entity.Building;
 import com.insideout.backend.domain.building.entity.Floor;
+import com.insideout.backend.domain.map.exception.MapErrorCode;
+import com.insideout.backend.domain.map.exception.MapException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -117,13 +119,22 @@ public class Obstacle {
 
     @Builder
     public Obstacle(UUID tenantId, Building building, Floor floor, String kind, Geometry geomPx, List<UUID> affectedEdgeIds, BigDecimal extraCost, boolean isBlocking, OffsetDateTime activeFrom, OffsetDateTime activeTo, String note) {
+        BigDecimal finalExtraCost = extraCost != null ? extraCost : BigDecimal.ZERO;
+
+        if (finalExtraCost.signum() < 0) {
+            throw new MapException(MapErrorCode.NEGATIVE_EXTRA_COST);
+        }
+        if (activeFrom != null && activeTo != null && activeFrom.isAfter(activeTo)) {
+            throw new MapException(MapErrorCode.INVALID_ACTIVE_PERIOD);
+        }
+
         this.tenantId = tenantId;
         this.building = building;
         this.floor = floor;
         this.kind = kind;
         this.geomPx = geomPx;
         this.affectedEdgeIds = affectedEdgeIds;
-        this.extraCost = extraCost != null ? extraCost : BigDecimal.ZERO;
+        this.extraCost = finalExtraCost;
         this.isBlocking = isBlocking;
         this.activeFrom = activeFrom;
         this.activeTo = activeTo;

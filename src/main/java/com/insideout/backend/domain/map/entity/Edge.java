@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.LineString;
+import com.insideout.backend.domain.map.exception.MapErrorCode;
+import com.insideout.backend.domain.map.exception.MapException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -123,6 +125,15 @@ public class Edge {
 
     @Builder
     public Edge(UUID tenantId, MapVersion mapVersion, Node fromNode, Node toNode, String kindCode, LineString geomPx, LineString geomWgs84, BigDecimal lengthM, boolean isDirected, BigDecimal baseWeight, Map<String, Object> properties, String source, UUID aiDetectionId) {
+        BigDecimal finalBaseWeight = baseWeight != null ? baseWeight : BigDecimal.ONE;
+        
+        if (finalBaseWeight.signum() <= 0) {
+            throw new MapException(MapErrorCode.INVALID_BASE_WEIGHT);
+        }
+        if (lengthM != null && lengthM.signum() < 0) {
+            throw new MapException(MapErrorCode.NEGATIVE_LENGTH);
+        }
+
         this.tenantId = tenantId;
         this.mapVersion = mapVersion;
         this.fromNode = fromNode;
@@ -132,7 +143,7 @@ public class Edge {
         this.geomWgs84 = geomWgs84;
         this.lengthM = lengthM;
         this.isDirected = isDirected;
-        this.baseWeight = baseWeight != null ? baseWeight : BigDecimal.ONE;
+        this.baseWeight = finalBaseWeight;
         this.properties = properties != null ? properties : Map.of();
         this.source = source != null ? source : "manual";
         this.aiDetectionId = aiDetectionId;

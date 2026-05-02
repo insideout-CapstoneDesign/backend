@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 실내외 길찾기(Navigation) 기능을 담당하는 핵심 서비스.
  * 
- * <p>Repository를 직접 참조하지 않고, MapQueryService 등 
+ * <p>Repository를 직접 참조하지 않고, MapQueryFacade 등
  * 다른 도메인의 Service를 주입받아 필요한 데이터를 가져옵니다.
  */
 @Service

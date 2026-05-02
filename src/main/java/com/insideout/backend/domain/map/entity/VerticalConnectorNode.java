@@ -44,6 +44,21 @@ public class VerticalConnectorNode {
     @JoinColumn(name = "floor_id", nullable = false)
     private Floor floor;
 
+    // TODO: VerticalConnectorNode 생성 시 아래 3가지 불변식을 Service에서 반드시 검증해야 합니다.
+    //       LAZY 로딩 특성상 이 생성자 안에서 연관 엔티티를 호출하면 LazyInitializationException이 발생합니다.
+    //       Service에서 connector, node, floor를 완전히 로딩한 후 검증하세요:
+    //
+    //       1. floor가 node의 floor와 일치하는지:
+    //          if (!node.getFloor().getId().equals(floor.getId()))
+    //              throw new MapException(MapErrorCode.VERTICAL_CONNECTOR_FLOOR_MISMATCH);
+    //
+    //       2. tenantId가 connector의 tenantId와 일치하는지:
+    //          if (!tenantId.equals(connector.getTenantId()))
+    //              throw new MapException(MapErrorCode.VERTICAL_CONNECTOR_TENANT_MISMATCH);
+    //
+    //       3. tenantId가 node의 tenantId와 일치하는지:
+    //          if (!tenantId.equals(node.getTenantId()))
+    //              throw new MapException(MapErrorCode.VERTICAL_CONNECTOR_TENANT_MISMATCH);
     @Builder
     public VerticalConnectorNode(UUID tenantId, VerticalConnector connector, Node node, Floor floor) {
         this.tenantId = tenantId;

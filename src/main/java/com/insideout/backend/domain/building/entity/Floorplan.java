@@ -1,6 +1,8 @@
 package com.insideout.backend.domain.building.entity;
 
 import com.insideout.backend.domain.user.entity.User;
+import com.insideout.backend.domain.building.exception.BuildingErrorCode;
+import com.insideout.backend.domain.building.exception.BuildingException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -97,6 +99,13 @@ public class Floorplan {
 
     @Builder
     public Floorplan(UUID tenantId, Floor floor, String imageUrl, String imageSha256, int widthPx, int heightPx, User uploadedBy, boolean isCurrent) {
+        if (widthPx <= 0 || heightPx <= 0) {
+            throw new BuildingException(BuildingErrorCode.INVALID_FLOORPLAN_DIMENSIONS);
+        }
+        if (tenantId != null && floor != null && floor.getTenantId() != null 
+                && !tenantId.equals(floor.getTenantId())) {
+            throw new BuildingException(BuildingErrorCode.TENANT_MISMATCH);
+        }
         this.tenantId = tenantId;
         this.floor = floor;
         this.imageUrl = imageUrl;

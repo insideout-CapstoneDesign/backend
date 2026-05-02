@@ -95,12 +95,21 @@ public class MapVersion {
 
     @Builder
     public MapVersion(UUID tenantId, Building building, String label, String status, UUID parentVersionId, User createdBy, OffsetDateTime publishedAt) {
+        String finalStatus = status != null ? status : "draft";
+        OffsetDateTime finalPublishedAt = publishedAt;
+
+        if ("published".equals(finalStatus) && finalPublishedAt == null) {
+            finalPublishedAt = OffsetDateTime.now();
+        } else if (finalPublishedAt != null && !"published".equals(finalStatus)) {
+            finalStatus = "published";
+        }
+
         this.tenantId = tenantId;
         this.building = building;
         this.label = label;
-        this.status = status != null ? status : "draft";
+        this.status = finalStatus;
         this.parentVersionId = parentVersionId;
         this.createdBy = createdBy;
-        this.publishedAt = publishedAt;
+        this.publishedAt = finalPublishedAt;
     }
 }

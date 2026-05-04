@@ -5,9 +5,10 @@ import com.insideout.backend.domain.user.dto.request.SignupRequest;
 import com.insideout.backend.domain.user.dto.response.LoginResponse;
 import com.insideout.backend.domain.user.dto.response.SignupResponse;
 import com.insideout.backend.domain.user.service.UserService;
+import com.insideout.backend.global.apiPayload.ApiResponse;
+import com.insideout.backend.global.apiPayload.code.GeneralSuccessCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,15 +19,13 @@ public class UserController {
 	private final UserService userService;
 
 	@PostMapping("/signup")
-	@ResponseStatus(HttpStatus.CREATED)
-	public SignupResponse signup(@Valid @RequestBody SignupRequest request) {
-		return userService.signup(request);
+	public ApiResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
+		return ApiResponse.success(GeneralSuccessCode.CREATED, userService.signup(request));
 	}
 
 	@PostMapping("/login")
-	@ResponseStatus(HttpStatus.OK)
-	public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-		return userService.login(request);
+	public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+		return ApiResponse.success(GeneralSuccessCode.OK, userService.login(request));
 	}
 
 }

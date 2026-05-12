@@ -20,3 +20,13 @@ spring:
 
 server:
   port: 8080
+
+storage:
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    region: ${S3_REGION:ap-northeast-2}
+    access-key: ${S3_ACCESS_KEY}
+    secret-key: ${S3_SECRET_KEY}
+    bucket: ${S3_BUCKET}
+    path-style-access: true
+

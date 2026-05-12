@@ -7,7 +7,9 @@ public record NavigationResponseDto(
         CoordinateDto requestedDestination,
         CoordinateDto routedDestination,
         IndoorInfoDto indoor,
-        List<RouteDto> routes
+        List<RouteDto> routes,
+        List<RouteMode> notFoundRouteTypes,
+        String message
 ) {
 
     public record CoordinateDto(

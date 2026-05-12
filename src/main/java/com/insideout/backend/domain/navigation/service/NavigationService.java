@@ -17,14 +17,15 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto
 import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
 import com.insideout.backend.global.apiPayload.exception.ProjectException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
@@ -43,6 +44,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class NavigationService {
 
     private static final String TMAP_TRANSIT_ROUTES_URL = "https://apis.openapi.sk.com/transit/routes";
@@ -50,7 +52,7 @@ public class NavigationService {
     private static final String TMAP_WALK_ROUTES_URL = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1";
 
     private final MapQueryFacade mapQueryFacade;
-    private final RestTemplateBuilder restTemplateBuilder;
+    private final RestTemplate restTemplate;
 
     @Value("${tmap.api.key}")
     private String tmapApiKey;
@@ -59,25 +61,50 @@ public class NavigationService {
         RouteTarget target = resolveRouteTarget(request);
         EnumSet<RouteType> routeTypes = resolveRouteTypes(request);
         List<RouteDto> routes = new ArrayList<>();
+        List<RouteMode> notFoundRouteTypes = new ArrayList<>();
 
         if (routeTypes.contains(RouteType.TRANSIT)) {
-            routes.addAll(findTransitRouteDtos(request, target));
+            List<RouteDto> transitRoutes = findTransitRouteDtos(request, target);
+            if (transitRoutes.isEmpty()) {
+                notFoundRouteTypes.add(RouteMode.TRANSIT);
+            }
+            routes.addAll(transitRoutes);
         }
         if (routeTypes.contains(RouteType.CAR)) {
-            routes.add(findCarRouteDto(request, target, RouteOption.RECOMMENDED, 0));
-            routes.add(findCarRouteDto(request, target, RouteOption.MIN_TIME, 2));
+            int beforeSize = routes.size();
+            findCarRouteDto(request, target, RouteOption.RECOMMENDED, 0).ifPresent(routes::add);
+            findCarRouteDto(request, target, RouteOption.MIN_TIME, 2).ifPresent(routes::add);
+            if (routes.size() == beforeSize) {
+                notFoundRouteTypes.add(RouteMode.CAR);
+            }
         }
         if (routeTypes.contains(RouteType.WALK)) {
-            routes.add(findWalkRouteDto(request, target, RouteOption.SHORTEST, "10"));
-            routes.add(findWalkRouteDto(request, target, RouteOption.COMFORTABLE, "30"));
+            int beforeSize = routes.size();
+            findWalkRouteDto(request, target, RouteOption.SHORTEST, "10").ifPresent(routes::add);
+            findWalkRouteDto(request, target, RouteOption.COMFORTABLE, "30").ifPresent(routes::add);
+            if (routes.size() == beforeSize) {
+                notFoundRouteTypes.add(RouteMode.WALK);
+            }
         }
 
         return new NavigationResponseDto(
                 new CoordinateDto(request.endX(), request.endY(), request.endName()),
                 new CoordinateDto(target.endX(), target.endY(), target.endName()),
                 target.toIndoorInfo(),
-                routes
+                routes,
+                notFoundRouteTypes,
+                resolveRouteMessage(routes, notFoundRouteTypes)
         );
+    }
+
+    private String resolveRouteMessage(List<RouteDto> routes, List<RouteMode> notFoundRouteTypes) {
+        if (notFoundRouteTypes.isEmpty()) {
+            return null;
+        }
+        if (routes.isEmpty()) {
+            return "경로를 찾을 수 없습니다.";
+        }
+        return "일부 이동 수단의 경로를 찾을 수 없습니다.";
     }
 
     public NavigationResponseDto findTransitRoutes(NavigationRequestDto request) {
@@ -134,7 +161,7 @@ public class NavigationService {
         return parseTransitRoutes(response, target);
     }
 
-    private RouteDto findCarRouteDto(
+    private Optional<RouteDto> findCarRouteDto(
             NavigationRequestDto request,
             RouteTarget target,
             RouteOption routeOption,
@@ -150,7 +177,7 @@ public class NavigationService {
         return parseFeatureCollectionRoute(response, RouteMode.CAR, routeOption, LegMode.CAR, target);
     }
 
-    private RouteDto findWalkRouteDto(
+    private Optional<RouteDto> findWalkRouteDto(
             NavigationRequestDto request,
             RouteTarget target,
             RouteOption routeOption,
@@ -178,8 +205,6 @@ public class NavigationService {
     }
 
     private JsonNode postForJson(String url, Map<String, Object> body) {
-        RestTemplate restTemplate = restTemplateBuilder.build();
-
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -188,11 +213,21 @@ public class NavigationService {
         try {
             JsonNode response = restTemplate.postForObject(url, new HttpEntity<>(body, headers), JsonNode.class);
             if (response == null || response.isNull()) {
+                log.warn("TMAP API returned empty response. url={}", url);
                 throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
             }
             return response;
+        } catch (RestClientResponseException e) {
+            log.warn(
+                    "TMAP API returned error. url={}, status={}, body={}",
+                    url,
+                    e.getStatusCode(),
+                    abbreviate(e.getResponseBodyAsString())
+            );
+            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY, e);
         } catch (RestClientException e) {
-            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
+            log.warn("TMAP API request failed. url={}", url, e);
+            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY, e);
         }
     }
 
@@ -202,8 +237,12 @@ public class NavigationService {
                 .path("plan")
                 .path("itineraries");
 
-        if (!itineraries.isArray() || itineraries.isEmpty()) {
+        if (!itineraries.isArray()) {
+            log.warn("TMAP transit response has invalid structure. response={}", abbreviate(response.toString()));
             throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
+        }
+        if (itineraries.isEmpty()) {
+            return List.of();
         }
 
         List<RouteDto> routes = new ArrayList<>();
@@ -294,7 +333,7 @@ public class NavigationService {
         return steps;
     }
 
-    private RouteDto parseFeatureCollectionRoute(
+    private Optional<RouteDto> parseFeatureCollectionRoute(
             JsonNode response,
             RouteMode routeMode,
             RouteOption routeOption,
@@ -302,8 +341,12 @@ public class NavigationService {
             RouteTarget target
     ) {
         JsonNode features = response.path("features");
-        if (!features.isArray() || features.isEmpty()) {
+        if (!features.isArray()) {
+            log.warn("TMAP {} response has invalid structure. response={}", routeMode, abbreviate(response.toString()));
             throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
+        }
+        if (features.isEmpty()) {
+            return Optional.empty();
         }
 
         JsonNode summary = features.get(0).path("properties");
@@ -324,14 +367,14 @@ public class NavigationService {
         ));
         addIndoorLegIfNeeded(legs, target);
 
-        return new RouteDto(
+        return Optional.of(new RouteDto(
                 routeMode,
                 routeOption,
                 totalTimeSeconds,
                 totalDistanceMeters,
                 formatDuration(totalTimeSeconds, target.includesIndoor()),
                 legs
-        );
+        ));
     }
 
     private List<StepDto> parseFeatureSteps(JsonNode features) {
@@ -487,6 +530,13 @@ public class NavigationService {
 
     private Double firstNonNull(Double first, Double second) {
         return first != null ? first : second;
+    }
+
+    private String abbreviate(String value) {
+        if (value == null || value.length() <= 500) {
+            return value;
+        }
+        return value.substring(0, 500) + "...";
     }
 
     private String getNullableText(JsonNode node) {

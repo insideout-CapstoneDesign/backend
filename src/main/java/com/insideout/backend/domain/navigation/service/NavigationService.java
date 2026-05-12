@@ -71,24 +71,37 @@ public class NavigationService {
         List<RouteMode> notFoundRouteTypes = new ArrayList<>();
 
         if (routeTypes.contains(RouteType.TRANSIT)) {
-            List<RouteDto> transitRoutes = findTransitRouteDtos(request, target);
-            if (transitRoutes.isEmpty()) {
+            try {
+                List<RouteDto> transitRoutes = findTransitRouteDtos(request, target);
+                if (transitRoutes.isEmpty()) {
+                    notFoundRouteTypes.add(RouteMode.TRANSIT);
+                }
+                routes.addAll(transitRoutes);
+            } catch (NavigationException e) {
+                log.warn("TRANSIT route lookup failed.", e);
                 notFoundRouteTypes.add(RouteMode.TRANSIT);
             }
-            routes.addAll(transitRoutes);
         }
         if (routeTypes.contains(RouteType.CAR)) {
             int beforeSize = routes.size();
-            findCarRouteDto(request, target, RouteOption.RECOMMENDED, 0).ifPresent(routes::add);
-            findCarRouteDto(request, target, RouteOption.MIN_TIME, 2).ifPresent(routes::add);
+            try {
+                findCarRouteDto(request, target, RouteOption.RECOMMENDED, 0).ifPresent(routes::add);
+                findCarRouteDto(request, target, RouteOption.MIN_TIME, 2).ifPresent(routes::add);
+            } catch (NavigationException e) {
+                log.warn("CAR route lookup failed.", e);
+            }
             if (routes.size() == beforeSize) {
                 notFoundRouteTypes.add(RouteMode.CAR);
             }
         }
         if (routeTypes.contains(RouteType.WALK)) {
             int beforeSize = routes.size();
-            findWalkRouteDto(request, target, RouteOption.SHORTEST, "10").ifPresent(routes::add);
-            findWalkRouteDto(request, target, RouteOption.COMFORTABLE, "30").ifPresent(routes::add);
+            try {
+                findWalkRouteDto(request, target, RouteOption.SHORTEST, "10").ifPresent(routes::add);
+                findWalkRouteDto(request, target, RouteOption.COMFORTABLE, "30").ifPresent(routes::add);
+            } catch (NavigationException e) {
+                log.warn("WALK route lookup failed.", e);
+            }
             if (routes.size() == beforeSize) {
                 notFoundRouteTypes.add(RouteMode.WALK);
             }
@@ -141,7 +154,7 @@ public class NavigationService {
         );
 
         return anchor
-                .map(value -> RouteTarget.withIndoor(value, request.endName()))
+                .map(value -> RouteTarget.withIndoor(value, request.endX(), request.endY(), request.endName()))
                 .orElseGet(() -> RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName()));
     }
 
@@ -438,7 +451,16 @@ public class NavigationService {
                 null,
                 target.entranceName(),
                 target.originalEndName(),
-                List.of(new StepDto("실내 이동", null, null, target.endX(), target.endY(), null, "INDOOR", null))
+                List.of(new StepDto(
+                        "실내 이동",
+                        null,
+                        null,
+                        target.originalEndX(),
+                        target.originalEndY(),
+                        null,
+                        "INDOOR",
+                        null
+                ))
         ));
     }
 
@@ -587,6 +609,8 @@ public class NavigationService {
     private record RouteTarget(
             double endX,
             double endY,
+            double originalEndX,
+            double originalEndY,
             String endName,
             boolean includesIndoor,
             String originalEndName,
@@ -594,13 +618,20 @@ public class NavigationService {
     ) {
 
         private static RouteTarget outdoorOnly(double endX, double endY, String endName) {
-            return new RouteTarget(endX, endY, endName, false, endName, null);
+            return new RouteTarget(endX, endY, endX, endY, endName, false, endName, null);
         }
 
-        private static RouteTarget withIndoor(IndoorDestinationAnchor anchor, String originalEndName) {
+        private static RouteTarget withIndoor(
+                IndoorDestinationAnchor anchor,
+                double originalEndX,
+                double originalEndY,
+                String originalEndName
+        ) {
             return new RouteTarget(
                     anchor.x(),
                     anchor.y(),
+                    originalEndX,
+                    originalEndY,
                     defaultAnchorName(anchor),
                     true,
                     originalEndName,

@@ -16,8 +16,8 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteOp
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto;
 import com.insideout.backend.domain.navigation.exception.NavigationErrorCode;
 import com.insideout.backend.domain.navigation.exception.NavigationException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -42,7 +42,6 @@ import java.util.Optional;
  * 다른 도메인의 Service를 주입받아 필요한 데이터를 가져옵니다.
  */
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 @Slf4j
 public class NavigationService {
@@ -56,6 +55,14 @@ public class NavigationService {
 
     @Value("${tmap.api.key}")
     private String tmapApiKey;
+
+    public NavigationService(
+            MapQueryFacade mapQueryFacade,
+            @Qualifier("tmapRestTemplate") RestTemplate restTemplate
+    ) {
+        this.mapQueryFacade = mapQueryFacade;
+        this.restTemplate = restTemplate;
+    }
 
     public NavigationResponseDto findRoutes(NavigationRequestDto request) {
         RouteTarget target = resolveRouteTarget(request);

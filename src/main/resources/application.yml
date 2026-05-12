@@ -20,7 +20,7 @@ spring:
 
 tmap:
   api:
-    key: "APszqbEk6fCh6gy5dauBltyftW0JZz65YSAOnO10"
+    key: ${TMAP_API_KEY:}
 
 server:
   port: 8080

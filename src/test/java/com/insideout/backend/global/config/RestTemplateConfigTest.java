@@ -16,8 +16,8 @@ class RestTemplateConfigTest {
     private final RestTemplateConfig restTemplateConfig = new RestTemplateConfig();
 
     @Test
-    void restTemplateHasConnectAndReadTimeouts() {
-        RestTemplate restTemplate = restTemplateConfig.restTemplate(new RestTemplateBuilder());
+    void tmapRestTemplateHasConnectAndReadTimeouts() {
+        RestTemplate restTemplate = restTemplateConfig.tmapRestTemplate(new RestTemplateBuilder());
 
         assertThat(restTemplate.getRequestFactory()).isInstanceOf(JdkClientHttpRequestFactory.class);
 

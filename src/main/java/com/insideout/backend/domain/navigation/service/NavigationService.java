@@ -14,8 +14,8 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteDt
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteMode;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteOption;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto;
-import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
-import com.insideout.backend.global.apiPayload.exception.ProjectException;
+import com.insideout.backend.domain.navigation.exception.NavigationErrorCode;
+import com.insideout.backend.domain.navigation.exception.NavigationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -214,20 +214,19 @@ public class NavigationService {
             JsonNode response = restTemplate.postForObject(url, new HttpEntity<>(body, headers), JsonNode.class);
             if (response == null || response.isNull()) {
                 log.warn("TMAP API returned empty response. url={}", url);
-                throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
+                throw new NavigationException(NavigationErrorCode.TMAP_EMPTY_RESPONSE);
             }
             return response;
         } catch (RestClientResponseException e) {
             log.warn(
-                    "TMAP API returned error. url={}, status={}, body={}",
+                    "TMAP API returned error. url={}, status={}",
                     url,
-                    e.getStatusCode(),
-                    abbreviate(e.getResponseBodyAsString())
+                    e.getStatusCode()
             );
-            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY, e);
+            throw new NavigationException(NavigationErrorCode.TMAP_REQUEST_FAILED, e);
         } catch (RestClientException e) {
             log.warn("TMAP API request failed. url={}", url, e);
-            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY, e);
+            throw new NavigationException(NavigationErrorCode.TMAP_CONNECTION_FAILED, e);
         }
     }
 
@@ -238,8 +237,8 @@ public class NavigationService {
                 .path("itineraries");
 
         if (!itineraries.isArray()) {
-            log.warn("TMAP transit response has invalid structure. response={}", abbreviate(response.toString()));
-            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
+            log.warn("TMAP transit response has invalid structure.");
+            throw new NavigationException(NavigationErrorCode.INVALID_TRANSIT_RESPONSE);
         }
         if (itineraries.isEmpty()) {
             return List.of();
@@ -342,8 +341,8 @@ public class NavigationService {
     ) {
         JsonNode features = response.path("features");
         if (!features.isArray()) {
-            log.warn("TMAP {} response has invalid structure. response={}", routeMode, abbreviate(response.toString()));
-            throw new ProjectException(GeneralErrorCode.BAD_GATEWAY);
+            log.warn("TMAP {} response has invalid structure.", routeMode);
+            throw new NavigationException(resolveInvalidFeatureResponseErrorCode(routeMode));
         }
         if (features.isEmpty()) {
             return Optional.empty();
@@ -375,6 +374,14 @@ public class NavigationService {
                 formatDuration(totalTimeSeconds, target.includesIndoor()),
                 legs
         ));
+    }
+
+    private NavigationErrorCode resolveInvalidFeatureResponseErrorCode(RouteMode routeMode) {
+        return switch (routeMode) {
+            case CAR -> NavigationErrorCode.INVALID_CAR_RESPONSE;
+            case WALK -> NavigationErrorCode.INVALID_WALK_RESPONSE;
+            default -> NavigationErrorCode.TMAP_REQUEST_FAILED;
+        };
     }
 
     private List<StepDto> parseFeatureSteps(JsonNode features) {
@@ -530,13 +537,6 @@ public class NavigationService {
 
     private Double firstNonNull(Double first, Double second) {
         return first != null ? first : second;
-    }
-
-    private String abbreviate(String value) {
-        if (value == null || value.length() <= 500) {
-            return value;
-        }
-        return value.substring(0, 500) + "...";
     }
 
     private String getNullableText(JsonNode node) {

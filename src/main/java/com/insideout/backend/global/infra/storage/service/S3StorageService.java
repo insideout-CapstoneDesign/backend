@@ -155,11 +155,41 @@ public class S3StorageService {
             UUID floorId,
             String originalFilename
     ) {
-        String safeName = (originalFilename == null) ? "image.png" : originalFilename;
+        String safeName = sanitizeFilename(originalFilename);
         return String.format(
                 "tenants/%s/buildings/%s/floors/%s/%s_%s",
                 tenantId, buildingId, floorId,
                 UUID.randomUUID(), safeName
         );
+    }
+
+    private static final int MAX_FILENAME_LENGTH = 100;
+    private static final String DEFAULT_FILENAME = "image.png";
+
+    /**
+     * 원본 파일명에서 basename 추출 후, 안전하지 않은 문자를 제거/치환하여 반환.
+     * null·빈 문자열이면 기본값 "image.png"을 반환한다.
+     */
+    private String sanitizeFilename(String original) {
+        if (original == null || original.isBlank()) {
+            return DEFAULT_FILENAME;
+        }
+
+        // 1) 경로 구분자 통일 후 basename 추출
+        String cleaned = original.replace("\\", "/");
+        String basename = cleaned.substring(cleaned.lastIndexOf('/') + 1);
+
+        // 2) 제어문자·비인쇄 문자 제거
+        basename = basename.replaceAll("[\\p{Cntrl}\\p{Cc}]", "");
+
+        // 3) 안전하지 않은 문자(공백·특수문자 등)를 언더스코어로 치환 (영문, 숫자, 점, 하이픈, 언더스코어만 허용)
+        basename = basename.replaceAll("[^a-zA-Z0-9.\\-_]", "_");
+
+        // 4) 길이 제한
+        if (basename.length() > MAX_FILENAME_LENGTH) {
+            basename = basename.substring(basename.length() - MAX_FILENAME_LENGTH);
+        }
+
+        return basename.isBlank() ? DEFAULT_FILENAME : basename;
     }
 }

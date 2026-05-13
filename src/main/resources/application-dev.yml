@@ -17,3 +17,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate # 공용 DB는 테이블 구조 확정되면  validate
+
+kakao:
+  local:
+    base-url: https://dapi.kakao.com
+    rest-api-key: ${KAKAO_REST_API_KEY}

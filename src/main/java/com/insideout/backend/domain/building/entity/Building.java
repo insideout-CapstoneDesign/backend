@@ -15,6 +15,7 @@ import com.insideout.backend.domain.building.exception.BuildingException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -114,6 +115,9 @@ public class Building {
         if (entranceCount < 0) {
             throw new BuildingException(BuildingErrorCode.NEGATIVE_ENTRANCE_COUNT);
         }
+        if (hasDifferentTenant(tenant, campus)) {
+            throw new BuildingException(BuildingErrorCode.BUILDING_CAMPUS_TENANT_MISMATCH);
+        }
         this.tenant = tenant;
         this.campus = campus;
         this.name = name;
@@ -126,5 +130,19 @@ public class Building {
 
     public boolean hasCampus() {
         return this.campus != null;
+    }
+
+    private boolean hasDifferentTenant(Tenant tenant, Campus campus) {
+        if (tenant == null || campus == null || campus.getTenant() == null) {
+            return false;
+        }
+
+        UUID tenantId = tenant.getId();
+        UUID campusTenantId = campus.getTenant().getId();
+        if (tenantId != null || campusTenantId != null) {
+            return !Objects.equals(tenantId, campusTenantId);
+        }
+
+        return tenant != campus.getTenant();
     }
 }

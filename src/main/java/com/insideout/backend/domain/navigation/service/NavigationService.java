@@ -350,7 +350,7 @@ public class NavigationService {
             Integer totalDistanceMeters = getNullableInt(itinerary.path("totalDistance"));
             List<LegDto> legs = parseTransitLegs(itinerary.path("legs"));
             List<RouteFailureDto> failures = new ArrayList<>();
-            applyHybridLegs(legs, failures, target, RouteMode.TRANSIT, RouteOption.SHORTEST);
+            applyHybridLegs(legs, failures, target, RouteMode.TRANSIT, RouteOption.TRANSIT_CANDIDATE);
 
             routes.add(new RouteDto(
                     RouteMode.TRANSIT,
@@ -564,6 +564,10 @@ public class NavigationService {
         createIndoorLeg(target, routeOption).ifPresentOrElse(
                 legs::add,
                 () -> {
+                    if (!target.hasIndoorDestinationNode()) {
+                        legs.add(createFallbackIndoorLeg(target));
+                        return;
+                    }
                     failures.add(routeFailure(NavigationErrorCode.INDOOR_ROUTE_NOT_FOUND, routeMode, routeOption, LegMode.INDOOR, MapType.BUILDING));
                     legs.add(createFallbackIndoorLeg(target));
                 }
@@ -1318,6 +1322,10 @@ public class NavigationService {
 
         private boolean hasCampus() {
             return anchor != null && anchor.hasCampus();
+        }
+
+        private boolean hasIndoorDestinationNode() {
+            return destination != null && destination.anchorNodeId() != null;
         }
 
         private String campusEntranceName() {

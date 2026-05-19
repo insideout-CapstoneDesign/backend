@@ -39,14 +39,17 @@ public class S3MapAssetStorage implements MapAssetStorage {
     private Optional<MapAssetDescriptor> findCurrentCampusMap(UUID campusId) {
         return campusMapRepository.findByCampusIdAndIsCurrentTrue(campusId)
                 .map(campusMap -> {
-                    String bucket = defaultIfBlank(campusMap.getBucketName(), s3StorageService.defaultBucket());
-                    String objectKey = campusMap.getObjectKey();
-                    String imageUrl = presignOrFallback(bucket, objectKey, campusMap.getImageUrl());
+                    StoredObject storedObject = resolveStoredObject(
+                            campusMap.getBucketName(),
+                            campusMap.getObjectKey(),
+                            campusMap.getImageUrl()
+                    );
+                    String imageUrl = presignOrFallback(storedObject, campusMap.getImageUrl());
                     return new MapAssetDescriptor(
                             MapType.CAMPUS,
                             campusId,
-                            bucket,
-                            objectKey,
+                            storedObject.bucket(),
+                            storedObject.objectKey(),
                             imageUrl,
                             campusMap.getWidthPx(),
                             campusMap.getHeightPx()
@@ -58,13 +61,7 @@ public class S3MapAssetStorage implements MapAssetStorage {
         return floorplanRepository.findByFloorIdAndIsCurrentTrue(floorId)
                 .map(floorplan -> {
                     StoredObject storedObject = parseStoredObject(floorplan.getImageUrl());
-                    String imageUrl = storedObject.canPresign()
-                            ? s3StorageService.generatePresignedDownloadUrl(
-                                    storedObject.bucket(),
-                                    storedObject.objectKey(),
-                                    MAP_IMAGE_URL_EXPIRY
-                            )
-                            : floorplan.getImageUrl();
+                    String imageUrl = presignOrFallback(storedObject, floorplan.getImageUrl());
                     return new MapAssetDescriptor(
                             MapType.BUILDING,
                             floorId,
@@ -77,11 +74,22 @@ public class S3MapAssetStorage implements MapAssetStorage {
                 });
     }
 
-    private String presignOrFallback(String bucket, String objectKey, String fallbackUrl) {
-        if (isBlank(bucket) || isBlank(objectKey)) {
+    private StoredObject resolveStoredObject(String bucket, String objectKey, String imageUrl) {
+        if (!isBlank(objectKey)) {
+            return new StoredObject(defaultIfBlank(bucket, s3StorageService.defaultBucket()), objectKey, true);
+        }
+        return parseStoredObject(imageUrl);
+    }
+
+    private String presignOrFallback(StoredObject storedObject, String fallbackUrl) {
+        if (!storedObject.canPresign()) {
             return fallbackUrl;
         }
-        return s3StorageService.generatePresignedDownloadUrl(bucket, objectKey, MAP_IMAGE_URL_EXPIRY);
+        return s3StorageService.generatePresignedDownloadUrl(
+                storedObject.bucket(),
+                storedObject.objectKey(),
+                MAP_IMAGE_URL_EXPIRY
+        );
     }
 
     private StoredObject parseStoredObject(String imageUrl) {
@@ -89,10 +97,14 @@ public class S3MapAssetStorage implements MapAssetStorage {
             return StoredObject.notPresignable();
         }
         if (imageUrl.startsWith("s3://")) {
-            URI uri = URI.create(imageUrl);
-            String bucket = defaultIfBlank(uri.getHost(), s3StorageService.defaultBucket());
-            String key = uri.getPath() == null ? null : stripLeadingSlash(uri.getPath());
-            return new StoredObject(bucket, key, true);
+            try {
+                URI uri = URI.create(imageUrl);
+                String bucket = defaultIfBlank(uri.getHost(), s3StorageService.defaultBucket());
+                String key = uri.getPath() == null ? null : stripLeadingSlash(uri.getPath());
+                return new StoredObject(bucket, key, true);
+            } catch (IllegalArgumentException e) {
+                return StoredObject.notPresignable();
+            }
         }
         if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
             return StoredObject.notPresignable();

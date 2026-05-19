@@ -1,5 +1,7 @@
 package com.insideout.backend.domain.building.entity;
 
+import com.insideout.backend.domain.building.exception.BuildingErrorCode;
+import com.insideout.backend.domain.building.exception.BuildingException;
 import com.insideout.backend.domain.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -74,6 +77,9 @@ public class CampusMap {
     @Builder
     public CampusMap(UUID tenantId, Campus campus, String bucketName, String objectKey, String imageUrl,
                      int widthPx, int heightPx, User uploadedBy, boolean isCurrent) {
+        if (hasDifferentTenant(tenantId, campus)) {
+            throw new BuildingException(BuildingErrorCode.CAMPUS_MAP_TENANT_MISMATCH);
+        }
         this.tenantId = tenantId;
         this.campus = campus;
         this.bucketName = bucketName;
@@ -83,5 +89,14 @@ public class CampusMap {
         this.heightPx = heightPx;
         this.uploadedBy = uploadedBy;
         this.isCurrent = isCurrent;
+    }
+
+    private boolean hasDifferentTenant(UUID tenantId, Campus campus) {
+        if (tenantId == null || campus == null || campus.getTenant() == null) {
+            return false;
+        }
+
+        UUID campusTenantId = campus.getTenant().getId();
+        return campusTenantId != null && !Objects.equals(tenantId, campusTenantId);
     }
 }

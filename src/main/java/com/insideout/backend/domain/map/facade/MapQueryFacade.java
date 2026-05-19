@@ -82,23 +82,7 @@ public class MapQueryFacade {
 
         return poiRepository.findByPublicId(destinationPoiId)
                 .filter(poi -> poi.getAnchorNodeId() != null)
-                .map(poi -> {
-                    Floor floor = poi.getFloor();
-                    Building building = floor.getBuilding();
-                    Campus campus = building.getCampus();
-                    return new IndoorPoiDestination(
-                            poi.getPublicId(),
-                            poi.getId(),
-                            poi.getName(),
-                            poi.getAnchorNodeId(),
-                            floor.getId(),
-                            floor.getName(),
-                            building.getId(),
-                            building.getName(),
-                            campus == null ? null : campus.getId(),
-                            campus == null ? null : campus.getName()
-                    );
-                });
+                .flatMap(this::toIndoorPoiDestination);
     }
 
     public Optional<UUID> findNearestPublishedCampusNodeId(UUID campusId, double x, double y) {
@@ -261,6 +245,32 @@ public class MapQueryFacade {
                 node.getNameKo(),
                 point.getX(),
                 point.getY()
+        ));
+    }
+
+    private Optional<IndoorPoiDestination> toIndoorPoiDestination(Poi poi) {
+        Floor floor = poi.getFloor();
+        if (floor == null) {
+            return Optional.empty();
+        }
+
+        Building building = floor.getBuilding();
+        if (building == null) {
+            return Optional.empty();
+        }
+
+        Campus campus = building.getCampus();
+        return Optional.of(new IndoorPoiDestination(
+                poi.getPublicId(),
+                poi.getId(),
+                poi.getName(),
+                poi.getAnchorNodeId(),
+                floor.getId(),
+                floor.getName(),
+                building.getId(),
+                building.getName(),
+                campus == null ? null : campus.getId(),
+                campus == null ? null : campus.getName()
         ));
     }
 

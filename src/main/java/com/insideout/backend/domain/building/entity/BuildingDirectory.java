@@ -1,5 +1,7 @@
 package com.insideout.backend.domain.building.entity;
 
+import com.insideout.backend.domain.building.exception.BuildingErrorCode;
+import com.insideout.backend.domain.building.exception.BuildingException;
 import com.insideout.backend.domain.map.entity.MapVersion;
 import com.insideout.backend.domain.tenant.entity.Tenant;
 import jakarta.persistence.*;
@@ -11,6 +13,7 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.Polygon;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -85,6 +88,9 @@ public class BuildingDirectory {
 
     @Builder
     public BuildingDirectory(UUID id, Tenant tenant, Campus campus, String name, String address, String category, Point centroid, Polygon bbox, boolean isPublic, MapVersion publishedVersion) {
+        if (hasDifferentTenant(tenant, campus)) {
+            throw new BuildingException(BuildingErrorCode.BUILDING_DIRECTORY_CAMPUS_TENANT_MISMATCH);
+        }
         this.id = id;
         this.tenant = tenant;
         this.campus = campus;
@@ -95,5 +101,19 @@ public class BuildingDirectory {
         this.bbox = bbox;
         this.isPublic = isPublic;
         this.publishedVersion = publishedVersion;
+    }
+
+    private boolean hasDifferentTenant(Tenant tenant, Campus campus) {
+        if (tenant == null || campus == null || campus.getTenant() == null) {
+            return false;
+        }
+
+        UUID tenantId = tenant.getId();
+        UUID campusTenantId = campus.getTenant().getId();
+        if (tenantId != null || campusTenantId != null) {
+            return !Objects.equals(tenantId, campusTenantId);
+        }
+
+        return tenant != campus.getTenant();
     }
 }

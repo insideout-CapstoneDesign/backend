@@ -23,6 +23,21 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "BUILDING400_3",
         "도면의 테넌트 ID와 층의 테넌트 ID가 일치하지 않습니다."
+    ),
+    BUILDING_CAMPUS_TENANT_MISMATCH(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_4",
+        "건물의 테넌트와 캠퍼스의 테넌트가 일치하지 않습니다."
+    ),
+    BUILDING_DIRECTORY_CAMPUS_TENANT_MISMATCH(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_5",
+        "건물 디렉터리의 테넌트와 캠퍼스의 테넌트가 일치하지 않습니다."
+    ),
+    CAMPUS_MAP_TENANT_MISMATCH(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_6",
+        "캠퍼스 맵의 테넌트 ID와 캠퍼스의 테넌트 ID가 일치하지 않습니다."
     );
 
     private final HttpStatus status;

@@ -9,13 +9,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insideout.backend.domain.map.facade.MapQueryFacade;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.IndoorDestinationAnchor;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.IndoorPoiDestination;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto.RouteType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegMode;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteFailureDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteMode;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteOption;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,6 +98,8 @@ class NavigationServiceTest {
         assertThat(indoorLeg.mode()).isEqualTo(LegMode.INDOOR);
         assertThat(indoorStep.x()).isEqualTo(originalEndX);
         assertThat(indoorStep.y()).isEqualTo(originalEndY);
+        assertThat(route.failures()).isEmpty();
+        assertThat(response.failures()).isEmpty();
     }
 
     @Test
@@ -129,6 +134,67 @@ class NavigationServiceTest {
         assertThat(response.message()).isEqualTo("일부 이동 수단의 경로를 찾을 수 없습니다.");
     }
 
+    @Test
+    void transitHybridFailureUsesTransitCandidateRouteOption() throws Exception {
+        UUID buildingId = UUID.randomUUID();
+        UUID entranceNodeId = UUID.randomUUID();
+        UUID destinationNodeId = UUID.randomUUID();
+        UUID floorId = UUID.randomUUID();
+        Long destinationPoiId = 1001L;
+
+        when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
+        when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
+                .thenReturn(Optional.of(new IndoorPoiDestination(
+                        destinationPoiId,
+                        UUID.randomUUID(),
+                        "목적지 POI",
+                        destinationNodeId,
+                        floorId,
+                        "1F",
+                        buildingId,
+                        "테스트 건물",
+                        null,
+                        null
+                )));
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
+                .thenReturn(Optional.of(new IndoorDestinationAnchor(
+                        buildingId,
+                        "테스트 건물",
+                        entranceNodeId,
+                        "정문",
+                        127.2000,
+                        37.6000
+                )));
+        when(restTemplate.postForObject(
+                eq("https://apis.openapi.sk.com/transit/routes"),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        )).thenReturn(transitRouteResponse());
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                buildingId,
+                destinationPoiId,
+                true,
+                List.of(RouteType.TRANSIT)
+        ));
+
+        RouteDto route = response.routes().get(0);
+
+        assertThat(route.routeOption()).isEqualTo(RouteOption.TRANSIT_CANDIDATE);
+        assertThat(route.failures())
+                .extracting(RouteFailureDto::routeOption)
+                .containsOnly(RouteOption.TRANSIT_CANDIDATE);
+        assertThat(response.failures())
+                .extracting(RouteFailureDto::routeOption)
+                .containsOnly(RouteOption.TRANSIT_CANDIDATE);
+    }
+
     private JsonNode walkRouteResponse() throws Exception {
         return OBJECT_MAPPER.readTree("""
                 {
@@ -148,6 +214,32 @@ class NavigationServiceTest {
                       }
                     }
                   ]
+                }
+                """);
+    }
+
+    private JsonNode transitRouteResponse() throws Exception {
+        return OBJECT_MAPPER.readTree("""
+                {
+                  "metaData": {
+                    "plan": {
+                      "itineraries": [
+                        {
+                          "totalTime": 1200,
+                          "totalDistance": 5000,
+                          "legs": [
+                            {
+                              "mode": "WALK",
+                              "sectionTime": 300,
+                              "distance": 600,
+                              "start": {"name": "출발지", "lon": 126.9, "lat": 37.4},
+                              "end": {"name": "정류장", "lon": 127.0, "lat": 37.45}
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
                 }
                 """);
     }

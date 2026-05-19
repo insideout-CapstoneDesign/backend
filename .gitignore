@@ -48,3 +48,4 @@ src/main/resources/application-local.yml
 *.local.sql
 src/main/resources/db.properties
 src/main/resources/security.yml
+AGENTS.md

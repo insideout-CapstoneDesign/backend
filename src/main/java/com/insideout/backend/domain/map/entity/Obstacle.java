@@ -1,6 +1,7 @@
 package com.insideout.backend.domain.map.entity;
 
 import com.insideout.backend.domain.building.entity.Building;
+import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.Floor;
 import com.insideout.backend.domain.map.exception.MapErrorCode;
 import com.insideout.backend.domain.map.exception.MapException;
@@ -40,8 +41,16 @@ public class Obstacle {
     private UUID tenantId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "building_id", nullable = false)
+    @JoinColumn(name = "building_id")
     private Building building;
+
+    /**
+     * 캠퍼스/단지 그래프에 적용되는 장애물.
+     * <p>건물 내부 장애물은 building에, 캠퍼스 내부 장애물은 campus에 연결합니다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campus_id")
+    private Campus campus;
 
     /**
      * 장애물이 위치한 층.
@@ -131,13 +140,19 @@ public class Obstacle {
     //          if (!floor.getBuilding().getId().equals(building.getId()))
     //              throw new MapException(MapErrorCode.OBSTACLE_BUILDING_MISMATCH);
     @Builder
-    public Obstacle(UUID tenantId, Building building, Floor floor, String kind, Geometry geomPx, List<UUID> affectedEdgeIds, BigDecimal extraCost, boolean isBlocking, OffsetDateTime activeFrom, OffsetDateTime activeTo, String note) {
+    public Obstacle(UUID tenantId, Building building, Campus campus, Floor floor, String kind, Geometry geomPx, List<UUID> affectedEdgeIds, BigDecimal extraCost, boolean isBlocking, OffsetDateTime activeFrom, OffsetDateTime activeTo, String note) {
         BigDecimal finalExtraCost = extraCost != null ? extraCost : BigDecimal.ZERO;
 
         // 필수 필드 null 선검증 (DB nullable=false 콜럼과 동기화)
         Objects.requireNonNull(tenantId, "tenantId must not be null");
-        Objects.requireNonNull(building, "building must not be null");
         Objects.requireNonNull(kind, "kind must not be null");
+
+        if ((building == null && campus == null) || (building != null && campus != null)) {
+            throw new MapException(MapErrorCode.OBSTACLE_BUILDING_MISMATCH);
+        }
+        if (floor != null && building == null) {
+            throw new MapException(MapErrorCode.OBSTACLE_BUILDING_MISMATCH);
+        }
 
         if (finalExtraCost.signum() < 0) {
             throw new MapException(MapErrorCode.NEGATIVE_EXTRA_COST);
@@ -153,6 +168,7 @@ public class Obstacle {
 
         this.tenantId = tenantId;
         this.building = building;
+        this.campus = campus;
         this.floor = floor;
         this.kind = kind;
         this.geomPx = geomPx;

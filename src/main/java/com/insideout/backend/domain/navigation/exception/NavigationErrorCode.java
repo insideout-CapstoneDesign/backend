@@ -38,6 +38,21 @@ public enum NavigationErrorCode implements BaseErrorCode {
             HttpStatus.BAD_GATEWAY,
             "NAVIGATION502_6",
             "TMAP 도보 경로 응답 형식이 올바르지 않습니다."
+    ),
+    INDOOR_ROUTE_NOT_FOUND(
+            HttpStatus.OK,
+            "NAVIGATION404_1",
+            "실내 경로를 찾을 수 없습니다."
+    ),
+    CAMPUS_ROUTE_NOT_FOUND(
+            HttpStatus.OK,
+            "NAVIGATION404_2",
+            "캠퍼스 내부 경로를 찾을 수 없습니다."
+    ),
+    ROUTE_NOT_FOUND(
+            HttpStatus.OK,
+            "NAVIGATION404_3",
+            "경로를 찾을 수 없습니다."
     );
 
     private final HttpStatus status;

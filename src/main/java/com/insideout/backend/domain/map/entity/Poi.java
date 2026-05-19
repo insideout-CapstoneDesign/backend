@@ -32,6 +32,12 @@ public class Poi {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /**
+     * 앱/API에서 사용하는 짧은 숫자형 POI 식별자.
+     */
+    @Column(name = "public_id", insertable = false, updatable = false)
+    private Long publicId;
+
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 

@@ -1,5 +1,7 @@
 package com.insideout.backend.domain.navigation.dto;
 
+import com.insideout.backend.domain.map.entity.MapType;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -9,8 +11,19 @@ public record NavigationResponseDto(
         IndoorInfoDto indoor,
         List<RouteDto> routes,
         List<RouteMode> notFoundRouteTypes,
+        List<RouteFailureDto> failures,
         String message
 ) {
+    public NavigationResponseDto(
+            CoordinateDto requestedDestination,
+            CoordinateDto routedDestination,
+            IndoorInfoDto indoor,
+            List<RouteDto> routes,
+            List<RouteMode> notFoundRouteTypes,
+            String message
+    ) {
+        this(requestedDestination, routedDestination, indoor, routes, notFoundRouteTypes, List.of(), message);
+    }
 
     public record CoordinateDto(
             Double x,
@@ -21,6 +34,9 @@ public record NavigationResponseDto(
 
     public record IndoorInfoDto(
             Boolean included,
+            UUID campusId,
+            String campusName,
+            String campusEntranceName,
             UUID buildingId,
             String buildingName,
             UUID entranceNodeId,
@@ -34,7 +50,28 @@ public record NavigationResponseDto(
             Integer totalTimeSeconds,
             Integer totalDistanceMeters,
             String totalDuration,
-            List<LegDto> legs
+            List<LegDto> legs,
+            List<RouteFailureDto> failures
+    ) {
+        public RouteDto(
+                RouteMode routeType,
+                RouteOption routeOption,
+                Integer totalTimeSeconds,
+                Integer totalDistanceMeters,
+                String totalDuration,
+                List<LegDto> legs
+        ) {
+            this(routeType, routeOption, totalTimeSeconds, totalDistanceMeters, totalDuration, legs, List.of());
+        }
+    }
+
+    public record RouteFailureDto(
+            String code,
+            String message,
+            RouteMode routeMode,
+            RouteOption routeOption,
+            LegMode legMode,
+            MapType mapType
     ) {
     }
 
@@ -47,8 +84,28 @@ public record NavigationResponseDto(
             Integer stationCount,
             String startName,
             String endName,
+            MapType mapType,
+            String mapImageUrl,
+            UUID floorId,
+            String floorName,
+            CoordinateType coordinateType,
+            List<CoordinateDto> path,
             List<StepDto> steps
     ) {
+        public LegDto(
+                LegMode mode,
+                String routeName,
+                String transitType,
+                Integer durationSeconds,
+                Integer distanceMeters,
+                Integer stationCount,
+                String startName,
+                String endName,
+                List<StepDto> steps
+        ) {
+            this(mode, routeName, transitType, durationSeconds, distanceMeters, stationCount,
+                    startName, endName, null, null, null, null, null, null, steps);
+        }
     }
 
     public record StepDto(
@@ -82,7 +139,13 @@ public record NavigationResponseDto(
         BUS,
         SUBWAY,
         CAR,
+        CAMPUS,
         INDOOR,
         OTHER
+    }
+
+    public enum CoordinateType {
+        WGS84,
+        PIXEL
     }
 }

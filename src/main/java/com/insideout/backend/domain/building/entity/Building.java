@@ -15,6 +15,7 @@ import com.insideout.backend.domain.building.exception.BuildingException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -42,6 +43,14 @@ public class Building {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
+
+    /**
+     * 이 건물이 속한 캠퍼스/대형 단지.
+     * <p>null이면 단독 건물로 취급합니다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campus_id")
+    private Campus campus;
 
     /**
      * 건물명.
@@ -102,16 +111,38 @@ public class Building {
     }
 
     @Builder
-    public Building(Tenant tenant, String name, String address, Polygon footprint, int entranceCount, Map<String, Object> meta, String externalApiId) {
+    public Building(Tenant tenant, Campus campus, String name, String address, Polygon footprint, int entranceCount, Map<String, Object> meta, String externalApiId) {
         if (entranceCount < 0) {
             throw new BuildingException(BuildingErrorCode.NEGATIVE_ENTRANCE_COUNT);
         }
+        if (hasDifferentTenant(tenant, campus)) {
+            throw new BuildingException(BuildingErrorCode.BUILDING_CAMPUS_TENANT_MISMATCH);
+        }
         this.tenant = tenant;
+        this.campus = campus;
         this.name = name;
         this.address = address;
         this.footprint = footprint;
         this.entranceCount = entranceCount;
         this.meta = meta != null ? meta : Map.of();
         this.externalApiId = externalApiId;
+    }
+
+    public boolean hasCampus() {
+        return this.campus != null;
+    }
+
+    private boolean hasDifferentTenant(Tenant tenant, Campus campus) {
+        if (tenant == null || campus == null || campus.getTenant() == null) {
+            return false;
+        }
+
+        UUID tenantId = tenant.getId();
+        UUID campusTenantId = campus.getTenant().getId();
+        if (tenantId != null || campusTenantId != null) {
+            return !Objects.equals(tenantId, campusTenantId);
+        }
+
+        return tenant != campus.getTenant();
     }
 }

@@ -1,5 +1,6 @@
 package com.insideout.backend.domain.map.entity;
 
+import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.Building;
 import com.insideout.backend.domain.user.entity.User;
 import jakarta.persistence.*;
@@ -37,11 +38,22 @@ public class MapVersion {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "map_type", nullable = false)
+    private MapType mapType;
+
+    /**
+     * 캠퍼스 그래프 버전일 때 채워집니다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campus_id")
+    private Campus campus;
+
     /**
      * 이 맵 버전이 속한 건물.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "building_id", nullable = false)
+    @JoinColumn(name = "building_id")
     private Building building;
 
     /**
@@ -91,10 +103,13 @@ public class MapVersion {
         if (this.status == null) {
             this.status = "draft";
         }
+        if (this.mapType == null) {
+            this.mapType = MapType.BUILDING;
+        }
     }
 
     @Builder
-    public MapVersion(UUID tenantId, Building building, String label, String status, UUID parentVersionId, User createdBy, OffsetDateTime publishedAt) {
+    public MapVersion(UUID tenantId, MapType mapType, Campus campus, Building building, String label, String status, UUID parentVersionId, User createdBy, OffsetDateTime publishedAt) {
         String finalStatus = status != null ? status : "draft";
         OffsetDateTime finalPublishedAt = publishedAt;
 
@@ -105,11 +120,17 @@ public class MapVersion {
         }
 
         this.tenantId = tenantId;
+        this.mapType = mapType != null ? mapType : inferMapType(campus);
+        this.campus = campus;
         this.building = building;
         this.label = label;
         this.status = finalStatus;
         this.parentVersionId = parentVersionId;
         this.createdBy = createdBy;
         this.publishedAt = finalPublishedAt;
+    }
+
+    private MapType inferMapType(Campus campus) {
+        return campus != null ? MapType.CAMPUS : MapType.BUILDING;
     }
 }

@@ -11,8 +11,19 @@ public record NavigationResponseDto(
         IndoorInfoDto indoor,
         List<RouteDto> routes,
         List<RouteMode> notFoundRouteTypes,
+        List<RouteFailureDto> failures,
         String message
 ) {
+    public NavigationResponseDto(
+            CoordinateDto requestedDestination,
+            CoordinateDto routedDestination,
+            IndoorInfoDto indoor,
+            List<RouteDto> routes,
+            List<RouteMode> notFoundRouteTypes,
+            String message
+    ) {
+        this(requestedDestination, routedDestination, indoor, routes, notFoundRouteTypes, List.of(), message);
+    }
 
     public record CoordinateDto(
             Double x,
@@ -39,7 +50,28 @@ public record NavigationResponseDto(
             Integer totalTimeSeconds,
             Integer totalDistanceMeters,
             String totalDuration,
-            List<LegDto> legs
+            List<LegDto> legs,
+            List<RouteFailureDto> failures
+    ) {
+        public RouteDto(
+                RouteMode routeType,
+                RouteOption routeOption,
+                Integer totalTimeSeconds,
+                Integer totalDistanceMeters,
+                String totalDuration,
+                List<LegDto> legs
+        ) {
+            this(routeType, routeOption, totalTimeSeconds, totalDistanceMeters, totalDuration, legs, List.of());
+        }
+    }
+
+    public record RouteFailureDto(
+            String code,
+            String message,
+            RouteMode routeMode,
+            RouteOption routeOption,
+            LegMode legMode,
+            MapType mapType
     ) {
     }
 

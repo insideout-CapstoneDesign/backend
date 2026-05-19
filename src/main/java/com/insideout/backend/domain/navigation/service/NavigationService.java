@@ -19,11 +19,13 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.IndoorI
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegMode;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteFailureDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteMode;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteOption;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto;
 import com.insideout.backend.domain.navigation.exception.NavigationErrorCode;
 import com.insideout.backend.domain.navigation.exception.NavigationException;
+import com.insideout.backend.global.apiPayload.code.BaseErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -85,17 +87,20 @@ public class NavigationService {
         EnumSet<RouteType> routeTypes = resolveRouteTypes(request);
         List<RouteDto> routes = new ArrayList<>();
         List<RouteMode> notFoundRouteTypes = new ArrayList<>();
+        List<RouteFailureDto> failures = new ArrayList<>();
 
         if (routeTypes.contains(RouteType.TRANSIT)) {
             try {
                 List<RouteDto> transitRoutes = findTransitRouteDtos(request, target);
                 if (transitRoutes.isEmpty()) {
                     notFoundRouteTypes.add(RouteMode.TRANSIT);
+                    failures.add(routeFailure(NavigationErrorCode.ROUTE_NOT_FOUND, RouteMode.TRANSIT, RouteOption.TRANSIT_CANDIDATE, null, null));
                 }
                 routes.addAll(transitRoutes);
             } catch (NavigationException e) {
                 log.warn("TRANSIT route lookup failed.", e);
                 notFoundRouteTypes.add(RouteMode.TRANSIT);
+                failures.add(routeFailure(e.getErrorCode(), RouteMode.TRANSIT, RouteOption.TRANSIT_CANDIDATE, null, null));
             }
         }
         if (routeTypes.contains(RouteType.CAR)) {
@@ -108,6 +113,7 @@ public class NavigationService {
             }
             if (routes.size() == beforeSize) {
                 notFoundRouteTypes.add(RouteMode.CAR);
+                failures.add(routeFailure(NavigationErrorCode.ROUTE_NOT_FOUND, RouteMode.CAR, null, null, null));
             }
         }
         if (routeTypes.contains(RouteType.WALK)) {
@@ -120,8 +126,13 @@ public class NavigationService {
             }
             if (routes.size() == beforeSize) {
                 notFoundRouteTypes.add(RouteMode.WALK);
+                failures.add(routeFailure(NavigationErrorCode.ROUTE_NOT_FOUND, RouteMode.WALK, null, null, null));
             }
         }
+
+        routes.stream()
+                .flatMap(route -> route.failures().stream())
+                .forEach(failures::add);
 
         return new NavigationResponseDto(
                 new CoordinateDto(request.endX(), request.endY(), request.endName()),
@@ -129,16 +140,37 @@ public class NavigationService {
                 target.toIndoorInfo(),
                 routes,
                 notFoundRouteTypes,
-                resolveRouteMessage(routes, notFoundRouteTypes)
+                failures,
+                resolveRouteMessage(routes, notFoundRouteTypes, failures)
         );
     }
 
-    private String resolveRouteMessage(List<RouteDto> routes, List<RouteMode> notFoundRouteTypes) {
-        if (notFoundRouteTypes.isEmpty()) {
+    private RouteFailureDto routeFailure(
+            BaseErrorCode errorCode,
+            RouteMode routeMode,
+            RouteOption routeOption,
+            LegMode legMode,
+            MapType mapType
+    ) {
+        return new RouteFailureDto(
+                errorCode.getCode(),
+                errorCode.getMessage(),
+                routeMode,
+                routeOption,
+                legMode,
+                mapType
+        );
+    }
+
+    private String resolveRouteMessage(List<RouteDto> routes, List<RouteMode> notFoundRouteTypes, List<RouteFailureDto> failures) {
+        if (notFoundRouteTypes.isEmpty() && failures.isEmpty()) {
             return null;
         }
         if (routes.isEmpty()) {
             return "경로를 찾을 수 없습니다.";
+        }
+        if (!failures.isEmpty() && failures.stream().anyMatch(failure -> failure.legMode() == LegMode.INDOOR || failure.legMode() == LegMode.CAMPUS)) {
+            return "일부 실내 경로를 찾을 수 없습니다.";
         }
         return "일부 이동 수단의 경로를 찾을 수 없습니다.";
     }
@@ -317,7 +349,8 @@ public class NavigationService {
             Integer totalTimeSeconds = getNullableInt(itinerary.path("totalTime"));
             Integer totalDistanceMeters = getNullableInt(itinerary.path("totalDistance"));
             List<LegDto> legs = parseTransitLegs(itinerary.path("legs"));
-            applyHybridLegs(legs, target, RouteOption.SHORTEST);
+            List<RouteFailureDto> failures = new ArrayList<>();
+            applyHybridLegs(legs, failures, target, RouteMode.TRANSIT, RouteOption.SHORTEST);
 
             routes.add(new RouteDto(
                     RouteMode.TRANSIT,
@@ -325,7 +358,8 @@ public class NavigationService {
                     totalTimeSeconds,
                     totalDistanceMeters,
                     formatDuration(totalTimeSeconds, target.includesIndoor()),
-                    legs
+                    legs,
+                    failures
             ));
         }
 
@@ -421,7 +455,8 @@ public class NavigationService {
         Integer totalDistanceMeters = getNullableInt(summary.path("totalDistance"));
         List<StepDto> steps = parseFeatureSteps(features);
         List<LegDto> legs = new ArrayList<>();
-        prependExitLegsIfNeeded(legs, target, routeOption);
+        List<RouteFailureDto> failures = new ArrayList<>();
+        prependExitLegsIfNeeded(legs, failures, target, routeMode, routeOption);
         legs.add(new LegDto(
                 legMode,
                 null,
@@ -433,7 +468,7 @@ public class NavigationService {
                 target.endName(),
                 steps
         ));
-        appendEntryLegsIfNeeded(legs, target, routeOption);
+        appendEntryLegsIfNeeded(legs, failures, target, routeMode, routeOption);
 
         return Optional.of(new RouteDto(
                 routeMode,
@@ -441,7 +476,8 @@ public class NavigationService {
                 totalTimeSeconds,
                 totalDistanceMeters,
                 formatDuration(totalTimeSeconds, target.includesIndoor()),
-                legs
+                legs,
+                failures
         ));
     }
 
@@ -487,18 +523,30 @@ public class NavigationService {
     }
 
     private void addHybridLegsIfNeeded(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
-        applyHybridLegs(legs, target, routeOption);
+        applyHybridLegs(legs, new ArrayList<>(), target, null, routeOption);
     }
 
-    private void applyHybridLegs(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
+    private void applyHybridLegs(
+            List<LegDto> legs,
+            List<RouteFailureDto> failures,
+            RouteTarget target,
+            RouteMode routeMode,
+            RouteOption routeOption
+    ) {
         if (target.startsIndoor()) {
-            prependExitLegsIfNeeded(legs, target, routeOption);
+            prependExitLegsIfNeeded(legs, failures, target, routeMode, routeOption);
         } else {
-            appendEntryLegsIfNeeded(legs, target, routeOption);
+            appendEntryLegsIfNeeded(legs, failures, target, routeMode, routeOption);
         }
     }
 
-    private void appendEntryLegsIfNeeded(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
+    private void appendEntryLegsIfNeeded(
+            List<LegDto> legs,
+            List<RouteFailureDto> failures,
+            RouteTarget target,
+            RouteMode routeMode,
+            RouteOption routeOption
+    ) {
         if (!target.includesIndoor()) {
             return;
         }
@@ -506,17 +554,29 @@ public class NavigationService {
         if (target.hasCampus()) {
             createCampusLeg(target, routeOption).ifPresentOrElse(
                     legs::add,
-                    () -> legs.add(createFallbackCampusLeg(target))
+                    () -> {
+                        failures.add(routeFailure(NavigationErrorCode.CAMPUS_ROUTE_NOT_FOUND, routeMode, routeOption, LegMode.CAMPUS, MapType.CAMPUS));
+                        legs.add(createFallbackCampusLeg(target));
+                    }
             );
         }
 
         createIndoorLeg(target, routeOption).ifPresentOrElse(
                 legs::add,
-                () -> legs.add(createFallbackIndoorLeg(target))
+                () -> {
+                    failures.add(routeFailure(NavigationErrorCode.INDOOR_ROUTE_NOT_FOUND, routeMode, routeOption, LegMode.INDOOR, MapType.BUILDING));
+                    legs.add(createFallbackIndoorLeg(target));
+                }
         );
     }
 
-    private void prependExitLegsIfNeeded(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
+    private void prependExitLegsIfNeeded(
+            List<LegDto> legs,
+            List<RouteFailureDto> failures,
+            RouteTarget target,
+            RouteMode routeMode,
+            RouteOption routeOption
+    ) {
         if (!target.startsIndoor()) {
             return;
         }
@@ -524,12 +584,18 @@ public class NavigationService {
         List<LegDto> exitLegs = new ArrayList<>();
         createExitIndoorLeg(target, routeOption).ifPresentOrElse(
                 exitLegs::add,
-                () -> exitLegs.add(createFallbackExitIndoorLeg(target))
+                () -> {
+                    failures.add(routeFailure(NavigationErrorCode.INDOOR_ROUTE_NOT_FOUND, routeMode, routeOption, LegMode.INDOOR, MapType.BUILDING));
+                    exitLegs.add(createFallbackExitIndoorLeg(target));
+                }
         );
         if (target.hasCampus()) {
             createExitCampusLeg(target, routeOption).ifPresentOrElse(
                     exitLegs::add,
-                    () -> exitLegs.add(createFallbackExitCampusLeg(target))
+                    () -> {
+                        failures.add(routeFailure(NavigationErrorCode.CAMPUS_ROUTE_NOT_FOUND, routeMode, routeOption, LegMode.CAMPUS, MapType.CAMPUS));
+                        exitLegs.add(createFallbackExitCampusLeg(target));
+                    }
             );
         }
         legs.addAll(0, exitLegs);
@@ -694,7 +760,7 @@ public class NavigationService {
                 null,
                 CoordinateType.PIXEL,
                 List.of(),
-                List.of(new StepDto("캠퍼스 내부 이동", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "CAMPUS", null))
+                List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "CAMPUS", null))
         );
     }
 
@@ -718,7 +784,7 @@ public class NavigationService {
                 floorName,
                 CoordinateType.PIXEL,
                 List.of(),
-                List.of(new StepDto("실내 이동", null, null, target.originalEndX(), target.originalEndY(), null, "INDOOR", null))
+                List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.originalEndX(), target.originalEndY(), null, "INDOOR", null))
         );
     }
 
@@ -742,7 +808,7 @@ public class NavigationService {
                 floorName,
                 CoordinateType.PIXEL,
                 List.of(),
-                List.of(new StepDto("실내 출구까지 이동", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "INDOOR", null))
+                List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "INDOOR", null))
         );
     }
 
@@ -762,7 +828,7 @@ public class NavigationService {
                 null,
                 CoordinateType.PIXEL,
                 List.of(),
-                List.of(new StepDto("캠퍼스 출구까지 이동", null, null, target.resolvedOutdoorStartX(), target.resolvedOutdoorStartY(), null, "CAMPUS", null))
+                List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.resolvedOutdoorStartX(), target.resolvedOutdoorStartY(), null, "CAMPUS", null))
         );
     }
 

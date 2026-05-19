@@ -1,13 +1,9 @@
 package com.insideout.backend.domain.map.facade;
 
-import com.insideout.backend.domain.building.entity.CampusMap;
 import com.insideout.backend.domain.building.entity.Floor;
-import com.insideout.backend.domain.building.entity.Floorplan;
 import com.insideout.backend.domain.building.entity.Building;
 import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.BuildingDirectory;
-import com.insideout.backend.domain.building.repository.CampusMapRepository;
-import com.insideout.backend.domain.building.repository.FloorplanRepository;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.map.entity.Edge;
@@ -24,6 +20,7 @@ import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.ObstacleRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
+import com.insideout.backend.domain.map.storage.MapAssetStorage;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
@@ -58,8 +55,7 @@ public class MapQueryFacade {
     private final MapVersionRepository mapVersionRepository;
     private final VerticalConnectorNodeRepository verticalConnectorNodeRepository;
     private final ObstacleRepository obstacleRepository;
-    private final FloorplanRepository floorplanRepository;
-    private final CampusMapRepository campusMapRepository;
+    private final MapAssetStorage mapAssetStorage;
 
     public Optional<IndoorDestinationAnchor> findIndoorDestinationAnchor(
             UUID destinationBuildingId,
@@ -125,14 +121,16 @@ public class MapQueryFacade {
         if (floorId == null) {
             return Optional.empty();
         }
-        return floorplanRepository.findByFloorIdAndIsCurrentTrue(floorId).map(Floorplan::getImageUrl);
+        return mapAssetStorage.findCurrentMapAsset(MapType.BUILDING, floorId)
+                .map(asset -> asset.imageUrl());
     }
 
     public Optional<String> findCurrentCampusMapImageUrl(UUID campusId) {
         if (campusId == null) {
             return Optional.empty();
         }
-        return campusMapRepository.findByCampusIdAndIsCurrentTrue(campusId).map(CampusMap::getImageUrl);
+        return mapAssetStorage.findCurrentMapAsset(MapType.CAMPUS, campusId)
+                .map(asset -> asset.imageUrl());
     }
 
     private RoutingGraph toRoutingGraph(MapType mapType, UUID ownerId, MapVersion mapVersion) {
@@ -210,8 +208,8 @@ public class MapQueryFacade {
 
     private String resolveMapImageUrl(MapType mapType, UUID ownerId) {
         if (mapType == MapType.CAMPUS) {
-            return campusMapRepository.findByCampusIdAndIsCurrentTrue(ownerId)
-                    .map(CampusMap::getImageUrl)
+            return mapAssetStorage.findCurrentMapAsset(MapType.CAMPUS, ownerId)
+                    .map(asset -> asset.imageUrl())
                     .orElse(null);
         }
 

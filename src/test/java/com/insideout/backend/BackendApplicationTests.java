@@ -10,6 +10,7 @@ import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.ObstacleRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
+import com.insideout.backend.domain.map.storage.MapAssetStorage;
 import com.insideout.backend.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -60,6 +61,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     private CampusMapRepository campusMapRepository;
+
+    @MockitoBean
+    private MapAssetStorage mapAssetStorage;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

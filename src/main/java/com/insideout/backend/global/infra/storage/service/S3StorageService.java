@@ -91,9 +91,13 @@ public class S3StorageService {
      * @return 유효 기간 내에 다운로드 가능한 URL
      */
     public String generatePresignedDownloadUrl(String key, Duration expiry) {
+        return generatePresignedDownloadUrl(s3Properties.bucket(), key, expiry);
+    }
+
+    public String generatePresignedDownloadUrl(String bucket, String key, Duration expiry) {
         try {
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                    .bucket(s3Properties.bucket())
+                    .bucket(bucket)
                     .key(key)
                     .build();
 
@@ -103,12 +107,16 @@ public class S3StorageService {
                     .build();
 
             String url = s3Presigner.presignGetObject(presignRequest).url().toString();
-            log.debug("Generated presigned URL for key={}, expiry={}s", key, expiry.getSeconds());
+            log.debug("Generated presigned URL for bucket={}, key={}, expiry={}s", bucket, key, expiry.getSeconds());
             return url;
         } catch (Exception e) {
-            log.error("Failed to generate presigned URL: key={}", key, e);
+            log.error("Failed to generate presigned URL: bucket={}, key={}", bucket, key, e);
             throw new StorageException(StorageErrorCode.DOWNLOAD_FAILED);
         }
+    }
+
+    public String defaultBucket() {
+        return s3Properties.bucket();
     }
 
     /**

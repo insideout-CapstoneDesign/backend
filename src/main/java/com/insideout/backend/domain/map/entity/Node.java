@@ -43,9 +43,10 @@ public class Node {
 
     /**
      * 이 노드가 위치한 층.
+     * <p>건물 내부 그래프에서는 필수이며, 캠퍼스 그래프에서는 null일 수 있습니다.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "floor_id", nullable = false)
+    @JoinColumn(name = "floor_id")
     private Floor floor;
 
     /**

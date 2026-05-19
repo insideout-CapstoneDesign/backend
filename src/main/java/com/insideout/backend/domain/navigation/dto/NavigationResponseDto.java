@@ -21,6 +21,9 @@ public record NavigationResponseDto(
 
     public record IndoorInfoDto(
             Boolean included,
+            UUID campusId,
+            String campusName,
+            String campusEntranceName,
             UUID buildingId,
             String buildingName,
             UUID entranceNodeId,
@@ -82,6 +85,7 @@ public record NavigationResponseDto(
         BUS,
         SUBWAY,
         CAR,
+        CAMPUS,
         INDOOR,
         OTHER
     }

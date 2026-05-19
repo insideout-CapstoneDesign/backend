@@ -1,6 +1,7 @@
 package com.insideout.backend;
 
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     private BuildingDirectoryRepository buildingDirectoryRepository;
+
+    @MockitoBean
+    private BuildingRepository buildingRepository;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

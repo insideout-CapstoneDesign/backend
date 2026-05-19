@@ -35,6 +35,10 @@ public class BuildingDirectory {
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campus_id")
+    private Campus campus;
+
     @Column(nullable = false)
     private String name;
 
@@ -80,9 +84,10 @@ public class BuildingDirectory {
     }
 
     @Builder
-    public BuildingDirectory(UUID id, Tenant tenant, String name, String address, String category, Point centroid, Polygon bbox, boolean isPublic, MapVersion publishedVersion) {
+    public BuildingDirectory(UUID id, Tenant tenant, Campus campus, String name, String address, String category, Point centroid, Polygon bbox, boolean isPublic, MapVersion publishedVersion) {
         this.id = id;
         this.tenant = tenant;
+        this.campus = campus;
         this.name = name;
         this.address = address;
         this.category = category;

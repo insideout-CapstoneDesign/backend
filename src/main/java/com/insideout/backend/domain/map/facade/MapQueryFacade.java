@@ -1,6 +1,9 @@
 package com.insideout.backend.domain.map.facade;
 
+import com.insideout.backend.domain.building.entity.Building;
+import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.BuildingDirectory;
+import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.map.entity.Node;
 import com.insideout.backend.domain.map.repository.NodeRepository;
@@ -28,6 +31,7 @@ public class MapQueryFacade {
     // 내부적으로 자기 도메인의 Repository는 자유롭게 주입받아 사용합니다.
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
+    private final BuildingRepository buildingRepository;
     // private final EdgeRepository edgeRepository;
     // private final ObstacleRepository obstacleRepository;
 
@@ -55,7 +59,16 @@ public class MapQueryFacade {
             return Optional.empty();
         }
 
+        Optional<Building> buildingEntity = buildingRepository.findById(building.getId());
+        Campus campus = buildingEntity.map(Building::getCampus).orElse(null);
+        Point campusEntrance = campus == null ? null : campus.getPrimaryEntrance();
+
         return Optional.of(new IndoorDestinationAnchor(
+                campus == null ? null : campus.getId(),
+                campus == null ? null : campus.getName(),
+                campus == null ? null : campus.getPrimaryEntranceName(),
+                campusEntrance == null ? null : campusEntrance.getX(),
+                campusEntrance == null ? null : campusEntrance.getY(),
                 building.getId(),
                 building.getName(),
                 node.getId(),
@@ -66,6 +79,11 @@ public class MapQueryFacade {
     }
 
     public record IndoorDestinationAnchor(
+            UUID campusId,
+            String campusName,
+            String campusEntranceName,
+            Double campusEntranceX,
+            Double campusEntranceY,
             UUID buildingId,
             String buildingName,
             UUID entranceNodeId,
@@ -73,6 +91,41 @@ public class MapQueryFacade {
             double x,
             double y
     ) {
+        public IndoorDestinationAnchor(
+                UUID buildingId,
+                String buildingName,
+                UUID entranceNodeId,
+                String entranceName,
+                double x,
+                double y
+        ) {
+            this(null, null, null, null, null, buildingId, buildingName, entranceNodeId, entranceName, x, y);
+        }
+
+        public boolean hasCampus() {
+            return campusId != null && campusEntranceX != null && campusEntranceY != null;
+        }
+
+        public double outdoorTargetX() {
+            return hasCampus() ? campusEntranceX : x;
+        }
+
+        public double outdoorTargetY() {
+            return hasCampus() ? campusEntranceY : y;
+        }
+
+        public String outdoorTargetName() {
+            if (hasCampus() && campusEntranceName != null && !campusEntranceName.isBlank()) {
+                return campusEntranceName;
+            }
+            if (hasCampus()) {
+                return campusName;
+            }
+            if (entranceName != null && !entranceName.isBlank()) {
+                return entranceName;
+            }
+            return buildingName;
+        }
     }
 
     /*

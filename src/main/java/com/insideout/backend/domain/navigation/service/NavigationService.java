@@ -269,7 +269,7 @@ public class NavigationService {
             Integer totalTimeSeconds = getNullableInt(itinerary.path("totalTime"));
             Integer totalDistanceMeters = getNullableInt(itinerary.path("totalDistance"));
             List<LegDto> legs = parseTransitLegs(itinerary.path("legs"));
-            addIndoorLegIfNeeded(legs, target);
+            addHybridLegsIfNeeded(legs, target);
 
             routes.add(new RouteDto(
                     RouteMode.TRANSIT,
@@ -384,7 +384,7 @@ public class NavigationService {
                 target.endName(),
                 steps
         ));
-        addIndoorLegIfNeeded(legs, target);
+        addHybridLegsIfNeeded(legs, target);
 
         return Optional.of(new RouteDto(
                 routeMode,
@@ -437,9 +437,32 @@ public class NavigationService {
         return new CoordinateDto(null, null, null);
     }
 
-    private void addIndoorLegIfNeeded(List<LegDto> legs, RouteTarget target) {
+    private void addHybridLegsIfNeeded(List<LegDto> legs, RouteTarget target) {
         if (!target.includesIndoor()) {
             return;
+        }
+
+        if (target.hasCampus()) {
+            legs.add(new LegDto(
+                    LegMode.CAMPUS,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    target.campusEntranceName(),
+                    target.entranceName(),
+                    List.of(new StepDto(
+                            "캠퍼스 내부 이동",
+                            null,
+                            null,
+                            target.buildingEntranceX(),
+                            target.buildingEntranceY(),
+                            null,
+                            "CAMPUS",
+                            null
+                    ))
+            ));
         }
 
         legs.add(new LegDto(
@@ -628,11 +651,11 @@ public class NavigationService {
                 String originalEndName
         ) {
             return new RouteTarget(
-                    anchor.x(),
-                    anchor.y(),
+                    anchor.outdoorTargetX(),
+                    anchor.outdoorTargetY(),
                     originalEndX,
                     originalEndY,
-                    defaultAnchorName(anchor),
+                    anchor.outdoorTargetName(),
                     true,
                     originalEndName,
                     anchor
@@ -641,10 +664,13 @@ public class NavigationService {
 
         private IndoorInfoDto toIndoorInfo() {
             if (!includesIndoor) {
-                return new IndoorInfoDto(false, null, null, null, null);
+                return new IndoorInfoDto(false, null, null, null, null, null, null, null);
             }
             return new IndoorInfoDto(
                     true,
+                    anchor.campusId(),
+                    anchor.campusName(),
+                    anchor.campusEntranceName(),
                     anchor.buildingId(),
                     anchor.buildingName(),
                     anchor.entranceNodeId(),
@@ -652,15 +678,24 @@ public class NavigationService {
             );
         }
 
+        private boolean hasCampus() {
+            return anchor != null && anchor.hasCampus();
+        }
+
+        private String campusEntranceName() {
+            return anchor == null ? null : anchor.outdoorTargetName();
+        }
+
         private String entranceName() {
             return anchor == null ? null : anchor.entranceName();
         }
 
-        private static String defaultAnchorName(IndoorDestinationAnchor anchor) {
-            if (anchor.entranceName() != null && !anchor.entranceName().isBlank()) {
-                return anchor.entranceName();
-            }
-            return anchor.buildingName();
+        private double buildingEntranceX() {
+            return anchor == null ? endX : anchor.x();
+        }
+
+        private double buildingEntranceY() {
+            return anchor == null ? endY : anchor.y();
         }
     }
 }

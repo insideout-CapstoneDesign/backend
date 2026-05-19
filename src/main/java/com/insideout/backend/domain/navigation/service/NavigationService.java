@@ -3,9 +3,17 @@ package com.insideout.backend.domain.navigation.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.insideout.backend.domain.map.facade.MapQueryFacade;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.IndoorDestinationAnchor;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.IndoorPoiDestination;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingEdge;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingGraph;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingNode;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingObstacle;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.VerticalRoutingLink;
+import com.insideout.backend.domain.map.entity.MapType;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto.RouteType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.IndoorInfoDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegDto;
@@ -29,16 +37,21 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * 실내외 길찾기(Navigation) 기능을 담당하는 핵심 서비스.
- *
- * <p>Repository를 직접 참조하지 않고, MapQueryFacade 등
+ * Repository를 직접 참조하지 않고, MapQueryFacade 등
  * 다른 도메인의 Service를 주입받아 필요한 데이터를 가져옵니다.
  */
 @Service
@@ -49,6 +62,9 @@ public class NavigationService {
     private static final String TMAP_TRANSIT_ROUTES_URL = "https://apis.openapi.sk.com/transit/routes";
     private static final String TMAP_CAR_ROUTES_URL = "https://apis.openapi.sk.com/tmap/routes?version=1&format=json";
     private static final String TMAP_WALK_ROUTES_URL = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1";
+    private static final double COMFORTABLE_STAIR_PENALTY_MULTIPLIER = 20.0;
+    private static final double COMFORTABLE_OBSTACLE_PENALTY_MULTIPLIER = 10.0;
+    private static final double BLOCKING_EDGE_COST = Double.POSITIVE_INFINITY;
 
     private final MapQueryFacade mapQueryFacade;
     private final RestTemplate restTemplate;
@@ -135,7 +151,9 @@ public class NavigationService {
                 request.endY(),
                 request.startName(),
                 request.endName(),
+                request.startPoiId(),
                 request.destinationBuildingId(),
+                request.destinationPoiId(),
                 request.includeIndoor(),
                 List.of(RouteType.TRANSIT)
         );
@@ -147,14 +165,44 @@ public class NavigationService {
             return RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName());
         }
 
+        Optional<IndoorPoiDestination> source = mapQueryFacade.findIndoorPoiDestination(request.startPoiId());
+        if (source.isPresent()) {
+            Optional<IndoorDestinationAnchor> exitAnchor = mapQueryFacade.findIndoorDestinationAnchor(
+                    source.get().buildingId(),
+                    request.endX(),
+                    request.endY()
+            );
+
+            return exitAnchor
+                    .map(value -> RouteTarget.fromIndoorToOutdoor(
+                            value,
+                            source.get(),
+                            request.endX(),
+                            request.endY(),
+                            request.endName()
+                    ))
+                    .orElseGet(() -> RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName()));
+        }
+
+        Optional<IndoorPoiDestination> destination = mapQueryFacade.findIndoorPoiDestination(request.destinationPoiId());
+        UUID destinationBuildingId = request.destinationBuildingId() != null
+                ? request.destinationBuildingId()
+                : destination.map(IndoorPoiDestination::buildingId).orElse(null);
+
         Optional<IndoorDestinationAnchor> anchor = mapQueryFacade.findIndoorDestinationAnchor(
-                request.destinationBuildingId(),
+                destinationBuildingId,
                 request.endX(),
                 request.endY()
         );
 
         return anchor
-                .map(value -> RouteTarget.withIndoor(value, request.endX(), request.endY(), request.endName()))
+                .map(value -> RouteTarget.withIndoor(
+                        value,
+                        destination.orElse(null),
+                        request.endX(),
+                        request.endY(),
+                        request.endName()
+                ))
                 .orElseGet(() -> RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName()));
     }
 
@@ -170,8 +218,8 @@ public class NavigationService {
 
     private List<RouteDto> findTransitRouteDtos(NavigationRequestDto request, RouteTarget target) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("startX", request.startX());
-        body.put("startY", request.startY());
+        body.put("startX", target.outdoorStartX(request));
+        body.put("startY", target.outdoorStartY(request));
         body.put("endX", target.endX());
         body.put("endY", target.endY());
         body.put("format", "json");
@@ -213,13 +261,13 @@ public class NavigationService {
 
     private Map<String, Object> baseOutdoorRouteBody(NavigationRequestDto request, RouteTarget target) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("startX", request.startX());
-        body.put("startY", request.startY());
+        body.put("startX", target.outdoorStartX(request));
+        body.put("startY", target.outdoorStartY(request));
         body.put("endX", target.endX());
         body.put("endY", target.endY());
         body.put("reqCoordType", "WGS84GEO");
         body.put("resCoordType", "WGS84GEO");
-        body.put("startName", defaultName(request.startName(), "출발"));
+        body.put("startName", defaultName(target.outdoorStartName(request), "출발"));
         body.put("endName", defaultName(target.endName(), "도착"));
         return body;
     }
@@ -269,7 +317,7 @@ public class NavigationService {
             Integer totalTimeSeconds = getNullableInt(itinerary.path("totalTime"));
             Integer totalDistanceMeters = getNullableInt(itinerary.path("totalDistance"));
             List<LegDto> legs = parseTransitLegs(itinerary.path("legs"));
-            addHybridLegsIfNeeded(legs, target);
+            applyHybridLegs(legs, target, RouteOption.SHORTEST);
 
             routes.add(new RouteDto(
                     RouteMode.TRANSIT,
@@ -373,6 +421,7 @@ public class NavigationService {
         Integer totalDistanceMeters = getNullableInt(summary.path("totalDistance"));
         List<StepDto> steps = parseFeatureSteps(features);
         List<LegDto> legs = new ArrayList<>();
+        prependExitLegsIfNeeded(legs, target, routeOption);
         legs.add(new LegDto(
                 legMode,
                 null,
@@ -384,7 +433,7 @@ public class NavigationService {
                 target.endName(),
                 steps
         ));
-        addHybridLegsIfNeeded(legs, target);
+        appendEntryLegsIfNeeded(legs, target, routeOption);
 
         return Optional.of(new RouteDto(
                 routeMode,
@@ -437,35 +486,224 @@ public class NavigationService {
         return new CoordinateDto(null, null, null);
     }
 
-    private void addHybridLegsIfNeeded(List<LegDto> legs, RouteTarget target) {
+    private void addHybridLegsIfNeeded(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
+        applyHybridLegs(legs, target, routeOption);
+    }
+
+    private void applyHybridLegs(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
+        if (target.startsIndoor()) {
+            prependExitLegsIfNeeded(legs, target, routeOption);
+        } else {
+            appendEntryLegsIfNeeded(legs, target, routeOption);
+        }
+    }
+
+    private void appendEntryLegsIfNeeded(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
         if (!target.includesIndoor()) {
             return;
         }
 
         if (target.hasCampus()) {
-            legs.add(new LegDto(
-                    LegMode.CAMPUS,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    target.campusEntranceName(),
-                    target.entranceName(),
-                    List.of(new StepDto(
-                            "캠퍼스 내부 이동",
-                            null,
-                            null,
-                            target.buildingEntranceX(),
-                            target.buildingEntranceY(),
-                            null,
-                            "CAMPUS",
-                            null
-                    ))
-            ));
+            createCampusLeg(target, routeOption).ifPresentOrElse(
+                    legs::add,
+                    () -> legs.add(createFallbackCampusLeg(target))
+            );
         }
 
-        legs.add(new LegDto(
+        createIndoorLeg(target, routeOption).ifPresentOrElse(
+                legs::add,
+                () -> legs.add(createFallbackIndoorLeg(target))
+        );
+    }
+
+    private void prependExitLegsIfNeeded(List<LegDto> legs, RouteTarget target, RouteOption routeOption) {
+        if (!target.startsIndoor()) {
+            return;
+        }
+
+        List<LegDto> exitLegs = new ArrayList<>();
+        createExitIndoorLeg(target, routeOption).ifPresentOrElse(
+                exitLegs::add,
+                () -> exitLegs.add(createFallbackExitIndoorLeg(target))
+        );
+        if (target.hasCampus()) {
+            createExitCampusLeg(target, routeOption).ifPresentOrElse(
+                    exitLegs::add,
+                    () -> exitLegs.add(createFallbackExitCampusLeg(target))
+            );
+        }
+        legs.addAll(0, exitLegs);
+    }
+
+    private Optional<LegDto> createCampusLeg(RouteTarget target, RouteOption routeOption) {
+        if (!target.hasCampus()) {
+            return Optional.empty();
+        }
+
+        Optional<UUID> startNodeId = mapQueryFacade.findNearestPublishedCampusNodeId(
+                target.anchor().campusId(),
+                target.anchor().campusEntranceX(),
+                target.anchor().campusEntranceY()
+        );
+        Optional<UUID> endNodeId = mapQueryFacade.findNearestPublishedCampusNodeId(
+                target.anchor().campusId(),
+                target.anchor().x(),
+                target.anchor().y()
+        );
+        Optional<RoutingGraph> graph = mapQueryFacade.findPublishedRoutingGraph(MapType.CAMPUS, target.anchor().campusId());
+
+        if (startNodeId.isEmpty() || endNodeId.isEmpty() || graph.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return computeIndoorRoute(graph.get(), startNodeId.get(), endNodeId.get(), routeOption)
+                .map(route -> toNavigationLeg(
+                        LegMode.CAMPUS,
+                        MapType.CAMPUS,
+                        mapQueryFacade.findCurrentCampusMapImageUrl(target.anchor().campusId()).orElse(graph.get().mapImageUrl()),
+                        null,
+                        null,
+                        target.campusEntranceName(),
+                        target.entranceName(),
+                        route
+                ));
+    }
+
+    private Optional<LegDto> createIndoorLeg(RouteTarget target, RouteOption routeOption) {
+        if (target.destination() == null) {
+            return Optional.empty();
+        }
+
+        Optional<RoutingGraph> graph = mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, target.destination().buildingId());
+        if (graph.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return computeIndoorRoute(graph.get(), target.anchor().entranceNodeId(), target.destination().anchorNodeId(), routeOption)
+                .map(route -> toNavigationLeg(
+                        LegMode.INDOOR,
+                        MapType.BUILDING,
+                        mapQueryFacade.findCurrentFloorplanImageUrl(target.destination().floorId()).orElse(graph.get().mapImageUrl()),
+                        target.destination().floorId(),
+                        target.destination().floorName(),
+                        target.entranceName(),
+                        target.destination().name(),
+                        route
+                ));
+    }
+
+    private Optional<LegDto> createExitIndoorLeg(RouteTarget target, RouteOption routeOption) {
+        if (target.source() == null || target.anchor() == null) {
+            return Optional.empty();
+        }
+
+        Optional<RoutingGraph> graph = mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, target.source().buildingId());
+        if (graph.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return computeIndoorRoute(graph.get(), target.source().anchorNodeId(), target.anchor().entranceNodeId(), routeOption)
+                .map(route -> toNavigationLeg(
+                        LegMode.INDOOR,
+                        MapType.BUILDING,
+                        mapQueryFacade.findCurrentFloorplanImageUrl(target.source().floorId()).orElse(graph.get().mapImageUrl()),
+                        target.source().floorId(),
+                        target.source().floorName(),
+                        target.source().name(),
+                        target.entranceName(),
+                        route
+                ));
+    }
+
+    private Optional<LegDto> createExitCampusLeg(RouteTarget target, RouteOption routeOption) {
+        if (!target.hasCampus()) {
+            return Optional.empty();
+        }
+
+        Optional<UUID> startNodeId = mapQueryFacade.findNearestPublishedCampusNodeId(
+                target.anchor().campusId(),
+                target.anchor().x(),
+                target.anchor().y()
+        );
+        Optional<UUID> endNodeId = mapQueryFacade.findNearestPublishedCampusNodeId(
+                target.anchor().campusId(),
+                target.anchor().campusEntranceX(),
+                target.anchor().campusEntranceY()
+        );
+        Optional<RoutingGraph> graph = mapQueryFacade.findPublishedRoutingGraph(MapType.CAMPUS, target.anchor().campusId());
+
+        if (startNodeId.isEmpty() || endNodeId.isEmpty() || graph.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return computeIndoorRoute(graph.get(), startNodeId.get(), endNodeId.get(), routeOption)
+                .map(route -> toNavigationLeg(
+                        LegMode.CAMPUS,
+                        MapType.CAMPUS,
+                        mapQueryFacade.findCurrentCampusMapImageUrl(target.anchor().campusId()).orElse(graph.get().mapImageUrl()),
+                        null,
+                        null,
+                        target.entranceName(),
+                        target.campusEntranceName(),
+                        route
+                ));
+    }
+
+    private LegDto toNavigationLeg(
+            LegMode mode,
+            MapType mapType,
+            String mapImageUrl,
+            UUID floorId,
+            String floorName,
+            String startName,
+            String endName,
+            ComputedIndoorRoute route
+    ) {
+        return new LegDto(
+                mode,
+                null,
+                null,
+                null,
+                null,
+                null,
+                startName,
+                endName,
+                mapType,
+                mapImageUrl,
+                floorId,
+                floorName,
+                CoordinateType.PIXEL,
+                route.path(),
+                route.steps()
+        );
+    }
+
+    private LegDto createFallbackCampusLeg(RouteTarget target) {
+        return new LegDto(
+                LegMode.CAMPUS,
+                null,
+                null,
+                null,
+                null,
+                null,
+                target.campusEntranceName(),
+                target.entranceName(),
+                MapType.CAMPUS,
+                target.anchor() == null ? null : mapQueryFacade.findCurrentCampusMapImageUrl(target.anchor().campusId()).orElse(null),
+                null,
+                null,
+                CoordinateType.PIXEL,
+                List.of(),
+                List.of(new StepDto("캠퍼스 내부 이동", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "CAMPUS", null))
+        );
+    }
+
+    private LegDto createFallbackIndoorLeg(RouteTarget target) {
+        UUID floorId = target.destination() == null ? null : target.destination().floorId();
+        String floorName = target.destination() == null ? null : target.destination().floorName();
+        String endName = target.destination() == null ? target.originalEndName() : target.destination().name();
+
+        return new LegDto(
                 LegMode.INDOOR,
                 null,
                 null,
@@ -473,18 +711,282 @@ public class NavigationService {
                 null,
                 null,
                 target.entranceName(),
-                target.originalEndName(),
-                List.of(new StepDto(
-                        "실내 이동",
-                        null,
-                        null,
-                        target.originalEndX(),
-                        target.originalEndY(),
-                        null,
-                        "INDOOR",
-                        null
-                ))
-        ));
+                endName,
+                MapType.BUILDING,
+                floorId == null ? null : mapQueryFacade.findCurrentFloorplanImageUrl(floorId).orElse(null),
+                floorId,
+                floorName,
+                CoordinateType.PIXEL,
+                List.of(),
+                List.of(new StepDto("실내 이동", null, null, target.originalEndX(), target.originalEndY(), null, "INDOOR", null))
+        );
+    }
+
+    private LegDto createFallbackExitIndoorLeg(RouteTarget target) {
+        UUID floorId = target.source() == null ? null : target.source().floorId();
+        String floorName = target.source() == null ? null : target.source().floorName();
+        String startName = target.source() == null ? target.originalStartName() : target.source().name();
+
+        return new LegDto(
+                LegMode.INDOOR,
+                null,
+                null,
+                null,
+                null,
+                null,
+                startName,
+                target.entranceName(),
+                MapType.BUILDING,
+                floorId == null ? null : mapQueryFacade.findCurrentFloorplanImageUrl(floorId).orElse(null),
+                floorId,
+                floorName,
+                CoordinateType.PIXEL,
+                List.of(),
+                List.of(new StepDto("실내 출구까지 이동", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "INDOOR", null))
+        );
+    }
+
+    private LegDto createFallbackExitCampusLeg(RouteTarget target) {
+        return new LegDto(
+                LegMode.CAMPUS,
+                null,
+                null,
+                null,
+                null,
+                null,
+                target.entranceName(),
+                target.campusEntranceName(),
+                MapType.CAMPUS,
+                target.anchor() == null ? null : mapQueryFacade.findCurrentCampusMapImageUrl(target.anchor().campusId()).orElse(null),
+                null,
+                null,
+                CoordinateType.PIXEL,
+                List.of(),
+                List.of(new StepDto("캠퍼스 출구까지 이동", null, null, target.resolvedOutdoorStartX(), target.resolvedOutdoorStartY(), null, "CAMPUS", null))
+        );
+    }
+
+    private Optional<ComputedIndoorRoute> computeIndoorRoute(
+            RoutingGraph graph,
+            UUID startNodeId,
+            UUID endNodeId,
+            RouteOption routeOption
+    ) {
+        Map<UUID, RoutingNode> nodes = graph.nodeIndex();
+        if (!nodes.containsKey(startNodeId) || !nodes.containsKey(endNodeId)) {
+            return Optional.empty();
+        }
+
+        Map<UUID, List<RouteLink>> adjacency = buildAdjacency(graph, nodes, routeOption);
+        Map<UUID, Double> distance = new HashMap<>();
+        Map<UUID, PreviousNode> previous = new HashMap<>();
+        PriorityQueue<NodeDistance> queue = new PriorityQueue<>(Comparator.comparingDouble(NodeDistance::distance));
+        Set<UUID> visited = new HashSet<>();
+
+        distance.put(startNodeId, 0.0);
+        queue.add(new NodeDistance(startNodeId, 0.0));
+
+        while (!queue.isEmpty()) {
+            NodeDistance current = queue.poll();
+            if (!visited.add(current.nodeId())) {
+                continue;
+            }
+            if (current.nodeId().equals(endNodeId)) {
+                break;
+            }
+
+            for (RouteLink link : adjacency.getOrDefault(current.nodeId(), List.of())) {
+                double nextDistance = current.distance() + link.cost();
+                if (nextDistance < distance.getOrDefault(link.toNodeId(), Double.MAX_VALUE)) {
+                    distance.put(link.toNodeId(), nextDistance);
+                    previous.put(link.toNodeId(), new PreviousNode(current.nodeId(), link));
+                    queue.add(new NodeDistance(link.toNodeId(), nextDistance));
+                }
+            }
+        }
+
+        if (!distance.containsKey(endNodeId)) {
+            return Optional.empty();
+        }
+
+        List<UUID> nodeIds = new ArrayList<>();
+        List<RouteLink> links = new ArrayList<>();
+        UUID cursor = endNodeId;
+        nodeIds.add(cursor);
+        while (!cursor.equals(startNodeId)) {
+            PreviousNode prev = previous.get(cursor);
+            if (prev == null) {
+                return Optional.empty();
+            }
+            links.add(0, prev.link());
+            cursor = prev.nodeId();
+            nodeIds.add(0, cursor);
+        }
+
+        List<RoutingNode> routeNodes = nodeIds.stream().map(nodes::get).toList();
+        List<CoordinateDto> path = routeNodes.stream()
+                .map(node -> new CoordinateDto(node.x(), node.y(), node.displayName()))
+                .toList();
+        List<StepDto> steps = buildIndoorSteps(routeNodes, links);
+        return Optional.of(new ComputedIndoorRoute(path, steps));
+    }
+
+    private Map<UUID, List<RouteLink>> buildAdjacency(
+            RoutingGraph graph,
+            Map<UUID, RoutingNode> nodes,
+            RouteOption routeOption
+    ) {
+        Map<UUID, List<RouteLink>> adjacency = new HashMap<>();
+
+        for (RoutingEdge edge : graph.edges()) {
+            RoutingNode from = nodes.get(edge.fromNodeId());
+            RoutingNode to = nodes.get(edge.toNodeId());
+            if (from == null || to == null) {
+                continue;
+            }
+            double cost = edgeCost(edge, from, to, graph.obstacles(), routeOption);
+            if (!Double.isFinite(cost)) {
+                continue;
+            }
+            addLink(adjacency, from.id(), new RouteLink(to.id(), cost, edge.kind(), false, null, null, null));
+            if (!edge.directed()) {
+                addLink(adjacency, edge.toNodeId(), new RouteLink(from.id(), cost, edge.kind(), false, null, null, null));
+            }
+        }
+
+        for (VerticalRoutingLink link : graph.verticalLinks()) {
+            addLink(adjacency, link.fromNodeId(), new RouteLink(
+                    link.toNodeId(),
+                    verticalCost(link, routeOption),
+                    link.connectorKind(),
+                    true,
+                    link.connectorKind(),
+                    link.displayName(),
+                    link.toFloorName()
+            ));
+        }
+
+        return adjacency;
+    }
+
+    private void addLink(Map<UUID, List<RouteLink>> adjacency, UUID fromNodeId, RouteLink link) {
+        adjacency.computeIfAbsent(fromNodeId, ignored -> new ArrayList<>()).add(link);
+    }
+
+    private double edgeCost(
+            RoutingEdge edge,
+            RoutingNode from,
+            RoutingNode to,
+            List<RoutingObstacle> obstacles,
+            RouteOption routeOption
+    ) {
+        double length = edge.length() > 0 ? edge.length() : pixelDistance(from, to);
+        double baseWeight = edge.baseWeight() > 0 ? edge.baseWeight() : 1.0;
+        double cost = Math.max(length, 1.0) * baseWeight;
+
+        if (isStair(edge.kind()) && routeOption == RouteOption.COMFORTABLE) {
+            cost *= COMFORTABLE_STAIR_PENALTY_MULTIPLIER;
+        }
+
+        for (RoutingObstacle obstacle : obstacles) {
+            if (!obstacle.affectedEdgeIds().contains(edge.id())) {
+                continue;
+            }
+            if (obstacle.blocking()) {
+                return BLOCKING_EDGE_COST;
+            }
+            double extraCost = Math.max(obstacle.extraCost(), 0.0);
+            cost += routeOption == RouteOption.COMFORTABLE
+                    ? extraCost * COMFORTABLE_OBSTACLE_PENALTY_MULTIPLIER
+                    : extraCost;
+        }
+
+        return cost;
+    }
+
+    private double verticalCost(VerticalRoutingLink link, RouteOption routeOption) {
+        double cost = Math.max(link.avgWaitSeconds() == null ? 1 : link.avgWaitSeconds(), 1);
+        if (isStair(link.connectorKind()) && routeOption == RouteOption.COMFORTABLE) {
+            cost *= COMFORTABLE_STAIR_PENALTY_MULTIPLIER;
+        }
+        return cost;
+    }
+
+    private boolean isStair(String kind) {
+        return "stair".equalsIgnoreCase(kind);
+    }
+
+    private double pixelDistance(RoutingNode from, RoutingNode to) {
+        double dx = from.x() - to.x();
+        double dy = from.y() - to.y();
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private List<StepDto> buildIndoorSteps(List<RoutingNode> nodes, List<RouteLink> links) {
+        if (nodes.isEmpty()) {
+            return List.of();
+        }
+
+        List<StepDto> steps = new ArrayList<>();
+        RoutingNode start = nodes.get(0);
+        steps.add(new StepDto(start.displayName() + "에서 출발", null, null, start.x(), start.y(), null, "INDOOR", null));
+
+        for (int i = 0; i < links.size(); i++) {
+            RouteLink link = links.get(i);
+            RoutingNode current = nodes.get(i);
+            RoutingNode next = nodes.get(i + 1);
+
+            String instruction;
+            if (link.vertical()) {
+                instruction = verticalInstruction(link);
+            } else {
+                instruction = horizontalInstruction(nodes, i, next);
+            }
+
+            steps.add(new StepDto(instruction, null, null, next.x(), next.y(), null, "INDOOR", null));
+        }
+
+        RoutingNode end = nodes.get(nodes.size() - 1);
+        steps.add(new StepDto(end.displayName() + " 도착", null, null, end.x(), end.y(), null, "INDOOR", null));
+        return steps;
+    }
+
+    private String verticalInstruction(RouteLink link) {
+        String destinationFloor = link.toFloorName() == null || link.toFloorName().isBlank()
+                ? "다른 층"
+                : link.toFloorName();
+        return switch (safeLower(link.connectorKind())) {
+            case "stair" -> "계단을 이용해 " + destinationFloor + "으로 이동";
+            case "ramp" -> "경사로를 따라 " + destinationFloor + "으로 이동";
+            case "escalator" -> "에스컬레이터를 타고 " + destinationFloor + "으로 이동";
+            default -> "엘리베이터를 타고 " + destinationFloor + "으로 이동";
+        };
+    }
+
+    private String horizontalInstruction(List<RoutingNode> nodes, int linkIndex, RoutingNode next) {
+        if (linkIndex == 0) {
+            return next.displayName() + " 앞까지 직진";
+        }
+
+        RoutingNode previous = nodes.get(linkIndex - 1);
+        RoutingNode current = nodes.get(linkIndex);
+        double cross = ((current.x() - previous.x()) * (next.y() - current.y()))
+                - ((current.y() - previous.y()) * (next.x() - current.x()));
+        double dot = ((current.x() - previous.x()) * (next.x() - current.x()))
+                + ((current.y() - previous.y()) * (next.y() - current.y()));
+        double angle = Math.toDegrees(Math.atan2(cross, dot));
+
+        if (Math.abs(angle) < 35) {
+            return next.displayName() + " 앞까지 직진";
+        }
+        if (angle > 0) {
+            return current.displayName() + " 앞에서 좌회전";
+        }
+        return current.displayName() + " 앞에서 우회전";
+    }
+
+    private String safeLower(String value) {
+        return value == null ? "" : value.toLowerCase();
     }
 
     private String resolveTransitRouteName(JsonNode legNode) {
@@ -629,23 +1131,60 @@ public class NavigationService {
         return null;
     }
 
+    private record ComputedIndoorRoute(
+            List<CoordinateDto> path,
+            List<StepDto> steps
+    ) {
+    }
+
+    private record RouteLink(
+            UUID toNodeId,
+            double cost,
+            String kind,
+            boolean vertical,
+            String connectorKind,
+            String connectorName,
+            String toFloorName
+    ) {
+    }
+
+    private record PreviousNode(
+            UUID nodeId,
+            RouteLink link
+    ) {
+    }
+
+    private record NodeDistance(
+            UUID nodeId,
+            double distance
+    ) {
+    }
+
     private record RouteTarget(
             double endX,
             double endY,
+            Double outdoorStartX,
+            Double outdoorStartY,
+            String outdoorStartName,
             double originalEndX,
             double originalEndY,
+            String originalStartName,
             String endName,
             boolean includesIndoor,
+            boolean startsIndoor,
             String originalEndName,
+            IndoorPoiDestination source,
+            IndoorPoiDestination destination,
             IndoorDestinationAnchor anchor
     ) {
 
         private static RouteTarget outdoorOnly(double endX, double endY, String endName) {
-            return new RouteTarget(endX, endY, endX, endY, endName, false, endName, null);
+            return new RouteTarget(endX, endY, null, null, null, endX, endY, null, endName, false, false, endName, null, null, null);
         }
 
         private static RouteTarget withIndoor(
                 IndoorDestinationAnchor anchor,
+                IndoorPoiDestination destination,
                 double originalEndX,
                 double originalEndY,
                 String originalEndName
@@ -653,11 +1192,44 @@ public class NavigationService {
             return new RouteTarget(
                     anchor.outdoorTargetX(),
                     anchor.outdoorTargetY(),
+                    null,
+                    null,
+                    null,
                     originalEndX,
                     originalEndY,
+                    null,
                     anchor.outdoorTargetName(),
                     true,
+                    false,
                     originalEndName,
+                    null,
+                    destination,
+                    anchor
+            );
+        }
+
+        private static RouteTarget fromIndoorToOutdoor(
+                IndoorDestinationAnchor anchor,
+                IndoorPoiDestination source,
+                double outdoorEndX,
+                double outdoorEndY,
+                String outdoorEndName
+        ) {
+            return new RouteTarget(
+                    outdoorEndX,
+                    outdoorEndY,
+                    anchor.outdoorTargetX(),
+                    anchor.outdoorTargetY(),
+                    anchor.outdoorTargetName(),
+                    outdoorEndX,
+                    outdoorEndY,
+                    source.name(),
+                    outdoorEndName,
+                    true,
+                    true,
+                    outdoorEndName,
+                    source,
+                    null,
                     anchor
             );
         }
@@ -696,6 +1268,26 @@ public class NavigationService {
 
         private double buildingEntranceY() {
             return anchor == null ? endY : anchor.y();
+        }
+
+        private double outdoorStartX(NavigationRequestDto request) {
+            return outdoorStartX == null ? request.startX() : outdoorStartX;
+        }
+
+        private double outdoorStartY(NavigationRequestDto request) {
+            return outdoorStartY == null ? request.startY() : outdoorStartY;
+        }
+
+        private String outdoorStartName(NavigationRequestDto request) {
+            return outdoorStartName == null ? request.startName() : outdoorStartName;
+        }
+
+        private double resolvedOutdoorStartX() {
+            return outdoorStartX == null ? endX : outdoorStartX;
+        }
+
+        private double resolvedOutdoorStartY() {
+            return outdoorStartY == null ? endY : outdoorStartY;
         }
     }
 }

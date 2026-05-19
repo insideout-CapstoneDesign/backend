@@ -1,8 +1,15 @@
 package com.insideout.backend;
 
+import com.insideout.backend.domain.building.repository.CampusMapRepository;
+import com.insideout.backend.domain.building.repository.FloorplanRepository;
+import com.insideout.backend.domain.map.repository.EdgeRepository;
+import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
+import com.insideout.backend.domain.map.repository.ObstacleRepository;
+import com.insideout.backend.domain.map.repository.PoiRepository;
+import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
 import com.insideout.backend.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +39,27 @@ class BackendApplicationTests {
 
     @MockitoBean
     private BuildingRepository buildingRepository;
+
+    @MockitoBean
+    private PoiRepository poiRepository;
+
+    @MockitoBean
+    private EdgeRepository edgeRepository;
+
+    @MockitoBean
+    private MapVersionRepository mapVersionRepository;
+
+    @MockitoBean
+    private VerticalConnectorNodeRepository verticalConnectorNodeRepository;
+
+    @MockitoBean
+    private ObstacleRepository obstacleRepository;
+
+    @MockitoBean
+    private FloorplanRepository floorplanRepository;
+
+    @MockitoBean
+    private CampusMapRepository campusMapRepository;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

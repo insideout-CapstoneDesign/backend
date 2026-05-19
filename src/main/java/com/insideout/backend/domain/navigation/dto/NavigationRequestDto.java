@@ -12,10 +12,41 @@ public record NavigationRequestDto(
         @NotNull Double endY,
         String startName,
         String endName,
+        Long startPoiId,
         UUID destinationBuildingId,
+        Long destinationPoiId,
         Boolean includeIndoor,
         List<RouteType> routeTypes
 ) {
+
+    public NavigationRequestDto(
+            Double startX,
+            Double startY,
+            Double endX,
+            Double endY,
+            String startName,
+            String endName,
+            UUID destinationBuildingId,
+            Boolean includeIndoor,
+            List<RouteType> routeTypes
+    ) {
+        this(startX, startY, endX, endY, startName, endName, null, destinationBuildingId, null, includeIndoor, routeTypes);
+    }
+
+    public NavigationRequestDto(
+            Double startX,
+            Double startY,
+            Double endX,
+            Double endY,
+            String startName,
+            String endName,
+            UUID destinationBuildingId,
+            Long destinationPoiId,
+            Boolean includeIndoor,
+            List<RouteType> routeTypes
+    ) {
+        this(startX, startY, endX, endY, startName, endName, null, destinationBuildingId, destinationPoiId, includeIndoor, routeTypes);
+    }
 
     public enum RouteType {
         TRANSIT,

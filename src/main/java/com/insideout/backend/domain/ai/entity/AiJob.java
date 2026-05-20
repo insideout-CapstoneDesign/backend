@@ -102,4 +102,23 @@ public class AiJob {
         this.finishedAt = finishedAt;
         this.error = error;
     }
+
+    public void markRunning() {
+        this.status = "running";
+        this.startedAt = OffsetDateTime.now();
+        this.finishedAt = null;
+        this.error = null;
+    }
+
+    public void markSucceeded() {
+        this.status = "succeeded";
+        this.finishedAt = OffsetDateTime.now();
+        this.error = null;
+    }
+
+    public void markFailed(String error) {
+        this.status = "failed";
+        this.finishedAt = OffsetDateTime.now();
+        this.error = error;
+    }
 }

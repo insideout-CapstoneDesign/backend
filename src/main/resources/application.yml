@@ -34,3 +34,10 @@ storage:
     bucket: ${S3_BUCKET}
     path-style-access: true
 
+ai:
+  service:
+    base-url: ${AI_SERVICE_URL:http://localhost:8000}
+    api-key-header: ${AI_API_KEY_HEADER:x-api-key}
+    api-key: ${AI_API_KEY:default-key-for-local-dev}
+    timeout-seconds: ${AI_SERVICE_TIMEOUT:120}
+

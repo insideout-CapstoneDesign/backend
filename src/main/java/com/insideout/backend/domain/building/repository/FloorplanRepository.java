@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface FloorplanRepository extends JpaRepository<Floorplan, UUID> {
 
     Optional<Floorplan> findByFloorIdAndIsCurrentTrue(UUID floorId);
+
+    Optional<Floorplan> findByIdAndTenantId(UUID id, UUID tenantId);
 }

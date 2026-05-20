@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * 대시보드 테넌트 목록에서 사용하는 응답 DTO.
  */
-public record TenantSummaryDTO(
+public record TenantSummaryResDTO(
         UUID tenantId,
         String slug,
         String displayName,
@@ -16,8 +16,8 @@ public record TenantSummaryDTO(
         String role,
         OffsetDateTime joinedAt
 ) {
-    public static TenantSummaryDTO from(Tenant tenant, String role, OffsetDateTime joinedAt) {
-        return new TenantSummaryDTO(
+    public static TenantSummaryResDTO from(Tenant tenant, String role, OffsetDateTime joinedAt) {
+        return new TenantSummaryResDTO(
                 tenant.getId(),
                 tenant.getSlug(),
                 tenant.getDisplayName(),

@@ -12,7 +12,9 @@ public record AiAnalyzeRequest(
     private static final String DEFAULT_MODEL_VERSION = "v1.0";
 
     public static AiAnalyzeRequest of(UUID floorplanId, String imageUrl, String modelVersion) {
-        String resolvedModelVersion = modelVersion != null ? modelVersion : DEFAULT_MODEL_VERSION;
+        String resolvedModelVersion = (modelVersion == null || modelVersion.isBlank())
+                ? DEFAULT_MODEL_VERSION
+                : modelVersion.trim();
         return new AiAnalyzeRequest(
                 floorplanId,
                 imageUrl,

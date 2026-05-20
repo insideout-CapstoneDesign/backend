@@ -1,12 +1,9 @@
 package com.insideout.backend.domain.ai.service;
 
 import com.insideout.backend.domain.ai.client.AiClient;
-import com.insideout.backend.domain.ai.converter.AiDetectionConverter;
 import com.insideout.backend.domain.ai.dto.client.AiAnalyzeResponse;
-import com.insideout.backend.domain.ai.dto.client.AiDetectionDTO;
 import com.insideout.backend.domain.ai.dto.response.AnalyzeResultDTO;
 import com.insideout.backend.domain.ai.dto.response.DetectionViewDTO;
-import com.insideout.backend.domain.ai.entity.AiDetection;
 import com.insideout.backend.domain.ai.entity.AiJob;
 import com.insideout.backend.domain.ai.exception.AiErrorCode;
 import com.insideout.backend.domain.ai.exception.AiException;
@@ -23,13 +20,12 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(noRollbackFor = AiException.class)
 public class AiAnalyzeService {
 
     private static final String DEFAULT_MODEL_VERSION = "v1.0";
 
     private final AiClient aiClient;
-    private final AiDetectionConverter aiDetectionConverter;
+    private final AiAnalyzePersistenceService aiAnalyzePersistenceService;
     private final BuildingQueryFacade buildingQueryFacade;
     private final AiDetectionRepository aiDetectionRepository;
     private final AiJobRepository aiJobRepository;
@@ -38,13 +34,11 @@ public class AiAnalyzeService {
         Floorplan floorplan = buildingQueryFacade.findFloorplanForTenant(floorplanId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
 
-        AiJob job = AiJob.builder()
-                .tenantId(tenantId)
-                .floorplan(floorplan)
-                .modelVersion(DEFAULT_MODEL_VERSION)
-                .build();
-        job.markRunning();
-        AiJob savedJob = aiJobRepository.save(job);
+        AiJob savedJob = aiAnalyzePersistenceService.createRunningJob(
+                floorplan.getId(),
+                tenantId,
+                DEFAULT_MODEL_VERSION
+        );
 
         try {
             AiAnalyzeResponse aiResponse = aiClient.analyze(
@@ -52,20 +46,17 @@ public class AiAnalyzeService {
                     floorplan.getImageUrl(),
                     DEFAULT_MODEL_VERSION
             );
-
-            List<AiDetection> detections = (aiResponse.detections() == null ? List.<AiDetectionDTO>of() : aiResponse.detections())
-                    .stream()
-                    .map(detectionDto -> aiDetectionConverter.toEntity(tenantId, savedJob, floorplan, detectionDto))
-                    .toList();
-            List<AiDetection> savedDetections = aiDetectionRepository.saveAll(detections);
-
-            savedJob.markSucceeded();
-            return AnalyzeResultDTO.of(savedJob.getId(), floorplan.getId(), savedJob.getStatus(), savedDetections);
+            return aiAnalyzePersistenceService.completeSuccess(
+                    savedJob.getId(),
+                    floorplan.getId(),
+                    tenantId,
+                    aiResponse
+            );
         } catch (AiException e) {
-            savedJob.markFailed(e.getErrorCode().getMessage());
+            aiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getErrorCode().getMessage());
             throw e;
         } catch (Exception e) {
-            savedJob.markFailed(e.getMessage());
+            aiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getMessage());
             throw new AiException(AiErrorCode.AI_ANALYSIS_FAILED);
         }
     }
@@ -75,7 +66,17 @@ public class AiAnalyzeService {
         Floorplan floorplan = buildingQueryFacade.findFloorplanForTenant(floorplanId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
 
-        return aiDetectionRepository.findByFloorplanIdAndTenantId(floorplan.getId(), tenantId).stream()
+        AiJob latestJob = aiJobRepository.findTopByFloorplan_IdAndTenantIdOrderByStartedAtDesc(
+                        floorplan.getId(),
+                        tenantId
+                )
+                .orElse(null);
+
+        if (latestJob == null) {
+            return List.of();
+        }
+
+        return aiDetectionRepository.findByJob_IdOrderByIdAsc(latestJob.getId()).stream()
                 .map(DetectionViewDTO::from)
                 .toList();
     }

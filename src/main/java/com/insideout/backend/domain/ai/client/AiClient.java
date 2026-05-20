@@ -18,6 +18,7 @@ import java.util.UUID;
 public class AiClient {
 
     private static final String ANALYZE_URI = "/api/v1/analyze";
+    private static final int MAX_ERROR_BODY_PREVIEW_LENGTH = 120;
 
     private final WebClient aiWebClient;
 
@@ -41,9 +42,12 @@ public class AiClient {
                     response.detections() != null ? response.detections().size() : 0);
             return response;
         } catch (WebClientResponseException e) {
-            log.error("AI server returned an error: status={}, body={}",
+            String responseBody = e.getResponseBodyAsString();
+            log.error("AI server returned an error: floorplanId={}, status={}, bodyLength={}, bodyPreview={}",
+                    floorplanId,
                     e.getStatusCode(),
-                    e.getResponseBodyAsString());
+                    responseBody != null ? responseBody.length() : 0,
+                    toSafeBodyPreview(responseBody));
             throw new AiException(AiErrorCode.AI_SERVER_ERROR);
         } catch (AiException e) {
             throw e;
@@ -51,5 +55,17 @@ public class AiClient {
             log.error("Failed to call AI server: floorplanId={}", floorplanId, e);
             throw new AiException(AiErrorCode.AI_SERVER_UNREACHABLE);
         }
+    }
+
+    private String toSafeBodyPreview(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return "<empty>";
+        }
+
+        String normalized = responseBody.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_ERROR_BODY_PREVIEW_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_ERROR_BODY_PREVIEW_LENGTH) + "...";
     }
 }

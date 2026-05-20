@@ -89,11 +89,17 @@ public record DetectionViewDTO(
             return null;
         }
 
+        double width = max[0] - min[0];
+        double height = max[1] - min[1];
+        if (width < 0 || height < 0) {
+            return null;
+        }
+
         return List.of(
                 min[0],
                 min[1],
-                max[0] - min[0],
-                max[1] - min[1]
+                width,
+                height
         );
     }
 

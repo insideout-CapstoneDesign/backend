@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -35,9 +36,10 @@ public class AiController {
     @PostMapping("/floorplans/{floorplanId}/analyze")
     public ApiResponse<AnalyzeResultDTO> analyze(
             @PathVariable UUID floorplanId,
+            @RequestParam UUID tenantId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        UUID tenantId = resolveTenantId(userDetails);
+        validateTenantAccess(userDetails, tenantId);
         return ApiResponse.success(
                 GeneralSuccessCode.OK,
                 aiAnalyzeService.analyze(floorplanId, tenantId)
@@ -48,21 +50,26 @@ public class AiController {
     @GetMapping("/floorplans/{floorplanId}/detections")
     public ApiResponse<List<DetectionViewDTO>> getDetections(
             @PathVariable UUID floorplanId,
+            @RequestParam UUID tenantId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        UUID tenantId = resolveTenantId(userDetails);
+        validateTenantAccess(userDetails, tenantId);
         return ApiResponse.success(
                 GeneralSuccessCode.OK,
                 aiAnalyzeService.getDetections(floorplanId, tenantId)
         );
     }
 
-    private UUID resolveTenantId(CustomUserDetails userDetails) {
+    /**
+     * 로그인한 유저가 요청한 tenantId에 실제로 소속되어 있는지 검증합니다.
+     */
+    private void validateTenantAccess(CustomUserDetails userDetails, UUID tenantId) {
         if (userDetails == null) {
             throw new AiException(AiErrorCode.AI_TENANT_NOT_FOUND);
         }
 
-        return tenantQueryFacade.findPrimaryTenantIdByUserId(userDetails.getUserId())
-                .orElseThrow(() -> new AiException(AiErrorCode.AI_TENANT_NOT_FOUND));
+        if (!tenantQueryFacade.isUserMemberOfTenant(userDetails.getUserId(), tenantId)) {
+            throw new AiException(AiErrorCode.AI_TENANT_NOT_FOUND);
+        }
     }
 }

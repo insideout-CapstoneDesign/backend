@@ -90,16 +90,14 @@ public class AiDetectionConverter {
             throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
         }
 
-        Coordinate[] shellCoordinates = asCoordinateArray(rings.get(0));
-        if (shellCoordinates.length < 4) {
-            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
-        }
+        Coordinate[] shellCoordinates = requireValidRing(asCoordinateArray(rings.get(0)));
 
         LinearRing shell = GEOMETRY_FACTORY.createLinearRing(closeRing(shellCoordinates));
 
         LinearRing[] holes = rings.stream()
                 .skip(1)
                 .map(this::asCoordinateArray)
+                .map(this::requireValidRing)
                 .map(this::closeRing)
                 .map(GEOMETRY_FACTORY::createLinearRing)
                 .toArray(LinearRing[]::new);
@@ -115,6 +113,10 @@ public class AiDetectionConverter {
     }
 
     private Coordinate[] closeRing(Coordinate[] coordinates) {
+        if (coordinates == null || coordinates.length == 0) {
+            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+        }
+
         Coordinate first = coordinates[0];
         Coordinate last = coordinates[coordinates.length - 1];
 
@@ -126,6 +128,13 @@ public class AiDetectionConverter {
         System.arraycopy(coordinates, 0, closed, 0, coordinates.length);
         closed[closed.length - 1] = new Coordinate(first.x, first.y);
         return closed;
+    }
+
+    private Coordinate[] requireValidRing(Coordinate[] coordinates) {
+        if (coordinates == null || coordinates.length < 4) {
+            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+        }
+        return coordinates;
     }
 
     private Coordinate toCoordinate(Object value) {

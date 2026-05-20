@@ -4,8 +4,11 @@ import com.insideout.backend.domain.ai.entity.AiJob;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface AiJobRepository extends JpaRepository<AiJob, UUID> {
+
+    Optional<AiJob> findTopByFloorplan_IdAndTenantIdOrderByStartedAtDesc(UUID floorplanId, UUID tenantId);
 }

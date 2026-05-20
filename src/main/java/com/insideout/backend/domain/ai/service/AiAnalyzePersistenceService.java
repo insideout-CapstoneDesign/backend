@@ -53,6 +53,9 @@ public class AiAnalyzePersistenceService {
                 .orElseThrow(() -> new AiException(AiErrorCode.AI_JOB_NOT_FOUND));
         Floorplan floorplan = buildingQueryFacade.findFloorplanForTenant(floorplanId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
+        if(!tenantId.equals(job.getTenantId()) || !floorplanId.equals(job.getFloorplan().getId())){
+            throw new AiException(AiErrorCode.AI_JOB_NOT_FOUND);
+        }
 
         List<AiDetection> detections = (aiResponse.detections() == null ? List.<AiDetectionDTO>of() : aiResponse.detections())
                 .stream()

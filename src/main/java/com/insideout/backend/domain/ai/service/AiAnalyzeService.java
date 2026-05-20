@@ -53,7 +53,9 @@ public class AiAnalyzeService {
                     aiResponse
             );
         } catch (AiException e) {
-            aiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getErrorCode().getMessage());
+            aiAnalyzePersistenceService.completeFailure(
+                    savedJob.getId(),
+                    AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
             throw e;
         } catch (Exception e) {
             aiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getMessage());
@@ -66,7 +68,7 @@ public class AiAnalyzeService {
         Floorplan floorplan = buildingQueryFacade.findFloorplanForTenant(floorplanId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
 
-        AiJob latestJob = aiJobRepository.findTopByFloorplan_IdAndTenantIdOrderByStartedAtDesc(
+        AiJob latestJob = aiJobRepository.findTopByFloorplan_IdAndTenantIdOrderByStartedAtDescIdDesc(
                         floorplan.getId(),
                         tenantId
                 )

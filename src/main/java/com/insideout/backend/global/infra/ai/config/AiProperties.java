@@ -9,6 +9,8 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "ai.service")
 public record AiProperties(
         @NotBlank String baseUrl,
+        @NotBlank String apiKeyHeader,
+        @NotBlank String apiKey,
         @Min(1) int timeoutSeconds
 ) {
 }

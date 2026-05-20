@@ -27,6 +27,7 @@ public class AiClientConfig {
         return WebClient.builder()
                 .baseUrl(props.baseUrl())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(props.apiKeyHeader(), props.apiKey())
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .build();
     }

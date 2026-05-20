@@ -8,6 +8,7 @@ import com.insideout.backend.global.security.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +29,10 @@ public class TenantController {
     public ApiResponse<List<TenantSummaryDTO>> getMyTenants(
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
+        if (userDetails == null) {
+            throw new AuthenticationCredentialsNotFoundException("인증 정보가 없습니다.");
+        }
+        
         return ApiResponse.success(
                 GeneralSuccessCode.OK,
                 tenantService.getMyTenants(userDetails.getUserId())

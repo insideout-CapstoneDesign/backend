@@ -17,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiAnalyzeService {
@@ -53,12 +55,11 @@ public class AiAnalyzeService {
                     aiResponse
             );
         } catch (AiException e) {
-            aiAnalyzePersistenceService.completeFailure(
-                    savedJob.getId(),
-                    AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
+            aiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getErrorCode().getMessage());
             throw e;
         } catch (Exception e) {
-            aiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getMessage());
+            log.error("AI 분석 중 예상치 못한 오류 발생. Job ID: {}", savedJob.getId(), e);
+            aiAnalyzePersistenceService.completeFailure(savedJob.getId(), AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
             throw new AiException(AiErrorCode.AI_ANALYSIS_FAILED);
         }
     }

@@ -38,6 +38,16 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "BUILDING400_6",
         "캠퍼스 맵의 테넌트 ID와 캠퍼스의 테넌트 ID가 일치하지 않습니다."
+    ),
+    TENANT_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_1",
+        "해당 테넌트를 찾을 수 없습니다."
+    ),
+    CAMPUS_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_2",
+        "해당 캠퍼스를 찾을 수 없거나 권한이 없습니다."
     );
 
     private final HttpStatus status;

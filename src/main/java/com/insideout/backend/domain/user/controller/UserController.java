@@ -18,9 +18,14 @@ public class UserController {
 
 	private final UserService userService;
 
-	@PostMapping("/signup")
-	public ApiResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-		return ApiResponse.success(GeneralSuccessCode.CREATED, userService.signup(request));
+	@PostMapping("/signup/user")
+	public ApiResponse<SignupResponse> signupUser(@Valid @RequestBody SignupRequest request) {
+		return ApiResponse.success(GeneralSuccessCode.CREATED, userService.signupUser(request));
+	}
+
+	@PostMapping("/signup/tenant")
+	public ApiResponse<SignupResponse> signupTenant(@Valid @RequestBody SignupRequest request) {
+		return ApiResponse.success(GeneralSuccessCode.CREATED, userService.signupTenant(request));
 	}
 
 	@PostMapping("/login")

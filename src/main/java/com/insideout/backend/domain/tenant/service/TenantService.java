@@ -47,6 +47,9 @@ public class TenantService {
         String slug = req.slug() != null && !req.slug().isBlank()
                 ? req.slug()
                 : UUID.randomUUID().toString();
+        if(tenantRepository.existsBySlug(slug)){
+            throw new TenantException(TenantErrorCode.TENANT_SLUG_CONFLICT);
+        }
         Tenant tenant = Tenant.builder()
                 .displayName(req.name())
                 .slug(slug)

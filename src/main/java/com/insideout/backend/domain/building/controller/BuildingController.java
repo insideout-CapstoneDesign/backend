@@ -56,7 +56,7 @@ public class BuildingController {
     ) {
         validateTenantAccess(userDetails, tenantId);
         return ApiResponse.success(
-                GeneralSuccessCode.OK,
+                GeneralSuccessCode.CREATED,
                 buildingService.createBuilding(tenantId, request)
         );
     }

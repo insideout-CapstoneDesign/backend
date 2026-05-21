@@ -1,16 +1,25 @@
 package com.insideout.backend;
 
+import com.insideout.backend.domain.ai.repository.AiDetectionRepository;
+import com.insideout.backend.domain.ai.repository.AiJobRepository;
+import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.CampusMapRepository;
+import com.insideout.backend.domain.building.repository.CampusRepository;
+import com.insideout.backend.domain.building.repository.FloorRepository;
+import com.insideout.backend.domain.building.repository.FloorplanCalibrationRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
 import com.insideout.backend.domain.map.repository.EdgeRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
-import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
-import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.ObstacleRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
+import com.insideout.backend.domain.map.repository.VerticalConnectorRepository;
+import com.insideout.backend.domain.map.repository.ZoneRepository;
 import com.insideout.backend.domain.map.storage.MapAssetStorage;
+import com.insideout.backend.domain.tenant.repository.TenantMembershipRepository;
+import com.insideout.backend.domain.tenant.repository.TenantRepository;
 import com.insideout.backend.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -64,6 +73,33 @@ class BackendApplicationTests {
 
     @MockitoBean
     private MapAssetStorage mapAssetStorage;
+
+    @MockitoBean
+    private TenantRepository tenantRepository;
+
+    @MockitoBean
+    private TenantMembershipRepository tenantMembershipRepository;
+
+    @MockitoBean
+    private AiJobRepository aiJobRepository;
+
+    @MockitoBean
+    private AiDetectionRepository aiDetectionRepository;
+
+    @MockitoBean
+    private FloorRepository floorRepository;
+
+    @MockitoBean
+    private CampusRepository campusRepository;
+
+    @MockitoBean
+    private FloorplanCalibrationRepository floorplanCalibrationRepository;
+
+    @MockitoBean
+    private VerticalConnectorRepository verticalConnectorRepository;
+
+    @MockitoBean
+    private ZoneRepository zoneRepository;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

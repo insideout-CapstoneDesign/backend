@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface AiJobRepository extends JpaRepository<AiJob, UUID> {
 
     Optional<AiJob> findTopByFloorplan_IdAndTenantIdOrderByStartedAtDescIdDesc(UUID floorplanId, UUID tenantId);
+
+    void deleteByFloorplanId(UUID floorplanId);
 }

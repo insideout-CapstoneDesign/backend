@@ -17,7 +17,34 @@ class RestTemplateConfigTest {
 
     @Test
     void tmapRestTemplateHasConnectAndReadTimeouts() {
-        RestTemplate restTemplate = restTemplateConfig.tmapRestTemplate(new RestTemplateBuilder());
+        RestTemplateBuilder customBuilder = new RestTemplateBuilder() {
+            private final JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+                    java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build()
+            );
+
+            {
+                factory.setReadTimeout(Duration.ofSeconds(10));
+            }
+
+            @Override
+            public RestTemplateBuilder connectTimeout(Duration connectTimeout) {
+                return this;
+            }
+
+            @Override
+            public RestTemplateBuilder readTimeout(Duration readTimeout) {
+                return this;
+            }
+
+            @Override
+            public RestTemplate build() {
+                RestTemplate restTemplate = new RestTemplate();
+                restTemplate.setRequestFactory(factory);
+                return restTemplate;
+            }
+        };
+
+        RestTemplate restTemplate = restTemplateConfig.tmapRestTemplate(customBuilder);
 
         assertThat(restTemplate.getRequestFactory()).isInstanceOf(JdkClientHttpRequestFactory.class);
 

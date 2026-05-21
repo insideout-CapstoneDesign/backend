@@ -48,6 +48,21 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.NOT_FOUND,
         "BUILDING404_2",
         "해당 캠퍼스를 찾을 수 없거나 권한이 없습니다."
+    ),
+    BUILDING_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_3",
+        "해당 건물을 찾을 수 없습니다."
+    ),
+    FLOOR_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_4",
+        "해당 층을 찾을 수 없습니다."
+    ),
+    UNAUTHORIZED_ACCESS(
+        HttpStatus.FORBIDDEN,
+        "BUILDING403_1",
+        "해당 건물 정보에 접근 권한이 없습니다."
     );
 
     private final HttpStatus status;

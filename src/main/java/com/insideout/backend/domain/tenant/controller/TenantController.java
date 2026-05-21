@@ -15,6 +15,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "Tenant", description = "테넌트 관리 API")
 @RestController
@@ -52,6 +53,22 @@ public class TenantController {
         return ApiResponse.success(
                 GeneralSuccessCode.CREATED,
                 tenantService.createTenant(userDetails.getUserId(), request)
+        );
+    }
+
+    @Operation(summary = "테넌트 활성화", description = "대기(pending) 상태인 테넌트를 활성화(approved) 상태로 변경합니다.")
+    @PatchMapping("/{tenantId}/activate")
+    public ApiResponse<TenantSummaryResDTO> activateTenant(
+            @PathVariable UUID tenantId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        if (userDetails == null) {
+            throw new AuthenticationCredentialsNotFoundException("인증 정보가 없습니다.");
+        }
+
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                tenantService.activateTenant(userDetails.getUserId(), tenantId)
         );
     }
 }

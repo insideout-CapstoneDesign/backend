@@ -55,7 +55,7 @@ public class TenantService {
         Tenant tenant = Tenant.builder()
                 .displayName(req.name())
                 .slug(slug)
-                .status("approved") // 등록 즉시 활성화
+                .status("pending") // 최초 등록 시 대기 상태
                 .build();
         Tenant savedTenant = tenantRepository.save(tenant);
         TenantMembership membership = TenantMembership.builder()
@@ -65,6 +65,26 @@ public class TenantService {
                 .build();
         tenantMembershipRepository.save(membership);
         return TenantSummaryResDTO.from(savedTenant, membership.getRole(), membership.getJoinedAt());
+    }
+
+    /**
+     * 테넌트를 수동으로 활성화("approved")합니다.
+     * 요청한 유저가 해당 테넌트의 소유자(owner)여야 합니다.
+     */
+    @Transactional
+    public TenantSummaryResDTO activateTenant(UUID userId, UUID tenantId) {
+        TenantMembership membership = tenantMembershipRepository.findByUser_IdAndTenant_Id(userId, tenantId)
+                .orElseThrow(() -> new TenantException(TenantErrorCode.MEMBERSHIP_NOT_FOUND));
+
+        if (!"owner".equals(membership.getRole())) {
+            throw new TenantException(TenantErrorCode.NOT_TENANT_OWNER);
+        }
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantException(TenantErrorCode.TENANT_NOT_FOUND));
+
+        tenant.updateStatus("approved");
+        return TenantSummaryResDTO.from(tenant, membership.getRole(), membership.getJoinedAt());
     }
 
 }

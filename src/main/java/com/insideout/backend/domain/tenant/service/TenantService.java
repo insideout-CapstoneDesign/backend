@@ -4,6 +4,8 @@ import com.insideout.backend.domain.tenant.dto.response.TenantSummaryResDTO;
 import com.insideout.backend.domain.tenant.dto.request.TenantCreateReqDTO;
 import com.insideout.backend.domain.tenant.entity.Tenant;
 import com.insideout.backend.domain.tenant.entity.TenantMembership;
+import com.insideout.backend.domain.tenant.exception.TenantErrorCode;
+import com.insideout.backend.domain.tenant.exception.TenantException;
 import com.insideout.backend.domain.tenant.repository.TenantMembershipRepository;
 import com.insideout.backend.domain.tenant.repository.TenantRepository;
 import com.insideout.backend.domain.user.entity.User;

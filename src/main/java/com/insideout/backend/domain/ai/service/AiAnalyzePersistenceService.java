@@ -33,6 +33,10 @@ public class AiAnalyzePersistenceService {
         Floorplan floorplan = buildingQueryFacade.findFloorplanForTenant(floorplanId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
 
+        // 기존 도면에 대한 이전 AI 감지 결과 및 작업 내역 삭제 (DB 누적 방지)
+        aiDetectionRepository.deleteByFloorplanId(floorplanId);
+        aiJobRepository.deleteByFloorplanId(floorplanId);
+
         AiJob job = AiJob.builder()
                 .tenantId(tenantId)
                 .floorplan(floorplan)

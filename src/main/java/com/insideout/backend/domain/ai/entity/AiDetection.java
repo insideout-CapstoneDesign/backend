@@ -71,6 +71,7 @@ public class AiDetection {
      * 객체를 감싸는 직사각형 바운딩 박스.
      */
     @Column(name = "bbox_px", columnDefinition = "box2d")
+    @org.hibernate.annotations.ColumnTransformer(read = "bbox_px::text", write = "?::box2d")
     private String bboxPx; // box2d는 JPA에서 String 매핑이 간편합니다.
 
     /**

@@ -115,4 +115,8 @@ public class Floorplan {
         this.uploadedBy = uploadedBy;
         this.isCurrent = isCurrent;
     }
+
+    public void deactivate() {
+        this.isCurrent = false;
+    }
 }

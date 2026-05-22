@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -22,4 +23,9 @@ public interface TenantMembershipRepository extends JpaRepository<TenantMembersh
      * (API 요청 시 권한 검증에 사용)
      */
     boolean existsByUser_IdAndTenant_Id(UUID userId, UUID tenantId);
+
+    /**
+     * 특정 유저가 특정 테넌트에 소속된 멤버십 정보를 조회합니다.
+     */
+    Optional<TenantMembership> findByUser_IdAndTenant_Id(UUID userId, UUID tenantId);
 }

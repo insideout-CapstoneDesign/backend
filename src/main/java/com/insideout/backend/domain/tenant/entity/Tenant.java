@@ -44,4 +44,8 @@ public class Tenant {
         this.displayName = displayName;
         this.status = status != null ? status : "pending";
     }
+
+    public void updateStatus(String status) {
+        this.status = status;
+    }
 }

@@ -13,4 +13,6 @@ public interface AiDetectionRepository extends JpaRepository<AiDetection, UUID> 
     List<AiDetection> findByFloorplanIdAndTenantId(UUID floorplanId, UUID tenantId);
 
     List<AiDetection> findByJob_IdOrderByIdAsc(UUID jobId);
+
+    void deleteByFloorplanId(UUID floorplanId);
 }

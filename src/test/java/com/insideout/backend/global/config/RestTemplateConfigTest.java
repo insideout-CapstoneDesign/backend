@@ -18,26 +18,27 @@ class RestTemplateConfigTest {
     @Test
     void tmapRestTemplateHasConnectAndReadTimeouts() {
         RestTemplateBuilder customBuilder = new RestTemplateBuilder() {
-            private final JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
-                    java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build()
-            );
-
-            {
-                factory.setReadTimeout(Duration.ofSeconds(10));
-            }
+            private Duration configuredConnectTimeout;
+            private Duration configuredReadTimeout;
 
             @Override
             public RestTemplateBuilder connectTimeout(Duration connectTimeout) {
+                this.configuredConnectTimeout = connectTimeout;
                 return this;
             }
 
             @Override
             public RestTemplateBuilder readTimeout(Duration readTimeout) {
+                this.configuredReadTimeout = readTimeout;
                 return this;
             }
 
             @Override
             public RestTemplate build() {
+                JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+                        java.net.http.HttpClient.newBuilder().connectTimeout(configuredConnectTimeout).build()
+                );
+                factory.setReadTimeout(configuredReadTimeout);
                 RestTemplate restTemplate = new RestTemplate();
                 restTemplate.setRequestFactory(factory);
                 return restTemplate;

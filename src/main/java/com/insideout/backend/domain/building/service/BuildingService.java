@@ -34,11 +34,24 @@ public class BuildingService {
      * 특정 테넌트에 속한 건물 목록을 최신순으로 조회합니다.
      */
     public List<BuildingSummaryDTO> getBuildings(UUID tenantId) {
-        return buildingRepository.findByTenant_IdOrderByCreatedAtDesc(tenantId).stream()
-                .map(building -> {
-                    List<Floor> floors = floorRepository.findAllByBuilding_IdOrderByLevelDesc(building.getId());
-                    return BuildingSummaryDTO.from(building, floors);
-                })
+        List<Building> buildings = buildingRepository.findByTenant_IdOrderByCreatedAtDesc(tenantId);
+        if (buildings.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> buildingIds = buildings.stream()
+                .map(Building::getId)
+                .toList();
+
+        List<Floor> allFloors = floorRepository.findAllByBuilding_IdInOrderByLevelDesc(buildingIds);
+        Map<UUID, List<Floor>> floorsByBuildingId = allFloors.stream()
+                .collect(java.util.stream.Collectors.groupingBy(floor -> floor.getBuilding().getId()));
+
+        return buildings.stream()
+                .map(building -> BuildingSummaryDTO.from(
+                        building,
+                        floorsByBuildingId.getOrDefault(building.getId(), List.of())
+                ))
                 .toList();
     }
 

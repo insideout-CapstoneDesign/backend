@@ -61,7 +61,7 @@ public class FloorplanService {
             throw new BuildingException(BuildingErrorCode.UNAUTHORIZED_ACCESS);
         }
 
-        Floor floor = floorRepository.findByIdAndBuilding_Id(floorId, buildingId)
+        Floor floor = floorRepository.findByIdAndBuilding_IdForUpdate(floorId, buildingId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.FLOOR_NOT_FOUND));
 
         if (!floor.getTenantId().equals(tenantId)) {
@@ -92,8 +92,7 @@ public class FloorplanService {
         String imageUrl = imageStorageService.uploadFloorplanImage(tenantId, buildingId, floorId, file);
 
         // 5. 기존 최신 도면(isCurrent=true) 비활성화
-        floorplanRepository.findByFloorIdAndIsCurrentTrue(floorId)
-                .ifPresent(Floorplan::deactivate);
+        floorplanRepository.deactivateCurrentFloorplansByFloorId(floorId);
 
         // 6. 새 Floorplan 엔티티 저장
         Floorplan floorplan = Floorplan.builder()
@@ -122,7 +121,7 @@ public class FloorplanService {
             }
             return sb.toString();
         } catch (NoSuchAlgorithmException | IOException e) {
-            return null;
+            throw new ProjectException(GeneralErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
 }

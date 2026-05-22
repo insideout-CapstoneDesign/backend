@@ -1,5 +1,6 @@
 package com.insideout.backend.domain.building.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 
@@ -14,7 +15,7 @@ public record BuildingCreateRequestDTO(
         String externalApiId,
         String longitude,
         String latitude,
-        List<FloorCreateRequest> floors
+        @Valid List<FloorCreateRequest> floors
 ) {
     public record FloorCreateRequest(
             int level,

@@ -2,6 +2,8 @@ package com.insideout.backend;
 
 import com.insideout.backend.domain.ai.repository.AiDetectionRepository;
 import com.insideout.backend.domain.ai.repository.AiJobRepository;
+import com.insideout.backend.domain.ai.repository.CampusAiDetectionRepository;
+import com.insideout.backend.domain.ai.repository.CampusAiJobRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.CampusMapRepository;
@@ -85,6 +87,12 @@ class BackendApplicationTests {
 
     @MockitoBean
     private AiDetectionRepository aiDetectionRepository;
+
+    @MockitoBean
+    private CampusAiJobRepository campusAiJobRepository;
+
+    @MockitoBean
+    private CampusAiDetectionRepository campusAiDetectionRepository;
 
     @MockitoBean
     private FloorRepository floorRepository;

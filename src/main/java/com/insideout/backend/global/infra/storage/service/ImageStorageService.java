@@ -28,6 +28,19 @@ public class ImageStorageService {
         return s3StorageService.buildS3Url(key);
     }
 
+    /**
+     * 캠퍼스 야외 도면 이미지를 검증한 후 S3에 업로드하고, s3:// 형식을 따르는 S3 URL을 반환합니다.
+     */
+    public String uploadCampusMapImage(UUID tenantId, UUID campusId, MultipartFile file) {
+        validateFile(file);
+
+        String originalFilename = file.getOriginalFilename();
+        String key = s3StorageService.buildCampusMapKey(tenantId, campusId, originalFilename);
+
+        s3StorageService.upload(file, key);
+        return s3StorageService.buildS3Url(key);
+    }
+
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new StorageException(StorageErrorCode.INVALID_FILE);

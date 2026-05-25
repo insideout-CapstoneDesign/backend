@@ -5,6 +5,10 @@ spring:
   application:
     name: backend
 
+  sql:
+    init:
+      mode: never
+
   config:
     import:
       - optional:classpath:db.properties

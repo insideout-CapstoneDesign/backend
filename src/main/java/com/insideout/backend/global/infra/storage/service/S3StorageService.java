@@ -171,6 +171,22 @@ public class S3StorageService {
         );
     }
 
+    /**
+     * 캠퍼스 야외 도면 업로드 키 생성 헬퍼.
+     */
+    public String buildCampusMapKey(
+            UUID tenantId,
+            UUID campusId,
+            String originalFilename
+    ) {
+        String safeName = sanitizeFilename(originalFilename);
+        return String.format(
+                "tenants/%s/campuses/%s/maps/%s_%s",
+                tenantId, campusId,
+                UUID.randomUUID(), safeName
+        );
+    }
+
     private static final int MAX_FILENAME_LENGTH = 100;
     private static final String DEFAULT_FILENAME = "image.png";
 

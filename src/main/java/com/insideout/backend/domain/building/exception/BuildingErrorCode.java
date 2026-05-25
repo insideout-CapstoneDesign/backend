@@ -63,6 +63,11 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.FORBIDDEN,
         "BUILDING403_1",
         "해당 건물 정보에 접근 권한이 없습니다."
+    ),
+    INVALID_CAMPUS_BOUNDARY(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_7",
+        "캠퍼스 경계(boundary)는 최소 3개 이상의 유효한 좌표가 필요합니다."
     );
 
     private final HttpStatus status;

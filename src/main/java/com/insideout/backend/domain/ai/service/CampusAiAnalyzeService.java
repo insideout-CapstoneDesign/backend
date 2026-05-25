@@ -55,12 +55,20 @@ public class CampusAiAnalyzeService {
                     aiResponse
             );
         } catch (AiException e) {
-            campusAiAnalyzePersistenceService.completeFailure(savedJob.getId(), e.getErrorCode().getMessage());
+            markFailureSafely(savedJob.getId(), e.getErrorCode().getMessage());
             throw e;
         } catch (Exception e) {
             log.error("캠퍼스 AI 분석 중 예상치 못한 오류 발생. Job ID: {}", savedJob.getId(), e);
-            campusAiAnalyzePersistenceService.completeFailure(savedJob.getId(), AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
+            markFailureSafely(savedJob.getId(), AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
             throw new AiException(AiErrorCode.AI_ANALYSIS_FAILED);
+        }
+    }
+
+    private void markFailureSafely(UUID jobId, String errorMessage) {
+        try {
+            campusAiAnalyzePersistenceService.completeFailure(jobId, errorMessage);
+        } catch (Exception e) {
+            log.error("캠퍼스 AI 분석 실패 처리 중 오류 발생. Job ID: {}", jobId, e);
         }
     }
 
@@ -69,7 +77,7 @@ public class CampusAiAnalyzeService {
         CampusMap campusMap = campusMapRepository.findByIdAndTenantId(campusMapId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
 
-        CampusAiJob latestJob = campusAiJobRepository.findTopByCampusMap_IdAndTenantIdOrderByStartedAtDescIdDesc(
+        CampusAiJob latestJob = campusAiJobRepository.findTopByCampusMap_IdAndTenantIdOrderByCreatedAtDesc(
                         campusMap.getId(),
                         tenantId
                 )

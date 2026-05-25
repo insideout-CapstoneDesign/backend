@@ -25,7 +25,7 @@ INSERT INTO app_user (
     'test@t.t',
     '$2a$10$H6pHdmIclrIeR0i1jfrueegr1/iZ/Q7VOQKxZcpwEoA2tRjEgRxVW',
     'tt',
-    'tenant_user',
+    'TENANT_USER',
     now(),
     now()
 );

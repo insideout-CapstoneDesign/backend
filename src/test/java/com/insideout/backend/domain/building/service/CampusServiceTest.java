@@ -204,6 +204,32 @@ class CampusServiceTest {
         verify(campusMapRepository).deactivateCurrentMapsByCampusId(campusId);
     }
 
+    @Test
+    void createCampus_throwsInvalidCampusBoundary_whenBoundaryIsEmpty() {
+        CampusCreateRequestDTO request = new CampusCreateRequestDTO(
+                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null
+        );
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+
+        assertThatThrownBy(() -> campusService.createCampus(tenantId, request))
+                .isInstanceOf(BuildingException.class)
+                .extracting(ex -> ((BuildingException) ex).getErrorCode())
+                .isEqualTo(BuildingErrorCode.INVALID_CAMPUS_BOUNDARY);
+    }
+
+    @Test
+    void createCampus_throwsInvalidCampusBoundary_whenBoundaryIsNull() {
+        CampusCreateRequestDTO request = new CampusCreateRequestDTO(
+                "Test Campus", "Address", null, null, new CoordinateDTO(127.0, 37.0), "Gate", null
+        );
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+
+        assertThatThrownBy(() -> campusService.createCampus(tenantId, request))
+                .isInstanceOf(BuildingException.class)
+                .extracting(ex -> ((BuildingException) ex).getErrorCode())
+                .isEqualTo(BuildingErrorCode.INVALID_CAMPUS_BOUNDARY);
+    }
+
     private byte[] createTinyPngBytes() throws IOException {
         BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

@@ -1,7 +1,7 @@
 package com.insideout.backend.domain.building.controller;
 
-import com.insideout.backend.domain.ai.exception.AiErrorCode;
-import com.insideout.backend.domain.ai.exception.AiException;
+import com.insideout.backend.domain.building.exception.BuildingErrorCode;
+import com.insideout.backend.domain.building.exception.BuildingException;
 import com.insideout.backend.domain.building.dto.request.CampusCreateRequestDTO;
 import com.insideout.backend.domain.building.dto.response.CampusMapResponseDTO;
 import com.insideout.backend.domain.building.dto.response.CampusResponseDTO;
@@ -102,7 +102,7 @@ public class CampusController {
         }
 
         if (!tenantQueryFacade.isUserMemberOfTenant(userDetails.getUserId(), tenantId)) {
-            throw new AiException(AiErrorCode.AI_TENANT_NOT_FOUND);
+            throw new BuildingException(BuildingErrorCode.TENANT_NOT_FOUND);
         }
     }
 }

@@ -33,9 +33,9 @@ public class CampusAiAnalyzePersistenceService {
         CampusMap campusMap = campusMapRepository.findByIdAndTenantId(campusMapId, tenantId)
                 .orElseThrow(() -> new AiException(AiErrorCode.FLOORPLAN_NOT_FOUND));
 
-        // 기존 캠퍼스 맵에 대한 이전 AI 감지 결과 및 작업 내역 삭제 (DB 누적 방지)
-        campusAiDetectionRepository.deleteByCampusMap_Id(campusMapId);
-        campusAiJobRepository.deleteByCampusMap_Id(campusMapId);
+        // 기존 캠퍼스 맵에 대한 터미널 상태(Succeeded, Failed)의 AI 작업 내역만 안전하게 삭제 (진행 중인 작업 보호)
+        // DB의 ON DELETE CASCADE 제약 조건으로 인해 연관된 탐지 결과(CampusAiDetection)도 함께 자동 삭제됨
+        campusAiJobRepository.deleteTerminalJobsByCampusMapId(campusMapId);
 
         CampusAiJob job = CampusAiJob.builder()
                 .tenantId(tenantId)

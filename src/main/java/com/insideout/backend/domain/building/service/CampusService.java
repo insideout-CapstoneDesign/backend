@@ -159,7 +159,7 @@ public class CampusService {
 
     private Polygon createPolygon(List<CoordinateDTO> boundary) {
         if (boundary == null || boundary.isEmpty()) {
-            return null;
+            throw new BuildingException(BuildingErrorCode.INVALID_CAMPUS_BOUNDARY);
         }
         int size = boundary.size();
         if (size < 3) {

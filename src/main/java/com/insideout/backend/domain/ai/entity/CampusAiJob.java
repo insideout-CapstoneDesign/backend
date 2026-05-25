@@ -43,6 +43,9 @@ public class CampusAiJob {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> params;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
     @Column(name = "started_at")
     private OffsetDateTime startedAt;
 
@@ -56,15 +59,23 @@ public class CampusAiJob {
         if (this.status == null) {
             this.status = "queued";
         }
+        if (this.createdAt == null) {
+            this.createdAt = OffsetDateTime.now();
+        }
     }
 
     @Builder
-    public CampusAiJob(UUID tenantId, CampusMap campusMap, String status, String modelVersion, Map<String, Object> params, OffsetDateTime startedAt, OffsetDateTime finishedAt, String error) {
+    public CampusAiJob(UUID tenantId, CampusMap campusMap, String status, String modelVersion, Map<String, Object> params, OffsetDateTime createdAt, OffsetDateTime startedAt, OffsetDateTime finishedAt, String error) {
+        if (tenantId != null && campusMap != null && campusMap.getTenantId() != null
+                && !tenantId.equals(campusMap.getTenantId())) {
+            throw new IllegalArgumentException("CampusAiJob tenantId must match campusMap.tenantId");
+        }
         this.tenantId = tenantId;
         this.campusMap = campusMap;
         this.status = status != null ? status : "queued";
         this.modelVersion = modelVersion;
         this.params = params;
+        this.createdAt = createdAt != null ? createdAt : OffsetDateTime.now();
         this.startedAt = startedAt;
         this.finishedAt = finishedAt;
         this.error = error;

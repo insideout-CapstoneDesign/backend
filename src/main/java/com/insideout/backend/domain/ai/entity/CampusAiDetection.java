@@ -78,6 +78,18 @@ public class CampusAiDetection {
 
     @Builder
     public CampusAiDetection(UUID tenantId, CampusAiJob job, CampusMap campusMap, String detectType, String label, BigDecimal confidence, Geometry geomPx, String bboxPx, String ocrText, Map<String, Object> attrs, String status, String committedEntityType, UUID committedEntityId) {
+        if (tenantId != null) {
+            if (job != null && job.getTenantId() != null && !tenantId.equals(job.getTenantId())) {
+                throw new IllegalArgumentException("tenantId must match job.tenantId");
+            }
+            if (campusMap != null && campusMap.getTenantId() != null && !tenantId.equals(campusMap.getTenantId())) {
+                throw new IllegalArgumentException("tenantId must match campusMap.tenantId");
+            }
+        }
+        if (job != null && campusMap != null && job.getCampusMap() != null
+                && !campusMap.equals(job.getCampusMap())) {
+            throw new IllegalArgumentException("campusMap must match job.campusMap");
+        }
         this.tenantId = tenantId;
         this.job = job;
         this.campusMap = campusMap;

@@ -102,7 +102,7 @@ public class CampusController {
         }
 
         if (!tenantQueryFacade.isUserMemberOfTenant(userDetails.getUserId(), tenantId)) {
-            throw new BuildingException(BuildingErrorCode.TENANT_NOT_FOUND);
+            throw new BuildingException(BuildingErrorCode.UNAUTHORIZED_ACCESS);
         }
     }
 }

@@ -18,6 +18,7 @@ import com.insideout.backend.domain.user.repository.UserRepository;
 import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
 import com.insideout.backend.global.apiPayload.exception.ProjectException;
 import com.insideout.backend.global.infra.storage.service.ImageStorageService;
+import java.util.Objects;
 import com.insideout.backend.global.infra.storage.service.S3StorageService;
 import com.insideout.backend.global.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -165,8 +166,8 @@ public class CampusService {
         if (size < 3) {
             throw new BuildingException(BuildingErrorCode.INVALID_CAMPUS_BOUNDARY);
         }
-        boolean isClosed = boundary.get(0).longitude() == boundary.get(size - 1).longitude()
-                && boundary.get(0).latitude() == boundary.get(size - 1).latitude();
+        boolean isClosed = Objects.equals(boundary.get(0).longitude(), boundary.get(size - 1).longitude())
+                && Objects.equals(boundary.get(0).latitude(), boundary.get(size - 1).latitude());
         int coordSize = isClosed ? size : size + 1;
         Coordinate[] coordinates = new Coordinate[coordSize];
         for (int i = 0; i < size; i++) {

@@ -14,13 +14,7 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
 
-  sql:
-    init:
-      mode: always
-      data-locations: classpath:data-local.sql
-
   jpa:
-    defer-datasource-initialization: true
     hibernate:
       ddl-auto: validate # 공용 DB는 테이블 구조 확정되면  validate
 

@@ -3,8 +3,11 @@ package com.insideout.backend.domain.ai.converter;
 import com.insideout.backend.domain.ai.dto.client.AiDetectionDTO;
 import com.insideout.backend.domain.ai.entity.AiDetection;
 import com.insideout.backend.domain.ai.entity.AiJob;
+import com.insideout.backend.domain.ai.entity.CampusAiDetection;
+import com.insideout.backend.domain.ai.entity.CampusAiJob;
 import com.insideout.backend.domain.ai.exception.AiErrorCode;
 import com.insideout.backend.domain.ai.exception.AiException;
+import com.insideout.backend.domain.building.entity.CampusMap;
 import com.insideout.backend.domain.building.entity.Floorplan;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
@@ -35,6 +38,27 @@ public class AiDetectionConverter {
                 .tenantId(tenantId)
                 .job(job)
                 .floorplan(floorplan)
+                .detectType(detectionDto.detectType())
+                .label(detectionDto.label())
+                .confidence(BigDecimal.valueOf(detectionDto.confidence()))
+                .geomPx(toGeometry(detectionDto.geomPx()))
+                .bboxPx(toBox2d(detectionDto.bboxPx()))
+                .ocrText(detectionDto.ocrText())
+                .attrs(Map.of())
+                .status("pending")
+                .build();
+    }
+
+    public CampusAiDetection toCampusEntity(
+            UUID tenantId,
+            CampusAiJob job,
+            CampusMap campusMap,
+            AiDetectionDTO detectionDto
+    ) {
+        return CampusAiDetection.builder()
+                .tenantId(tenantId)
+                .job(job)
+                .campusMap(campusMap)
                 .detectType(detectionDto.detectType())
                 .label(detectionDto.label())
                 .confidence(BigDecimal.valueOf(detectionDto.confidence()))

@@ -27,9 +27,12 @@ public class PlaceSearchController {
     @Operation(summary = "장소 키워드 검색", description = "키워드로 장소를 검색합니다.")
     @GetMapping("/search")
     public ApiResponse<List<PlaceSearchItemResponse>> search(
-            @RequestParam("q") String query
+            @RequestParam("q") String query,
+            @RequestParam(value = "lat", required = false) Double lat,
+            @RequestParam(value = "lng", required = false) Double lng,
+            @RequestParam(value = "radius", required = false) Integer radius
     ) {
-        return ApiResponse.success(GeneralSuccessCode.OK, placeSearchService.search(query));
+        return ApiResponse.success(GeneralSuccessCode.OK, placeSearchService.search(query, lat, lng, radius));
     }
 
     @Operation(

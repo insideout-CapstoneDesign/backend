@@ -21,16 +21,31 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class KakaoPlaceSearchClient {
 
-    private static final int DEFAULT_SIZE = 10;
+    private static final int DEFAULT_SIZE = 15;
     private final @Qualifier("kakaoLocalRestClient") RestClient kakaoLocalRestClient;
 
     public List<PlaceSearchItemResponse> searchByKeyword(String query) {
+        return searchByKeyword(query, null, null, null);
+    }
+
+    public List<PlaceSearchItemResponse> searchByKeyword(String query, Double lat, Double lng) {
+        return searchByKeyword(query, lat, lng, null);
+    }
+
+    public List<PlaceSearchItemResponse> searchByKeyword(String query, Double lat, Double lng, Integer radius) {
         try {
             KakaoKeywordSearchResponse response = kakaoLocalRestClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/v2/local/search/keyword.json")
                             .queryParam("query", query)
                             .queryParam("size", DEFAULT_SIZE)
+                            .queryParamIfPresent("x", Optional.ofNullable(lng))
+                            .queryParamIfPresent("y", Optional.ofNullable(lat))
+                            .queryParamIfPresent("radius", Optional.ofNullable(radius))
+                            .queryParamIfPresent(
+                                    "sort",
+                                    (lat != null && lng != null) ? Optional.of("distance") : Optional.empty()
+                            )
                             .build())
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()

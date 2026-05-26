@@ -36,7 +36,7 @@ public class PlaceSearchService {
     }
 
     private void validateCoordinate(Double lat, Double lng) {
-        if (lat == null || lng == null) {
+        if (lat == null || lng == null || !Double.isFinite(lat) || !Double.isFinite(lng)) {
             throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
         }
 

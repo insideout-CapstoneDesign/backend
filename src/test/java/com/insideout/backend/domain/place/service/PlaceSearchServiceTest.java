@@ -44,6 +44,14 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void findNearest_nanCoordinate_throwsPlaceException() {
+        assertThatThrownBy(() -> placeSearchService.findNearest(Double.NaN, 127.0, 30))
+                .isInstanceOf(PlaceException.class)
+                .extracting(ex -> ((PlaceException) ex).getErrorCode())
+                .isEqualTo(PlaceErrorCode.INVALID_COORDINATE);
+    }
+
+    @Test
     void findNearest_usesDefaultRadiusWhenMissing() {
         PlaceNearestResponse expected = new PlaceNearestResponse(
                 "테스트 건물",

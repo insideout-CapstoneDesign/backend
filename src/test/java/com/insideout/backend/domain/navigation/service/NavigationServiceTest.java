@@ -10,6 +10,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insideout.backend.domain.map.facade.MapQueryFacade;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.IndoorDestinationAnchor;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.IndoorPoiDestination;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingEdge;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingGraph;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingNode;
+import com.insideout.backend.domain.map.facade.MapQueryFacade.VerticalRoutingLink;
+import com.insideout.backend.domain.map.entity.MapType;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto.RouteType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;
@@ -193,6 +198,107 @@ class NavigationServiceTest {
         assertThat(response.failures())
                 .extracting(RouteFailureDto::routeOption)
                 .containsOnly(RouteOption.TRANSIT_CANDIDATE);
+    }
+
+    @Test
+    void indoorLegSplitsPathByFloorSegments() throws Exception {
+        UUID buildingId = UUID.randomUUID();
+        UUID mapVersionId = UUID.randomUUID();
+        UUID entranceNodeId = UUID.randomUUID();
+        UUID firstFloorConnectorNodeId = UUID.randomUUID();
+        UUID secondFloorConnectorNodeId = UUID.randomUUID();
+        UUID destinationNodeId = UUID.randomUUID();
+        UUID firstFloorId = UUID.randomUUID();
+        UUID secondFloorId = UUID.randomUUID();
+        Long destinationPoiId = 1001L;
+
+        when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
+        when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
+                .thenReturn(Optional.of(new IndoorPoiDestination(
+                        destinationPoiId,
+                        UUID.randomUUID(),
+                        "목적지 POI",
+                        destinationNodeId,
+                        secondFloorId,
+                        "2F",
+                        buildingId,
+                        "테스트 건물",
+                        null,
+                        null
+                )));
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
+                .thenReturn(Optional.of(new IndoorDestinationAnchor(
+                        buildingId,
+                        "테스트 건물",
+                        entranceNodeId,
+                        "정문",
+                        127.2000,
+                        37.6000
+                )));
+        when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
+                .thenReturn(Optional.of(new RoutingGraph(
+                        mapVersionId,
+                        MapType.BUILDING,
+                        "https://signed.example/fallback.png",
+                        List.of(
+                                new RoutingNode(entranceNodeId, "entrance", "정문", firstFloorId, "1F", 10, 10),
+                                new RoutingNode(firstFloorConnectorNodeId, "elevator", "엘리베이터", firstFloorId, "1F", 20, 20),
+                                new RoutingNode(secondFloorConnectorNodeId, "elevator", "엘리베이터", secondFloorId, "2F", 30, 30),
+                                new RoutingNode(destinationNodeId, "poi", "목적지 POI", secondFloorId, "2F", 40, 40)
+                        ),
+                        List.of(
+                                new RoutingEdge(UUID.randomUUID(), entranceNodeId, firstFloorConnectorNodeId, "corridor", false, 10, 1),
+                                new RoutingEdge(UUID.randomUUID(), secondFloorConnectorNodeId, destinationNodeId, "corridor", false, 10, 1)
+                        ),
+                        List.of(new VerticalRoutingLink(
+                                firstFloorConnectorNodeId,
+                                secondFloorConnectorNodeId,
+                                "elevator",
+                                "엘리베이터",
+                                "1F",
+                                "2F",
+                                10
+                        )),
+                        List.of()
+                )));
+        when(mapQueryFacade.findCurrentFloorplanImageUrl(firstFloorId))
+                .thenReturn(Optional.of("https://signed.example/1f.png"));
+        when(mapQueryFacade.findCurrentFloorplanImageUrl(secondFloorId))
+                .thenReturn(Optional.of("https://signed.example/2f.png"));
+        when(restTemplate.postForObject(
+                eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        )).thenReturn(walkRouteResponse());
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                buildingId,
+                destinationPoiId,
+                true,
+                List.of(RouteType.WALK)
+        ));
+
+        LegDto indoorLeg = response.routes().get(0).legs().stream()
+                .filter(leg -> leg.mode() == LegMode.INDOOR)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(indoorLeg.path()).hasSize(4);
+        assertThat(indoorLeg.floorSegments()).hasSize(2);
+        assertThat(indoorLeg.floorSegments())
+                .extracting(segment -> segment.floorId())
+                .containsExactly(firstFloorId, secondFloorId);
+        assertThat(indoorLeg.floorSegments())
+                .extracting(segment -> segment.mapImageUrl())
+                .containsExactly("https://signed.example/1f.png", "https://signed.example/2f.png");
+        assertThat(indoorLeg.floorSegments().get(0).path()).hasSize(2);
+        assertThat(indoorLeg.floorSegments().get(1).path()).hasSize(2);
     }
 
     private JsonNode walkRouteResponse() throws Exception {

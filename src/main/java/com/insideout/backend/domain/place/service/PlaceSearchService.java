@@ -1,5 +1,7 @@
 package com.insideout.backend.domain.place.service;
 
+import com.insideout.backend.domain.building.repository.BuildingRepository;
+import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
@@ -7,11 +9,17 @@ import com.insideout.backend.domain.place.exception.PlaceException;
 import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
 import com.insideout.backend.global.apiPayload.exception.ProjectException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,33 +30,52 @@ public class PlaceSearchService {
     private static final int MIN_RADIUS_METER = 1;
     private static final int MAX_RADIUS_METER = 20_000;
 
+    private final BuildingRepository buildingRepository;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
 
     public List<PlaceSearchItemResponse> search(String query, Double lat, Double lng, Integer radius) {
         if (query == null || query.isBlank()) {
             throw new ProjectException(GeneralErrorCode.BAD_REQUEST);
         }
-        if (lat == null && lng == null) {
-            if (radius != null) {
-                throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
-            }
-            return kakaoPlaceSearchClient.searchByKeyword(query.trim());
+
+        String normalizedQuery = query.trim();
+        boolean hasCoordinate = lat != null || lng != null;
+
+        Integer resolvedSearchRadius = null;
+        if (hasCoordinate) {
+            validateCoordinate(lat, lng);
+            resolvedSearchRadius = normalizeSearchRadius(radius);
+        } else if (radius != null) {
+            throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
         }
 
-        validateCoordinate(lat, lng);
-        int resolvedRadius = normalizeSearchRadius(radius);
-        return kakaoPlaceSearchClient.searchByKeyword(query.trim(), lat, lng, resolvedRadius).stream()
-                .filter(item -> item.lat() != null && item.lng() != null)
-                .map(item -> new ScoredPlace(item, distanceInMeter(lat, lng, item.lat(), item.lng())))
-                .filter(scored -> scored.distanceMeter() <= resolvedRadius)
-                .sorted(Comparator.comparingDouble(ScoredPlace::distanceMeter))
-                .map(ScoredPlace::item)
+        List<PlaceSearchItemResponse> registeredPlaces = buildingRepository.searchRegisteredPlaces(normalizedQuery).stream()
+                .map(this::toRegisteredSearchItem)
                 .toList();
+
+        List<PlaceSearchItemResponse> externalPlaces = resolvedSearchRadius == null
+                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery)
+                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius);
+
+        List<PlaceSearchItemResponse> merged = mergeRegisteredAndExternal(registeredPlaces, externalPlaces, normalizedQuery, lat, lng);
+        if (resolvedSearchRadius != null) {
+            return sortWithCoordinates(merged, normalizedQuery, lat, lng, resolvedSearchRadius);
+        }
+
+        return sortWithoutCoordinates(merged, normalizedQuery);
     }
 
     public Optional<PlaceNearestResponse> findNearest(Double lat, Double lng, Integer radius) {
         validateCoordinate(lat, lng);
         int resolvedRadius = normalizeRadius(radius);
+        Optional<PlaceNearestResponse> registeredPlace = buildingRepository
+                .findNearestRegisteredPlace(lat, lng, resolvedRadius)
+                .map(this::toRegisteredNearestResponse);
+
+        if (registeredPlace.isPresent()) {
+            return registeredPlace;
+        }
+
         return kakaoPlaceSearchClient.findNearestByCoordinate(lat, lng, resolvedRadius);
     }
 
@@ -97,6 +124,211 @@ public class PlaceSearchService {
         return earthRadius * c;
     }
 
-    private record ScoredPlace(PlaceSearchItemResponse item, double distanceMeter) {
+    private List<PlaceSearchItemResponse> mergeRegisteredAndExternal(
+            List<PlaceSearchItemResponse> registeredPlaces,
+            List<PlaceSearchItemResponse> externalPlaces,
+            String query,
+            Double lat,
+            Double lng
+    ) {
+        Map<String, PlaceSearchItemResponse> registeredByExternalApiId = registeredPlaces.stream()
+                .filter(item -> StringUtils.hasText(item.externalApiId()))
+                .collect(Collectors.toMap(
+                        item -> item.externalApiId().trim(),
+                        item -> item,
+                        (left, right) -> left
+                ));
+
+        Map<String, PlaceSearchItemResponse> deduplicated = new LinkedHashMap<>();
+        registeredPlaces.forEach(item -> putBest(deduplicated, item, query, lat, lng));
+
+        Set<String> externalIds = externalPlaces.stream()
+                .map(PlaceSearchItemResponse::externalApiId)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+
+        if (!externalIds.isEmpty()) {
+            List<PlaceSearchItemResponse> additionalRegistered = buildingRepository
+                    .findRegisteredPlacesByExternalApiIds(externalIds)
+                    .stream()
+                    .map(this::toRegisteredSearchItem)
+                    .toList();
+            additionalRegistered.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
+        }
+
+        for (PlaceSearchItemResponse external : externalPlaces) {
+            PlaceSearchItemResponse matched = applyRegisteredMatch(external, registeredByExternalApiId);
+            putBest(deduplicated, matched, query, lat, lng);
+        }
+
+        return new ArrayList<>(deduplicated.values());
+    }
+
+    private List<PlaceSearchItemResponse> sortWithoutCoordinates(List<PlaceSearchItemResponse> items, String query) {
+        return items.stream()
+                .sorted(Comparator
+                        .comparingInt((PlaceSearchItemResponse item) -> keywordScore(item.name(), query)).reversed()
+                        .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
+                        .thenComparing(item -> normalizeText(item.name())))
+                .toList();
+    }
+
+    private List<PlaceSearchItemResponse> sortWithCoordinates(
+            List<PlaceSearchItemResponse> items,
+            String query,
+            double lat,
+            double lng,
+            int radius
+    ) {
+        return items.stream()
+                .filter(item -> item.lat() != null && item.lng() != null)
+                .map(item -> new ScoredPlace(item, distanceInMeter(lat, lng, item.lat(), item.lng()), keywordScore(item.name(), query)))
+                .filter(scored -> scored.distanceMeter() <= radius)
+                .sorted(Comparator
+                        .comparingInt(ScoredPlace::keywordScore).reversed()
+                        .thenComparingDouble(ScoredPlace::distanceMeter)
+                        .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
+                        .thenComparing(scored -> normalizeText(scored.item().name())))
+                .map(ScoredPlace::item)
+                .toList();
+    }
+
+    private PlaceSearchItemResponse toRegisteredSearchItem(BuildingSearchProjection building) {
+        return new PlaceSearchItemResponse(
+                building.getName(),
+                building.getAddress(),
+                null,
+                building.getLat(),
+                building.getLng(),
+                true,
+                building.getExternalApiId()
+        );
+    }
+
+    private PlaceNearestResponse toRegisteredNearestResponse(BuildingSearchProjection building) {
+        return new PlaceNearestResponse(
+                building.getName(),
+                building.getAddress(),
+                null,
+                building.getLat(),
+                building.getLng(),
+                true,
+                building.getExternalApiId()
+        );
+    }
+
+    private PlaceSearchItemResponse applyRegisteredMatch(
+            PlaceSearchItemResponse external,
+            Map<String, PlaceSearchItemResponse> registeredByExternalApiId
+    ) {
+        if (!StringUtils.hasText(external.externalApiId())) {
+            return external;
+        }
+
+        PlaceSearchItemResponse registered = registeredByExternalApiId.get(external.externalApiId().trim());
+        if (registered == null) {
+            return external;
+        }
+
+        return new PlaceSearchItemResponse(
+                registered.name(),
+                registered.address(),
+                external.roadAddress(),
+                registered.lat() != null ? registered.lat() : external.lat(),
+                registered.lng() != null ? registered.lng() : external.lng(),
+                true,
+                registered.externalApiId()
+        );
+    }
+
+    private void putBest(
+            Map<String, PlaceSearchItemResponse> deduplicated,
+            PlaceSearchItemResponse candidate,
+            String query,
+            Double lat,
+            Double lng
+    ) {
+        String key = dedupeKey(candidate);
+        PlaceSearchItemResponse existing = deduplicated.get(key);
+        if (existing == null || compareCandidate(existing, candidate, query, lat, lng) < 0) {
+            deduplicated.put(key, candidate);
+        }
+    }
+
+    private int compareCandidate(
+            PlaceSearchItemResponse existing,
+            PlaceSearchItemResponse candidate,
+            String query,
+            Double lat,
+            Double lng
+    ) {
+        if (existing.isRegistered() != candidate.isRegistered()) {
+            return existing.isRegistered() ? 1 : -1;
+        }
+
+        int existingScore = keywordScore(existing.name(), query);
+        int candidateScore = keywordScore(candidate.name(), query);
+        if (existingScore != candidateScore) {
+            return Integer.compare(existingScore, candidateScore);
+        }
+
+        if (lat != null && lng != null
+                && existing.lat() != null && existing.lng() != null
+                && candidate.lat() != null && candidate.lng() != null) {
+            double existingDistance = distanceInMeter(lat, lng, existing.lat(), existing.lng());
+            double candidateDistance = distanceInMeter(lat, lng, candidate.lat(), candidate.lng());
+            return Double.compare(candidateDistance, existingDistance);
+        }
+
+        boolean existingHasCoordinate = existing.lat() != null && existing.lng() != null;
+        boolean candidateHasCoordinate = candidate.lat() != null && candidate.lng() != null;
+        if (existingHasCoordinate != candidateHasCoordinate) {
+            return existingHasCoordinate ? 1 : -1;
+        }
+
+        return 0;
+    }
+
+    private String dedupeKey(PlaceSearchItemResponse item) {
+        if (StringUtils.hasText(item.externalApiId())) {
+            return "ext:" + item.externalApiId().trim();
+        }
+        if (item.lat() != null && item.lng() != null) {
+            return "geo:" + normalizeText(item.name()) + ":" + round(item.lat(), 4) + ":" + round(item.lng(), 4);
+        }
+        return "name:" + normalizeText(item.name()) + "|" + normalizeText(item.address());
+    }
+
+    private int keywordScore(String name, String query) {
+        String target = normalizeText(name);
+        String keyword = normalizeText(query);
+        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
+            return 0;
+        }
+        if (target.equals(keyword)) {
+            return 3;
+        }
+        if (target.startsWith(keyword)) {
+            return 2;
+        }
+        if (target.contains(keyword)) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private String normalizeText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("\\s+", "").toLowerCase();
+    }
+
+    private double round(double value, int precision) {
+        double scale = Math.pow(10, precision);
+        return Math.round(value * scale) / scale;
+    }
+
+    private record ScoredPlace(PlaceSearchItemResponse item, double distanceMeter, int keywordScore) {
     }
 }

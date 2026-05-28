@@ -50,6 +50,14 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void search_withoutCoordinatesButRadius_throwsInvalidCoordinate() {
+        assertThatThrownBy(() -> placeSearchService.search("스타벅스", null, null, 3000))
+                .isInstanceOf(PlaceException.class)
+                .extracting(ex -> ((PlaceException) ex).getErrorCode())
+                .isEqualTo(PlaceErrorCode.INVALID_COORDINATE);
+    }
+
+    @Test
     void search_withCoordinates_usesDistanceSearch() {
         when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, 5_000))
                 .thenReturn(List.of());

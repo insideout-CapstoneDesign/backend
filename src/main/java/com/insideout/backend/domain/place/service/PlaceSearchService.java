@@ -29,6 +29,9 @@ public class PlaceSearchService {
             throw new ProjectException(GeneralErrorCode.BAD_REQUEST);
         }
         if (lat == null && lng == null) {
+            if (radius != null) {
+                throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
+            }
             return kakaoPlaceSearchClient.searchByKeyword(query.trim());
         }
 

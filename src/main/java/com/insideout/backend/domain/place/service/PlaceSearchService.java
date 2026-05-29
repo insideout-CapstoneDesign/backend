@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
 public class PlaceSearchService {
 
     private static final int DEFAULT_RADIUS_METER = 30;
-    private static final int DEFAULT_SEARCH_RADIUS_METER = 5_000;
     private static final int MIN_RADIUS_METER = 1;
     private static final int MAX_RADIUS_METER = 20_000;
 
@@ -44,7 +43,9 @@ public class PlaceSearchService {
         Integer resolvedSearchRadius = null;
         if (hasCoordinate) {
             validateCoordinate(lat, lng);
-            resolvedSearchRadius = normalizeSearchRadius(radius);
+            if (radius != null) {
+                resolvedSearchRadius = normalizeRadius(radius);
+            }
         } else if (radius != null) {
             throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
         }
@@ -53,13 +54,13 @@ public class PlaceSearchService {
                 .map(this::toRegisteredSearchItem)
                 .toList();
 
-        List<PlaceSearchItemResponse> externalPlaces = resolvedSearchRadius == null
-                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery)
-                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius);
+        List<PlaceSearchItemResponse> externalPlaces = hasCoordinate
+                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius)
+                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
 
         List<PlaceSearchItemResponse> merged = mergeRegisteredAndExternal(registeredPlaces, externalPlaces, normalizedQuery, lat, lng);
-        if (resolvedSearchRadius != null) {
-            return sortWithCoordinates(merged, normalizedQuery, lat, lng, resolvedSearchRadius);
+        if (hasCoordinate) {
+            return sortWithCoordinates(merged, lat, lng, resolvedSearchRadius);
         }
 
         return sortWithoutCoordinates(merged, normalizedQuery);
@@ -92,18 +93,6 @@ public class PlaceSearchService {
     private int normalizeRadius(Integer radius) {
         if (radius == null) {
             return DEFAULT_RADIUS_METER;
-        }
-
-        if (radius < MIN_RADIUS_METER || radius > MAX_RADIUS_METER) {
-            throw new PlaceException(PlaceErrorCode.INVALID_RADIUS);
-        }
-
-        return radius;
-    }
-
-    private int normalizeSearchRadius(Integer radius) {
-        if (radius == null) {
-            return DEFAULT_SEARCH_RADIUS_METER;
         }
 
         if (radius < MIN_RADIUS_METER || radius > MAX_RADIUS_METER) {
@@ -175,21 +164,18 @@ public class PlaceSearchService {
 
     private List<PlaceSearchItemResponse> sortWithCoordinates(
             List<PlaceSearchItemResponse> items,
-            String query,
             double lat,
             double lng,
-            int radius
+            Integer radius
     ) {
         return items.stream()
-                .filter(item -> item.lat() != null && item.lng() != null)
-                .map(item -> new ScoredPlace(item, distanceInMeter(lat, lng, item.lat(), item.lng()), keywordScore(item.name(), query)))
-                .filter(scored -> scored.distanceMeter() <= radius)
+                .map(item -> toScoredPlace(item, lat, lng))
+                .filter(scored -> radius == null || (scored.distanceMeter() != null && scored.distanceMeter() <= radius))
                 .sorted(Comparator
-                        .comparingInt(ScoredPlace::keywordScore).reversed()
-                        .thenComparingDouble(ScoredPlace::distanceMeter)
+                        .comparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
                         .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
                         .thenComparing(scored -> normalizeText(scored.item().name())))
-                .map(ScoredPlace::item)
+                .map(ScoredPlace::toResponse)
                 .toList();
     }
 
@@ -201,7 +187,8 @@ public class PlaceSearchService {
                 building.getLat(),
                 building.getLng(),
                 true,
-                building.getExternalApiId()
+                building.getExternalApiId(),
+                null
         );
     }
 
@@ -237,7 +224,8 @@ public class PlaceSearchService {
                 registered.lat() != null ? registered.lat() : external.lat(),
                 registered.lng() != null ? registered.lng() : external.lng(),
                 true,
-                registered.externalApiId()
+                registered.externalApiId(),
+                external.distanceMeters()
         );
     }
 
@@ -329,6 +317,26 @@ public class PlaceSearchService {
         return Math.round(value * scale) / scale;
     }
 
-    private record ScoredPlace(PlaceSearchItemResponse item, double distanceMeter, int keywordScore) {
+    private ScoredPlace toScoredPlace(PlaceSearchItemResponse item, double lat, double lng) {
+        if (item.lat() == null || item.lng() == null) {
+            return new ScoredPlace(item, null);
+        }
+
+        return new ScoredPlace(item, distanceInMeter(lat, lng, item.lat(), item.lng()));
+    }
+
+    private record ScoredPlace(PlaceSearchItemResponse item, Double distanceMeter) {
+        PlaceSearchItemResponse toResponse() {
+            return new PlaceSearchItemResponse(
+                    item.name(),
+                    item.address(),
+                    item.roadAddress(),
+                    item.lat(),
+                    item.lng(),
+                    item.isRegistered(),
+                    item.externalApiId(),
+                    distanceMeter
+            );
+        }
     }
 }

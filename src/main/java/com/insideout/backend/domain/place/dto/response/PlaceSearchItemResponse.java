@@ -7,6 +7,7 @@ public record PlaceSearchItemResponse(
         Double lat,
         Double lng,
         boolean isRegistered,
-        String externalApiId
+        String externalApiId,
+        Double distanceMeters
 ) {
 }

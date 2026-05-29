@@ -78,12 +78,12 @@ class PlaceSearchServiceTest {
 
     @Test
     void search_withCoordinates_usesDistanceSearch() {
-        when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, 5_000))
+        when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, null))
                 .thenReturn(List.of());
 
         placeSearchService.search("스타벅스", 37.5, 127.0, null);
 
-        verify(kakaoPlaceSearchClient).searchByKeyword("스타벅스", 37.5, 127.0, 5_000);
+        verify(kakaoPlaceSearchClient).searchByKeyword("스타벅스", 37.5, 127.0, null);
     }
 
     @Test
@@ -105,7 +105,8 @@ class PlaceSearchServiceTest {
                 37.5005,
                 127.0005,
                 false,
-                "1"
+                "1",
+                null
         );
         PlaceSearchItemResponse far = new PlaceSearchItemResponse(
                 "먼 매장",
@@ -114,14 +115,18 @@ class PlaceSearchServiceTest {
                 33.4996,
                 126.5312,
                 false,
-                "2"
+                "2",
+                null
         );
         when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, 3000))
                 .thenReturn(List.of(far, near));
 
         List<PlaceSearchItemResponse> result = placeSearchService.search("스타벅스", 37.5, 127.0, 3000);
 
-        assertThat(result).containsExactly(near);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("근처 매장");
+        assertThat(result.get(0).externalApiId()).isEqualTo("1");
+        assertThat(result.get(0).distanceMeters()).isNotNull();
     }
 
     @Test
@@ -134,7 +139,7 @@ class PlaceSearchServiceTest {
                 ));
         when(kakaoPlaceSearchClient.searchByKeyword("신세계"))
                 .thenReturn(List.of(
-                        new PlaceSearchItemResponse("외부 건물명", "서울 중구 소공로 63", null, 37.5609, 126.9810, false, "7969138")
+                        new PlaceSearchItemResponse("외부 건물명", "서울 중구 소공로 63", null, 37.5609, 126.9810, false, "7969138", null)
                 ));
 
         List<PlaceSearchItemResponse> result = placeSearchService.search("신세계", null, null, null);

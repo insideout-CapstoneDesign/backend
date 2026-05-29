@@ -84,18 +84,6 @@ public class Zone {
         }
     }
 
-    // TODO: Zone 생성 시 아래 불변식을 Service에서 반드시 검증해야 합니다.
-    //       mapVersion.getTenantId() 및 floor.getTenantId()는 LAZY 로딩 연관 엔티티 호출이므로
-    //       @PrePersist/@PreUpdate 또는 생성자 안에서 호출 시 LazyInitializationException이 발생합니다.
-    //       Service에서 mapVersion, floor를 완전히 로딩한 후 검증하세요:
-    //
-    //       1. tenantId가 mapVersion의 tenantId와 일치하는지:
-    //          if (!tenantId.equals(mapVersion.getTenantId()))
-    //              throw new MapException(MapErrorCode.ZONE_TENANT_MISMATCH);
-    //
-    //       2. tenantId가 floor의 tenantId와 일치하는지:
-    //          if (!tenantId.equals(floor.getTenantId()))
-    //              throw new MapException(MapErrorCode.ZONE_TENANT_MISMATCH);
     @Builder
     public Zone(UUID tenantId, MapVersion mapVersion, Floor floor, ZoneKind kind, String name, Polygon geomPx, Map<String, Object> properties) {
         this.tenantId = Objects.requireNonNull(tenantId, "tenantId must not be null");

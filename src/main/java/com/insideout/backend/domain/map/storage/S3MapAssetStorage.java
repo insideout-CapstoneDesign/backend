@@ -4,7 +4,7 @@ import com.insideout.backend.domain.building.entity.CampusMap;
 import com.insideout.backend.domain.building.entity.Floorplan;
 import com.insideout.backend.domain.building.repository.CampusMapRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
-import com.insideout.backend.domain.map.entity.MapType;
+import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.global.infra.storage.service.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -1,6 +1,6 @@
 package com.insideout.backend.domain.navigation.dto;
 
-import com.insideout.backend.domain.map.entity.MapType;
+import com.insideout.backend.domain.map.enums.MapType;
 
 import java.util.List;
 import java.util.UUID;

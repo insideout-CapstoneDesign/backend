@@ -14,7 +14,7 @@ import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingEdge;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingGraph;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingNode;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.VerticalRoutingLink;
-import com.insideout.backend.domain.map.entity.MapType;
+import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto.RouteType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;

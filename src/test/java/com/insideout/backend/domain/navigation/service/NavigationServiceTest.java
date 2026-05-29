@@ -68,14 +68,7 @@ class NavigationServiceTest {
         double entranceY = 37.6000;
 
         when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, originalEndX, originalEndY))
-                .thenReturn(Optional.of(new IndoorDestinationAnchor(
-                        buildingId,
-                        "테스트 건물",
-                        entranceNodeId,
-                        "정문",
-                        entranceX,
-                        entranceY
-                )));
+                .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, entranceX, entranceY)));
         when(restTemplate.postForObject(
                 eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
                 any(HttpEntity.class),
@@ -149,27 +142,15 @@ class NavigationServiceTest {
 
         when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
         when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
-                .thenReturn(Optional.of(new IndoorPoiDestination(
+                .thenReturn(Optional.of(indoorPoiDestination(
                         destinationPoiId,
-                        UUID.randomUUID(),
-                        "목적지 POI",
                         destinationNodeId,
                         floorId,
                         "1F",
-                        buildingId,
-                        "테스트 건물",
-                        null,
-                        null
+                        buildingId
                 )));
         when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
-                .thenReturn(Optional.of(new IndoorDestinationAnchor(
-                        buildingId,
-                        "테스트 건물",
-                        entranceNodeId,
-                        "정문",
-                        127.2000,
-                        37.6000
-                )));
+                .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
         when(restTemplate.postForObject(
                 eq("https://apis.openapi.sk.com/transit/routes"),
                 any(HttpEntity.class),
@@ -214,53 +195,41 @@ class NavigationServiceTest {
 
         when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
         when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
-                .thenReturn(Optional.of(new IndoorPoiDestination(
+                .thenReturn(Optional.of(indoorPoiDestination(
                         destinationPoiId,
-                        UUID.randomUUID(),
-                        "목적지 POI",
                         destinationNodeId,
                         secondFloorId,
                         "2F",
-                        buildingId,
-                        "테스트 건물",
-                        null,
-                        null
+                        buildingId
                 )));
         when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
-                .thenReturn(Optional.of(new IndoorDestinationAnchor(
-                        buildingId,
-                        "테스트 건물",
-                        entranceNodeId,
-                        "정문",
-                        127.2000,
-                        37.6000
-                )));
+                .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
         when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
-                .thenReturn(Optional.of(new RoutingGraph(
-                        mapVersionId,
-                        MapType.BUILDING,
-                        "https://signed.example/fallback.png",
-                        List.of(
-                                new RoutingNode(entranceNodeId, "entrance", "정문", firstFloorId, "1F", 10, 10),
-                                new RoutingNode(firstFloorConnectorNodeId, "elevator", "엘리베이터", firstFloorId, "1F", 20, 20),
-                                new RoutingNode(secondFloorConnectorNodeId, "elevator", "엘리베이터", secondFloorId, "2F", 30, 30),
-                                new RoutingNode(destinationNodeId, "poi", "목적지 POI", secondFloorId, "2F", 40, 40)
-                        ),
-                        List.of(
-                                new RoutingEdge(UUID.randomUUID(), entranceNodeId, firstFloorConnectorNodeId, "corridor", false, 10, 1),
-                                new RoutingEdge(UUID.randomUUID(), secondFloorConnectorNodeId, destinationNodeId, "corridor", false, 10, 1)
-                        ),
-                        List.of(new VerticalRoutingLink(
-                                firstFloorConnectorNodeId,
-                                secondFloorConnectorNodeId,
-                                "elevator",
-                                "엘리베이터",
-                                "1F",
-                                "2F",
-                                10
-                        )),
-                        List.of()
-                )));
+                .thenReturn(Optional.of(RoutingGraph.builder()
+                        .mapVersionId(mapVersionId)
+                        .mapType(MapType.BUILDING)
+                        .mapImageUrl("https://signed.example/fallback.png")
+                        .nodes(List.of(
+                                routingNode(entranceNodeId, "entrance", "정문", firstFloorId, "1F", 10, 10),
+                                routingNode(firstFloorConnectorNodeId, "elevator", "엘리베이터", firstFloorId, "1F", 20, 20),
+                                routingNode(secondFloorConnectorNodeId, "elevator", "엘리베이터", secondFloorId, "2F", 30, 30),
+                                routingNode(destinationNodeId, "poi", "목적지 POI", secondFloorId, "2F", 40, 40)
+                        ))
+                        .edges(List.of(
+                                routingEdge(entranceNodeId, firstFloorConnectorNodeId),
+                                routingEdge(secondFloorConnectorNodeId, destinationNodeId)
+                        ))
+                        .verticalLinks(List.of(VerticalRoutingLink.builder()
+                                .fromNodeId(firstFloorConnectorNodeId)
+                                .toNodeId(secondFloorConnectorNodeId)
+                                .connectorKind("elevator")
+                                .connectorName("엘리베이터")
+                                .fromFloorName("1F")
+                                .toFloorName("2F")
+                                .avgWaitSeconds(10)
+                                .build()))
+                        .obstacles(List.of())
+                        .build()));
         when(mapQueryFacade.findCurrentFloorplanImageUrl(firstFloorId))
                 .thenReturn(Optional.of("https://signed.example/1f.png"));
         when(mapQueryFacade.findCurrentFloorplanImageUrl(secondFloorId))
@@ -322,6 +291,73 @@ class NavigationServiceTest {
                   ]
                 }
                 """);
+    }
+
+    private IndoorDestinationAnchor indoorAnchor(
+            UUID buildingId,
+            UUID entranceNodeId,
+            double entranceX,
+            double entranceY
+    ) {
+        return IndoorDestinationAnchor.builder()
+                .buildingId(buildingId)
+                .buildingName("테스트 건물")
+                .entranceNodeId(entranceNodeId)
+                .entranceName("정문")
+                .x(entranceX)
+                .y(entranceY)
+                .build();
+    }
+
+    private IndoorPoiDestination indoorPoiDestination(
+            Long publicId,
+            UUID anchorNodeId,
+            UUID floorId,
+            String floorName,
+            UUID buildingId
+    ) {
+        return IndoorPoiDestination.builder()
+                .publicId(publicId)
+                .poiId(UUID.randomUUID())
+                .name("목적지 POI")
+                .anchorNodeId(anchorNodeId)
+                .floorId(floorId)
+                .floorName(floorName)
+                .buildingId(buildingId)
+                .buildingName("테스트 건물")
+                .build();
+    }
+
+    private RoutingNode routingNode(
+            UUID id,
+            String kind,
+            String name,
+            UUID floorId,
+            String floorName,
+            double x,
+            double y
+    ) {
+        return RoutingNode.builder()
+                .id(id)
+                .kind(kind)
+                .name(name)
+                .floorId(floorId)
+                .floorName(floorName)
+                .x(x)
+                .y(y)
+                .build();
+    }
+
+    private RoutingEdge routingEdge(UUID fromNodeId, UUID toNodeId) {
+        return RoutingEdge.builder()
+                .id(UUID.randomUUID())
+                .fromNodeId(fromNodeId)
+                .toNodeId(toNodeId)
+                .kind("corridor")
+                .directed(false)
+                .length(10)
+                .baseWeight(1)
+                .build();
     }
 
     private JsonNode transitRouteResponse() throws Exception {

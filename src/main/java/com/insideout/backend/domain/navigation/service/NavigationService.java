@@ -9,12 +9,13 @@ import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingGraph;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingNode;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.RoutingObstacle;
 import com.insideout.backend.domain.map.facade.MapQueryFacade.VerticalRoutingLink;
-import com.insideout.backend.domain.map.entity.MapType;
+import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto;
 import com.insideout.backend.domain.navigation.dto.NavigationRequestDto.RouteType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.FloorSegmentDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.IndoorInfoDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegMode;
@@ -744,8 +745,100 @@ public class NavigationService {
                 floorName,
                 CoordinateType.PIXEL,
                 route.path(),
+                buildFloorSegments(mode, mapType, mapImageUrl, floorId, floorName, route),
                 route.steps()
         );
+    }
+
+    private List<FloorSegmentDto> buildFloorSegments(
+            LegMode mode,
+            MapType mapType,
+            String fallbackMapImageUrl,
+            UUID fallbackFloorId,
+            String fallbackFloorName,
+            ComputedIndoorRoute route
+    ) {
+        if (route.nodes().isEmpty()) {
+            return List.of();
+        }
+
+        if (mapType == MapType.CAMPUS || mode == LegMode.CAMPUS) {
+            return List.of(new FloorSegmentDto(
+                    mapType,
+                    null,
+                    null,
+                    fallbackMapImageUrl,
+                    CoordinateType.PIXEL,
+                    route.path(),
+                    route.steps()
+            ));
+        }
+
+        List<FloorSegmentDto> segments = new ArrayList<>();
+        Map<UUID, String> floorImageUrlCache = new HashMap<>();
+        int startIndex = 0;
+
+        while (startIndex < route.nodes().size()) {
+            RoutingNode startNode = route.nodes().get(startIndex);
+            UUID segmentFloorId = firstNonNull(startNode.floorId(), fallbackFloorId);
+            String segmentFloorName = firstNonNull(startNode.floorName(), fallbackFloorName);
+            int endIndex = startIndex + 1;
+
+            while (endIndex < route.nodes().size()
+                    && sameFloor(firstNonNull(route.nodes().get(endIndex).floorId(), fallbackFloorId), segmentFloorId)) {
+                endIndex++;
+            }
+
+            List<RoutingNode> segmentNodes = route.nodes().subList(startIndex, endIndex);
+            List<CoordinateDto> segmentPath = segmentNodes.stream()
+                    .map(node -> new CoordinateDto(node.x(), node.y(), node.displayName()))
+                    .toList();
+
+            segments.add(new FloorSegmentDto(
+                    mapType,
+                    segmentFloorId,
+                    segmentFloorName,
+                    resolveSegmentMapImageUrl(segmentFloorId, fallbackMapImageUrl, floorImageUrlCache),
+                    CoordinateType.PIXEL,
+                    segmentPath,
+                    stepsForNodeRange(route.steps(), startIndex, endIndex, route.nodes().size())
+            ));
+
+            startIndex = endIndex;
+        }
+
+        return segments;
+    }
+
+    private String resolveSegmentMapImageUrl(UUID floorId, String fallbackMapImageUrl, Map<UUID, String> cache) {
+        if (floorId == null) {
+            return fallbackMapImageUrl;
+        }
+        return cache.computeIfAbsent(
+                floorId,
+                key -> mapQueryFacade.findCurrentFloorplanImageUrl(key).orElse(fallbackMapImageUrl)
+        );
+    }
+
+    private List<StepDto> stepsForNodeRange(List<StepDto> steps, int startIndex, int endIndex, int nodeCount) {
+        if (steps.isEmpty() || startIndex >= endIndex) {
+            return List.of();
+        }
+
+        int fromIndex = Math.min(Math.max(startIndex, 0), steps.size());
+        int toIndex = Math.min(endIndex, steps.size());
+        List<StepDto> segmentSteps = new ArrayList<>(steps.subList(fromIndex, toIndex));
+
+        int arrivalStepIndex = nodeCount;
+        if (endIndex == nodeCount && arrivalStepIndex < steps.size()) {
+            segmentSteps.add(steps.get(arrivalStepIndex));
+        }
+
+        return segmentSteps;
+    }
+
+    private boolean sameFloor(UUID first, UUID second) {
+        return first == null ? second == null : first.equals(second);
     }
 
     private LegDto createFallbackCampusLeg(RouteTarget target) {
@@ -763,6 +856,7 @@ public class NavigationService {
                 null,
                 null,
                 CoordinateType.PIXEL,
+                List.of(),
                 List.of(),
                 List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "CAMPUS", null))
         );
@@ -788,6 +882,7 @@ public class NavigationService {
                 floorName,
                 CoordinateType.PIXEL,
                 List.of(),
+                List.of(),
                 List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.originalEndX(), target.originalEndY(), null, "INDOOR", null))
         );
     }
@@ -812,6 +907,7 @@ public class NavigationService {
                 floorName,
                 CoordinateType.PIXEL,
                 List.of(),
+                List.of(),
                 List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.buildingEntranceX(), target.buildingEntranceY(), null, "INDOOR", null))
         );
     }
@@ -831,6 +927,7 @@ public class NavigationService {
                 null,
                 null,
                 CoordinateType.PIXEL,
+                List.of(),
                 List.of(),
                 List.of(new StepDto("경로를 찾을 수 없습니다.", null, null, target.resolvedOutdoorStartX(), target.resolvedOutdoorStartY(), null, "CAMPUS", null))
         );
@@ -898,7 +995,7 @@ public class NavigationService {
                 .map(node -> new CoordinateDto(node.x(), node.y(), node.displayName()))
                 .toList();
         List<StepDto> steps = buildIndoorSteps(routeNodes, links);
-        return Optional.of(new ComputedIndoorRoute(path, steps));
+        return Optional.of(new ComputedIndoorRoute(path, steps, routeNodes));
     }
 
     private Map<UUID, List<RouteLink>> buildAdjacency(
@@ -1159,7 +1256,7 @@ public class NavigationService {
         }
     }
 
-    private Double firstNonNull(Double first, Double second) {
+    private <T> T firstNonNull(T first, T second) {
         return first != null ? first : second;
     }
 
@@ -1203,7 +1300,8 @@ public class NavigationService {
 
     private record ComputedIndoorRoute(
             List<CoordinateDto> path,
-            List<StepDto> steps
+            List<StepDto> steps,
+            List<RoutingNode> nodes
     ) {
     }
 

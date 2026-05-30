@@ -1,7 +1,7 @@
 -- campus_ai_detection 테이블의 detect_type CHECK 제약 조건을 확장합니다.
 -- AI 서버가 실내/실외 공통으로 반환하는 모든 타입을 저장할 수 있도록 합니다.
 
-ALTER TABLE campus_ai_detection DROP CONSTRAINT campus_ai_detection_detect_type_check;
+ALTER TABLE campus_ai_detection DROP CONSTRAINT IF EXISTS campus_ai_detection_detect_type_check;
 
 ALTER TABLE campus_ai_detection
     ADD CONSTRAINT campus_ai_detection_detect_type_check

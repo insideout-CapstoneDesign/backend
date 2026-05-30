@@ -84,6 +84,11 @@ public enum BuildingErrorCode implements BaseErrorCode {
         "BUILDING400_9",
         "유효하지 않은 Campus Gate입니다."
     ),
+    DUPLICATE_CAMPUS_GATE_NAME(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_12",
+        "Campus Gate 이름은 중복될 수 없습니다."
+    ),
     BUILDING_FLOOR_MISMATCH(
         HttpStatus.BAD_REQUEST,
         "BUILDING400_10",

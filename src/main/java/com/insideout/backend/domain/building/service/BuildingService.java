@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 
@@ -58,12 +59,19 @@ public class BuildingService {
         List<UUID> floorIds = allFloors.stream().map(Floor::getId).toList();
         List<Floorplan> currentFloorplans = floorplanRepository.findAllByFloorIdInAndIsCurrentTrue(floorIds);
         Map<UUID, Floorplan> floorplanByFloorId = currentFloorplans.stream()
-                .collect(java.util.stream.Collectors.toMap(fp -> fp.getFloor().getId(), fp -> fp));
+                .filter(fp -> fp.getFloor() != null && fp.getFloor().getId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        fp -> Objects.requireNonNull(fp.getFloor()).getId(),
+                        fp -> fp,
+                        (existing, replacement) -> existing
+                ));
 
         Map<UUID, String> presignedUrlByFloorplanId = currentFloorplans.stream()
+                .filter(fp -> fp.getImageUrl() != null)
                 .collect(java.util.stream.Collectors.toMap(
                         Floorplan::getId,
-                        fp -> s3StorageService.getPresignedUrlFromS3Url(fp.getImageUrl())
+                        fp -> s3StorageService.getPresignedUrlFromS3Url(fp.getImageUrl()),
+                        (existing, replacement) -> existing
                 ));
 
         return buildings.stream()

@@ -36,9 +36,13 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -88,14 +92,50 @@ public class CampusService {
         return CampusResponseDTO.from(savedCampus);
     }
 
+    @Transactional
+    public CampusResponseDTO updateCampus(UUID tenantId, UUID campusId, CampusCreateRequestDTO req) {
+        Campus campus = campusRepository.findByIdAndTenant_Id(campusId, tenantId)
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.CAMPUS_NOT_FOUND));
+
+        Polygon boundary = createPolygon(req.boundary());
+        Point centroid = createPoint(req.centroid());
+        List<CampusGateDTO> normalizedGates = normalizeGates(req);
+        Point primaryEntrance = !normalizedGates.isEmpty()
+                ? createPoint(normalizedGates.get(0).location())
+                : createPoint(req.primaryEntrance());
+        String primaryEntranceName = !normalizedGates.isEmpty()
+                ? normalizedGates.get(0).name()
+                : req.primaryEntranceName();
+
+        campus.updateGeography(
+                req.name(),
+                req.address(),
+                boundary,
+                centroid,
+                primaryEntrance,
+                primaryEntranceName,
+                buildCampusMeta(req.meta(), normalizedGates, req.requiresFloorplan())
+        );
+
+        return CampusResponseDTO.from(campus);
+    }
+
     /**
      * 특정 테넌트의 모든 캠퍼스 목록을 최신순으로 조회합니다.
      */
     public List<CampusResponseDTO> getCampuses(UUID tenantId) {
-        return campusRepository.findAllByTenant_IdOrderByCreatedAtDesc(tenantId).stream()
+        List<Campus> campuses = campusRepository.findAllByTenant_IdOrderByCreatedAtDesc(tenantId);
+        List<UUID> campusIds = campuses.stream()
+                .map(Campus::getId)
+                .toList();
+        Map<UUID, CampusMap> currentMapsByCampusId = campusMapRepository
+                .findAllByCampusIdInAndIsCurrentTrue(campusIds)
+                .stream()
+                .collect(Collectors.toMap(campusMap -> campusMap.getCampus().getId(), Function.identity()));
+
+        return campuses.stream()
                 .map(campus -> {
-                    CampusMap currentMap = campusMapRepository.findByCampusIdAndIsCurrentTrue(campus.getId())
-                            .orElse(null);
+                    CampusMap currentMap = currentMapsByCampusId.get(campus.getId());
                     String presignedUrl = currentMap != null ? s3StorageService.getPresignedUrlFromS3Url(currentMap.getImageUrl()) : null;
                     return CampusResponseDTO.from(campus, currentMap, presignedUrl);
                 })
@@ -178,13 +218,16 @@ public class CampusService {
 
     private List<CampusGateDTO> normalizeGates(CampusCreateRequestDTO req) {
         if (req.gates() != null && !req.gates().isEmpty()) {
-            return req.gates().stream()
+            List<CampusGateDTO> gates = req.gates().stream()
                     .map(gate -> new CampusGateDTO(
                             gate.id() != null && !gate.id().isBlank() ? gate.id() : UUID.randomUUID().toString(),
                             gate.name(),
                             gate.location()
                     ))
                     .toList();
+
+            validateUniqueGateNames(gates);
+            return gates;
         }
 
         if (req.primaryEntrance() != null) {
@@ -196,6 +239,16 @@ public class CampusService {
         }
 
         throw new BuildingException(BuildingErrorCode.INVALID_CAMPUS_GATES);
+    }
+
+    private void validateUniqueGateNames(List<CampusGateDTO> gates) {
+        Set<String> names = new LinkedHashSet<>();
+        for (CampusGateDTO gate : gates) {
+            String normalizedName = gate.name() == null ? "" : gate.name().trim().toLowerCase();
+            if (!names.add(normalizedName)) {
+                throw new BuildingException(BuildingErrorCode.DUPLICATE_CAMPUS_GATE_NAME);
+            }
+        }
     }
 
     private Map<String, Object> buildCampusMeta(

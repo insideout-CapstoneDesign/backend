@@ -19,6 +19,7 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +51,21 @@ public class CampusController {
         return ApiResponse.success(
                 GeneralSuccessCode.CREATED,
                 campusService.createCampus(tenantId, request)
+        );
+    }
+
+    @Operation(summary = "캠퍼스 수정", description = "기존 캠퍼스/단지의 지리 정보를 수정합니다.")
+    @PutMapping("/{campusId}")
+    public ApiResponse<CampusResponseDTO> updateCampus(
+            @RequestParam UUID tenantId,
+            @PathVariable UUID campusId,
+            @Valid @RequestBody CampusCreateRequestDTO request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        validateTenantAccess(userDetails, tenantId);
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                campusService.updateCampus(tenantId, campusId, request)
         );
     }
 

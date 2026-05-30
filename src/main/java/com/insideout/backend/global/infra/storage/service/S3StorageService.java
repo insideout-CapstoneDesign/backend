@@ -23,10 +23,10 @@ import java.util.UUID;
 /**
  * S3/MinIO 스토리지 서비스.
  *
- * 파일 업로드/다운로드/삭제 책임만 가진다.
+ * 파일 업로드/다운로드/삭제 책임을 가진다.
  * 어떤 키(경로)로 저장할지는 호출자가 결정 (예: FloorplanService).
- *
- * AI 서버는 boto3로 직접 인증 다운로드하므로, 여기서 presigned URL 생성은 불필요.
+ * 추가로 getPresignedUrlFromS3Url, generatePresignedDownloadUrl 메서드를 통해
+ * 클라이언트가 직접 다운로드할 수 있는 presigned URL을 생성할 수 있다.
  */
 @Slf4j
 @Service

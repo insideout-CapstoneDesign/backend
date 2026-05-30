@@ -3,6 +3,9 @@ spring:
     import:
       - optional:file:.env[.properties]
 
+  elasticsearch:
+    uris: http://localhost:9200
+
   datasource:
     url: jdbc:postgresql://localhost:${DB_PORT}/${POSTGRES_DB}
     username: ${POSTGRES_USER}

@@ -31,22 +31,7 @@ public class PlaceSuggestElasticsearchClient {
     private String searchIndex;
 
     public List<SuggestDocument> suggest(String query, int size, Double lat, Double lng) {
-        String primaryUri = resolvePrimaryUri(elasticsearchUris);
-        RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
-
-        try {
-            String response = restClient.post()
-                    .uri("/{index}/_search", searchIndex)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(buildRequestBody(query, size, lat, lng, null))
-                    .retrieve()
-                    .body(String.class);
-            return parseResponse(response);
-        } catch (RestClientException e) {
-            throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
-        } catch (Exception e) {
-            throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
-        }
+        return doSearch(query, size, lat, lng, null);
     }
 
     private String resolvePrimaryUri(String uris) {
@@ -58,17 +43,23 @@ public class PlaceSuggestElasticsearchClient {
     }
 
     public List<SuggestDocument> search(String query, int size, Double lat, Double lng, Integer radius) {
+        return doSearch(query, size, lat, lng, radius);
+    }
+
+    private List<SuggestDocument> doSearch(String query, int size, Double lat, Double lng, Integer radius) {
         String primaryUri = resolvePrimaryUri(elasticsearchUris);
         RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
 
         try {
-            String response = restClient.post()
-                    .uri("/{index}/_search", searchIndex)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(buildRequestBody(query, size, lat, lng, radius))
-                    .retrieve()
-                    .body(String.class);
-            return parseResponse(response);
+            SearchResponse first = executeSearch(restClient, query, size, lat, lng, radius, true);
+            if (!first.documents().isEmpty()) {
+                return first.documents();
+            }
+            if (!StringUtils.hasText(first.correctedQuery()) || query.equals(first.correctedQuery())) {
+                return first.documents();
+            }
+            SearchResponse retried = executeSearch(restClient, first.correctedQuery(), size, lat, lng, radius, false);
+            return retried.documents();
         } catch (RestClientException e) {
             throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
         } catch (Exception e) {
@@ -76,7 +67,32 @@ public class PlaceSuggestElasticsearchClient {
         }
     }
 
-    private Map<String, Object> buildRequestBody(String query, int size, Double lat, Double lng, Integer radius) {
+    private SearchResponse executeSearch(
+            RestClient restClient,
+            String query,
+            int size,
+            Double lat,
+            Double lng,
+            Integer radius,
+            boolean includeSuggester
+    ) throws Exception {
+        String response = restClient.post()
+                .uri("/{index}/_search", searchIndex)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(buildRequestBody(query, size, lat, lng, radius, includeSuggester))
+                .retrieve()
+                .body(String.class);
+        return parseResponse(response);
+    }
+
+    private Map<String, Object> buildRequestBody(
+            String query,
+            int size,
+            Double lat,
+            Double lng,
+            Integer radius,
+            boolean includeSuggester
+    ) {
         Map<String, Object> termNameKeyword = Map.of(
                 "term", Map.of(
                         "name.keyword", Map.of(
@@ -166,18 +182,30 @@ public class PlaceSuggestElasticsearchClient {
         requestBody.put("_source", List.of("name", "address", "roadAddress", "externalApiId", "location"));
         requestBody.put("query", Map.of("bool", bool));
         requestBody.put("sort", sort);
+        if (includeSuggester) {
+            requestBody.put("suggest", Map.of(
+                    "name_suggest", Map.of(
+                            "text", query,
+                            "term", Map.of(
+                                    "field", "name",
+                                    "suggest_mode", "popular",
+                                    "max_edits", 2
+                            )
+                    )
+            ));
+        }
         return requestBody;
     }
 
-    private List<SuggestDocument> parseResponse(String response) throws Exception {
+    private SearchResponse parseResponse(String response) throws Exception {
         if (!StringUtils.hasText(response)) {
-            return List.of();
+            return new SearchResponse(List.of(), null);
         }
 
         JsonNode root = objectMapper.readTree(response);
         JsonNode hits = root.path("hits").path("hits");
         if (!hits.isArray()) {
-            return List.of();
+            return new SearchResponse(List.of(), extractCorrectedQuery(root));
         }
 
         List<SuggestDocument> results = new ArrayList<>();
@@ -198,7 +226,23 @@ public class PlaceSuggestElasticsearchClient {
                     lng
             ));
         }
-        return results;
+        return new SearchResponse(results, extractCorrectedQuery(root));
+    }
+
+    private String extractCorrectedQuery(JsonNode root) {
+        JsonNode options = root.path("suggest")
+                .path("name_suggest");
+        if (!options.isArray() || options.isEmpty()) {
+            return null;
+        }
+        JsonNode firstSuggest = options.get(0);
+        JsonNode suggestOptions = firstSuggest.path("options");
+        if (!suggestOptions.isArray() || suggestOptions.isEmpty()) {
+            return null;
+        }
+        JsonNode firstOption = suggestOptions.get(0);
+        String corrected = nullableText(firstOption.path("text"));
+        return StringUtils.hasText(corrected) ? corrected.trim() : null;
     }
 
     private String nullableText(JsonNode node) {
@@ -219,6 +263,12 @@ public class PlaceSuggestElasticsearchClient {
             String externalApiId,
             Double lat,
             Double lng
+    ) {
+    }
+
+    private record SearchResponse(
+            List<SuggestDocument> documents,
+            String correctedQuery
     ) {
     }
 }

@@ -60,8 +60,13 @@ public class CampusAiAnalyzeService {
         } catch (Exception e) {
             log.error("캠퍼스 AI 분석 중 예상치 못한 오류 발생. Job ID: {}", savedJob.getId(), e);
             markFailureSafely(savedJob.getId(), AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
-            throw new AiException(AiErrorCode.AI_ANALYSIS_FAILED);
+            throw new AiException(
+                    AiErrorCode.AI_ANALYSIS_FAILED,
+                    "캠퍼스 AI 분석 중 예상치 못한 오류 발생: " + e.getMessage() + " (" + e.getClass().getSimpleName() + ")",
+                    e
+            );
         }
+
     }
 
     private void markFailureSafely(UUID jobId, String errorMessage) {

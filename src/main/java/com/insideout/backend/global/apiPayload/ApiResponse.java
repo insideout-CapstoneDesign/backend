@@ -57,7 +57,15 @@ public class ApiResponse<T> {
                 .body(onFailureBody(code, result));
     }
 
+    // [실패] 에러 핸들러에서 사용 (커스텀 메시지 및 데이터 포함)
+    public static <T> ResponseEntity<ApiResponse<T>> onFailureEntity(BaseErrorCode code, String customMessage, T result) {
+        return ResponseEntity
+                .status(code.getStatus())
+                .body(new ApiResponse<>(false, code.getCode(), customMessage, result));
+    }
+
     private static <T> ApiResponse<T> onFailureBody(BaseErrorCode code, T result) {
         return new ApiResponse<>(false, code.getCode(), code.getMessage(), result);
     }
 }
+

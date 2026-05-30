@@ -22,10 +22,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ProjectException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(ProjectException e) {
         BaseErrorCode errorCode = e.getErrorCode();
-        log.error("Custom Exception: {}", errorCode.getMessage());
+        String message = e.getCustomMessage() != null ? e.getCustomMessage() : errorCode.getMessage();
+        log.error("Custom Exception: {} - Details: {}", errorCode.getMessage(), message);
+        if (e.getCause() != null) {
+            log.error("Caused by: ", e.getCause());
+        }
 
-        return ApiResponse.onFailureEntity(errorCode);
+        return ApiResponse.onFailureEntity(errorCode, message, null);
     }
+
 
     // Validation 예외 처리 (MethodArgumentNotValidException)
     @ExceptionHandler(MethodArgumentNotValidException.class)

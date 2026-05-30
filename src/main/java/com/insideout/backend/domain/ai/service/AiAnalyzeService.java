@@ -60,8 +60,13 @@ public class AiAnalyzeService {
         } catch (Exception e) {
             log.error("AI 분석 중 예상치 못한 오류 발생. Job ID: {}", savedJob.getId(), e);
             aiAnalyzePersistenceService.completeFailure(savedJob.getId(), AiErrorCode.AI_ANALYSIS_FAILED.getMessage());
-            throw new AiException(AiErrorCode.AI_ANALYSIS_FAILED);
+            throw new AiException(
+                    AiErrorCode.AI_ANALYSIS_FAILED,
+                    "AI 분석 중 예상치 못한 오류 발생: " + e.getMessage() + " (" + e.getClass().getSimpleName() + ")",
+                    e
+            );
         }
+
     }
 
     @Transactional(readOnly = true)

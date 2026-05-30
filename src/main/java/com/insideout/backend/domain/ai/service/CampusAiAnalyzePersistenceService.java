@@ -46,6 +46,25 @@ public class CampusAiAnalyzePersistenceService {
         return campusAiJobRepository.save(job);
     }
 
+    private static final java.util.Set<String> ALLOWED_CAMPUS_TYPES = java.util.Set.of(
+            "campus_gate",
+            "campus_road",
+            "building_footprint",
+            "obstacle",
+            "wall",
+            "door",
+            "corridor",
+            "room",
+            "elevator",
+            "stair",
+            "escalator",
+            "restroom_sign",
+            "text",
+            "poi_candidate",
+            "node_candidate",
+            "edge_candidate"
+    );
+
     @Transactional(noRollbackFor = AiException.class)
     public CampusAnalyzeResultDTO completeSuccess(
             UUID jobId,
@@ -63,6 +82,15 @@ public class CampusAiAnalyzePersistenceService {
 
         List<CampusAiDetection> detections = (aiResponse.detections() == null ? List.<AiDetectionDTO>of() : aiResponse.detections())
                 .stream()
+                .map(dto -> {
+                    // AI 분석 서버가 'entrance'로 응답한 경우 캠퍼스 맵 사양인 'campus_gate'로 보정하여 매핑
+                    if ("entrance".equals(dto.detectType())) {
+                        return new AiDetectionDTO("campus_gate", dto.confidence(), dto.geomPx(), dto.bboxPx(), dto.label(), dto.ocrText());
+                    }
+                    return dto;
+                })
+                // 캠퍼스 AI 결과 테이블(campus_ai_detection)의 CHECK 제약조건 범위 내의 타입만 필터링해서 DB 적재
+                .filter(dto -> ALLOWED_CAMPUS_TYPES.contains(dto.detectType()))
                 .map(detectionDto -> aiDetectionConverter.toCampusEntity(tenantId, job, campusMap, detectionDto))
                 .toList();
         List<CampusAiDetection> savedDetections = campusAiDetectionRepository.saveAll(detections);

@@ -87,7 +87,7 @@ public class CampusAiDetection {
             }
         }
         if (job != null && campusMap != null && job.getCampusMap() != null
-                && !campusMap.equals(job.getCampusMap())) {
+                && !campusMap.getId().equals(job.getCampusMap().getId())) {
             throw new IllegalArgumentException("campusMap must match job.campusMap");
         }
         this.tenantId = tenantId;

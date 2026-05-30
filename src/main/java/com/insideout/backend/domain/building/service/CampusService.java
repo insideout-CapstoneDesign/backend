@@ -1,6 +1,7 @@
 package com.insideout.backend.domain.building.service;
 
 import com.insideout.backend.domain.building.dto.CoordinateDTO;
+import com.insideout.backend.domain.building.dto.CampusGateDTO;
 import com.insideout.backend.domain.building.dto.request.CampusCreateRequestDTO;
 import com.insideout.backend.domain.building.dto.response.CampusMapResponseDTO;
 import com.insideout.backend.domain.building.dto.response.CampusResponseDTO;
@@ -34,7 +35,9 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -62,7 +65,13 @@ public class CampusService {
 
         Polygon boundary = createPolygon(req.boundary());
         Point centroid = createPoint(req.centroid());
-        Point primaryEntrance = createPoint(req.primaryEntrance());
+        List<CampusGateDTO> normalizedGates = normalizeGates(req);
+        Point primaryEntrance = !normalizedGates.isEmpty()
+                ? createPoint(normalizedGates.get(0).location())
+                : createPoint(req.primaryEntrance());
+        String primaryEntranceName = !normalizedGates.isEmpty()
+                ? normalizedGates.get(0).name()
+                : req.primaryEntranceName();
 
         Campus campus = Campus.builder()
                 .tenant(tenant)
@@ -71,8 +80,8 @@ public class CampusService {
                 .boundary(boundary)
                 .centroid(centroid)
                 .primaryEntrance(primaryEntrance)
-                .primaryEntranceName(req.primaryEntranceName())
-                .meta(req.meta())
+                .primaryEntranceName(primaryEntranceName)
+                .meta(buildCampusMeta(req.meta(), normalizedGates, req.requiresFloorplan()))
                 .build();
 
         Campus savedCampus = campusRepository.save(campus);
@@ -84,7 +93,12 @@ public class CampusService {
      */
     public List<CampusResponseDTO> getCampuses(UUID tenantId) {
         return campusRepository.findAllByTenant_IdOrderByCreatedAtDesc(tenantId).stream()
-                .map(CampusResponseDTO::from)
+                .map(campus -> {
+                    CampusMap currentMap = campusMapRepository.findByCampusIdAndIsCurrentTrue(campus.getId())
+                            .orElse(null);
+                    String presignedUrl = currentMap != null ? s3StorageService.getPresignedUrlFromS3Url(currentMap.getImageUrl()) : null;
+                    return CampusResponseDTO.from(campus, currentMap, presignedUrl);
+                })
                 .toList();
     }
 
@@ -94,8 +108,12 @@ public class CampusService {
     public CampusResponseDTO getCampus(UUID tenantId, UUID campusId) {
         Campus campus = campusRepository.findByIdAndTenant_Id(campusId, tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.CAMPUS_NOT_FOUND));
-        return CampusResponseDTO.from(campus);
+        CampusMap currentMap = campusMapRepository.findByCampusIdAndIsCurrentTrue(campusId)
+                .orElse(null);
+        String presignedUrl = currentMap != null ? s3StorageService.getPresignedUrlFromS3Url(currentMap.getImageUrl()) : null;
+        return CampusResponseDTO.from(campus, currentMap, presignedUrl);
     }
+
 
     /**
      * 캠퍼스 야외 도면 이미지를 검증 및 업로드하고 DB에 저장합니다.
@@ -155,7 +173,53 @@ public class CampusService {
                 .build();
 
         CampusMap savedMap = campusMapRepository.save(campusMap);
-        return CampusMapResponseDTO.from(savedMap);
+        return CampusMapResponseDTO.from(savedMap, s3StorageService.getPresignedUrlFromS3Url(savedMap.getImageUrl()));
+    }
+
+    private List<CampusGateDTO> normalizeGates(CampusCreateRequestDTO req) {
+        if (req.gates() != null && !req.gates().isEmpty()) {
+            return req.gates().stream()
+                    .map(gate -> new CampusGateDTO(
+                            gate.id() != null && !gate.id().isBlank() ? gate.id() : UUID.randomUUID().toString(),
+                            gate.name(),
+                            gate.location()
+                    ))
+                    .toList();
+        }
+
+        if (req.primaryEntrance() != null) {
+            return List.of(new CampusGateDTO(
+                    UUID.randomUUID().toString(),
+                    req.primaryEntranceName() != null && !req.primaryEntranceName().isBlank() ? req.primaryEntranceName() : "대표 출입구",
+                    req.primaryEntrance()
+            ));
+        }
+
+        throw new BuildingException(BuildingErrorCode.INVALID_CAMPUS_GATES);
+    }
+
+    private Map<String, Object> buildCampusMeta(
+            Map<String, Object> originalMeta,
+            List<CampusGateDTO> gates,
+            Boolean requiresFloorplan
+    ) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        if (originalMeta != null) {
+            meta.putAll(originalMeta);
+        }
+
+        meta.put("requiresFloorplan", Boolean.TRUE.equals(requiresFloorplan));
+        meta.put("gates", gates.stream()
+                .map(gate -> Map.of(
+                        "id", gate.id(),
+                        "name", gate.name(),
+                        "location", Map.of(
+                                "longitude", gate.location().longitude(),
+                                "latitude", gate.location().latitude()
+                        )
+                ))
+                .toList());
+        return meta;
     }
 
     private Polygon createPolygon(List<CoordinateDTO> boundary) {

@@ -163,6 +163,34 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void search_whenElasticsearchHasEnoughResults_skipsKakaoFallback() {
+        when(placeSuggestElasticsearchClient.search("신세계", 2, null, null, null))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 본점",
+                                "서울 중구",
+                                "서울 중구 소공로 63",
+                                "1",
+                                37.5609,
+                                126.9810
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 강남점",
+                                "서울 서초구",
+                                "서울 서초구 신반포로 176",
+                                "2",
+                                37.5045,
+                                127.0032
+                        )
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSearchService.search("신세계", null, null, null, 2);
+
+        assertThat(result).hasSize(2);
+        verify(kakaoPlaceSearchClient, never()).searchByKeyword("신세계");
+    }
+
+    @Test
     void search_withPartialCoordinates_throwsInvalidCoordinate() {
         assertThatThrownBy(() -> placeSearchService.search("스타벅스", 37.5, null, null, null))
                 .isInstanceOf(PlaceException.class)

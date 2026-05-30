@@ -134,6 +134,37 @@ class PlaceSuggestServiceTest {
         verify(buildingRepository, never()).findRegisteredPlacesByExternalApiIds(anySet());
     }
 
+    @Test
+    void suggest_whenElasticsearchHasEnoughResults_skipsKakaoFallback() {
+        when(placeSuggestElasticsearchClient.suggest("신세계", 2, null, null))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 본점",
+                                "서울 중구",
+                                "서울 중구 소공로 63",
+                                "1",
+                                37.5609,
+                                126.9810
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 강남점",
+                                "서울 서초구",
+                                "서울 서초구 신반포로 176",
+                                "2",
+                                37.5045,
+                                127.0032
+                        )
+                ));
+        when(buildingRepository.findRegisteredPlacesByExternalApiIds(Set.of("1", "2")))
+                .thenReturn(List.of());
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", null, null, 2);
+
+        assertThat(result).hasSize(2);
+        verify(kakaoPlaceSearchClient, never()).searchByKeyword("신세계");
+        verify(placeSearchIndexingService, never()).upsertFromSearchResultsAsync(any());
+    }
+
     private BuildingSearchProjection projection(String name, String address, Double lat, Double lng, String externalApiId) {
         return new BuildingSearchProjection() {
             @Override

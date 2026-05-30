@@ -40,11 +40,13 @@ public class PlaceSuggestService {
         List<PlaceSuggestElasticsearchClient.SuggestDocument> fromElasticsearch = placeSuggestElasticsearchClient
                 .suggest(normalizedQuery, resolvedSize, lat, lng);
 
-        List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng);
-        List<PlaceSuggestElasticsearchClient.SuggestDocument> mergedSuggested = mergeSuggested(fromElasticsearch, fromKakao, resolvedSize);
-
-        if (fromElasticsearch.size() < resolvedSize && !fromKakao.isEmpty()) {
-            placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(resolvedSize).toList());
+        List<PlaceSuggestElasticsearchClient.SuggestDocument> mergedSuggested = fromElasticsearch;
+        if (fromElasticsearch.size() < resolvedSize) {
+            List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng);
+            mergedSuggested = mergeSuggested(fromElasticsearch, fromKakao, resolvedSize);
+            if (!fromKakao.isEmpty()) {
+                placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(resolvedSize).toList());
+            }
         }
 
         if (mergedSuggested.isEmpty()) {

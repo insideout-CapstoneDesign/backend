@@ -59,6 +59,11 @@ public enum BuildingErrorCode implements BaseErrorCode {
         "BUILDING404_4",
         "해당 층을 찾을 수 없습니다."
     ),
+    BUILDING_ENTRANCE_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_5",
+        "해당 건물 출입구를 찾을 수 없습니다."
+    ),
     UNAUTHORIZED_ACCESS(
         HttpStatus.FORBIDDEN,
         "BUILDING403_1",
@@ -68,6 +73,31 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "BUILDING400_7",
         "캠퍼스 경계(boundary)는 최소 3개 이상의 유효한 좌표가 필요합니다."
+    ),
+    INVALID_CAMPUS_GATES(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_8",
+        "캠퍼스 출입구(gate)는 최소 1개 이상 필요합니다."
+    ),
+    INVALID_CAMPUS_GATE(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_9",
+        "유효하지 않은 Campus Gate입니다."
+    ),
+    BUILDING_FLOOR_MISMATCH(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_10",
+        "해당 층은 요청한 건물에 속하지 않습니다."
+    ),
+    ENTRANCE_MAPPING_REQUIRES_CAMPUS(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_11",
+        "Campus Gate 매핑은 캠퍼스에 속한 건물에서만 가능합니다."
+    ),
+    POI_CATEGORY_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_6",
+        "필수 POI 카테고리를 찾을 수 없습니다."
     );
 
     private final HttpStatus status;

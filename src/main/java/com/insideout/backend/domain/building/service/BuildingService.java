@@ -12,13 +12,19 @@ import com.insideout.backend.domain.building.entity.Floor;
 import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.tenant.entity.Tenant;
 import com.insideout.backend.domain.tenant.repository.TenantRepository;
+import com.insideout.backend.domain.building.repository.FloorplanRepository;
+import com.insideout.backend.domain.building.entity.Floorplan;
+import com.insideout.backend.global.infra.storage.service.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +35,8 @@ public class BuildingService {
     private final CampusRepository campusRepository;
     private final TenantRepository tenantRepository;
     private final FloorRepository floorRepository;
+    private final FloorplanRepository floorplanRepository;
+    private final S3StorageService s3StorageService;
 
     /**
      * 특정 테넌트에 속한 건물 목록을 최신순으로 조회합니다.
@@ -47,13 +55,28 @@ public class BuildingService {
         Map<UUID, List<Floor>> floorsByBuildingId = allFloors.stream()
                 .collect(java.util.stream.Collectors.groupingBy(floor -> floor.getBuilding().getId()));
 
+        List<UUID> floorIds = allFloors.stream().map(Floor::getId).toList();
+        List<Floorplan> currentFloorplans = floorplanRepository.findAllByFloorIdInAndIsCurrentTrue(floorIds);
+        Map<UUID, Floorplan> floorplanByFloorId = currentFloorplans.stream()
+                .collect(java.util.stream.Collectors.toMap(fp -> fp.getFloor().getId(), fp -> fp));
+
+        Map<UUID, String> presignedUrlByFloorplanId = currentFloorplans.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Floorplan::getId,
+                        fp -> s3StorageService.getPresignedUrlFromS3Url(fp.getImageUrl())
+                ));
+
         return buildings.stream()
                 .map(building -> BuildingSummaryDTO.from(
                         building,
-                        floorsByBuildingId.getOrDefault(building.getId(), List.of())
+                        floorsByBuildingId.getOrDefault(building.getId(), List.of()),
+                        floorplanByFloorId,
+                        presignedUrlByFloorplanId
                 ))
                 .toList();
     }
+
+
 
     /**
      * 특정 테넌트 하위에 새로운 건물을 생성합니다.
@@ -69,14 +92,16 @@ public class BuildingService {
                     .orElseThrow(() -> new BuildingException(BuildingErrorCode.CAMPUS_NOT_FOUND));
         }
 
-        // 위경도 좌표를 JSON meta 맵에 위치 정보로 매핑하여 저장
-        Map<String, Object> meta = Map.of();
+        // 위경도 좌표와 등록 플로우 관련 메타를 JSON에 함께 저장
+        Map<String, Object> meta = new LinkedHashMap<>();
         if (req.longitude() != null && req.latitude() != null) {
-            meta = Map.of("location", Map.of(
+            meta.put("location", Map.of(
                     "longitude", req.longitude(),
                     "latitude", req.latitude()
             ));
         }
+        meta.put("requiresFloorplan", Boolean.TRUE.equals(req.requiresFloorplan()));
+        meta.put("activationStatus", "draft");
 
         Building building = Building.builder()
                 .tenant(tenant)
@@ -91,7 +116,7 @@ public class BuildingService {
 
         Building savedBuilding = buildingRepository.save(building);
 
-        // 건물 등록 시 함께 전달된 층 정보 일괄 저장
+        // 건물 등록 시 함께 전달된 층 정보는 도면 업로드 여부와 관계없이 기본 구조로 먼저 저장합니다.
         List<Floor> savedFloors = List.of();
         if (req.floors() != null && !req.floors().isEmpty()) {
             List<Floor> floorsToSave = req.floors().stream()

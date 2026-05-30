@@ -13,5 +13,7 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
 
     Optional<Building> findByIdAndCampusIsNotNull(UUID id);
 
+    Optional<Building> findByIdAndTenant_Id(UUID id, UUID tenantId);
+
     List<Building> findByTenant_IdOrderByCreatedAtDesc(UUID tenantId);
 }

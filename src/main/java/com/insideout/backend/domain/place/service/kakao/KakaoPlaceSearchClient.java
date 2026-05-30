@@ -1,4 +1,4 @@
-package com.insideout.backend.domain.place.service;
+package com.insideout.backend.domain.place.service.kakao;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;

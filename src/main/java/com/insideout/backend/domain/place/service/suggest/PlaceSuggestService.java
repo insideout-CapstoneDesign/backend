@@ -1,10 +1,14 @@
-package com.insideout.backend.domain.place.service;
+package com.insideout.backend.domain.place.service.suggest;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
+import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
+import com.insideout.backend.domain.place.service.kakao.KakaoPlaceSearchClient;
+import com.insideout.backend.domain.place.service.search.PlaceSearchIndexingService;
+import com.insideout.backend.domain.place.service.support.PlaceSearchSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -30,7 +34,7 @@ public class PlaceSuggestService {
 
     public List<PlaceSearchItemResponse> suggest(String query, Double lat, Double lng, Integer size) {
         String normalizedQuery = validateAndNormalizeQuery(query);
-        validateCoordinate(lat, lng);
+        PlaceSearchSupport.validateCoordinate(lat, lng, true);
         int resolvedSize = normalizeSize(size);
 
         List<PlaceSuggestElasticsearchClient.SuggestDocument> fromElasticsearch = placeSuggestElasticsearchClient
@@ -64,20 +68,6 @@ public class PlaceSuggestService {
             throw new PlaceException(PlaceErrorCode.SEARCH_INVALID_QUERY);
         }
         return normalized;
-    }
-
-    private void validateCoordinate(Double lat, Double lng) {
-        if (lat == null && lng == null) {
-            return;
-        }
-
-        if (lat == null || lng == null || !Double.isFinite(lat) || !Double.isFinite(lng)) {
-            throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
-        }
-
-        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
-        }
     }
 
     private int normalizeSize(Integer size) {
@@ -127,7 +117,7 @@ public class PlaceSuggestService {
     ) {
         Map<String, PlaceSuggestElasticsearchClient.SuggestDocument> merged = new LinkedHashMap<>();
         for (PlaceSuggestElasticsearchClient.SuggestDocument item : fromElasticsearch) {
-            merged.put(dedupeKey(item), item);
+            merged.put(PlaceSearchSupport.dedupeKey(item), item);
         }
         for (PlaceSearchItemResponse item : fromKakao) {
             PlaceSuggestElasticsearchClient.SuggestDocument document = new PlaceSuggestElasticsearchClient.SuggestDocument(
@@ -138,34 +128,12 @@ public class PlaceSuggestService {
                     item.lat(),
                     item.lng()
             );
-            merged.putIfAbsent(dedupeKey(document), document);
+            merged.putIfAbsent(PlaceSearchSupport.dedupeKey(document), document);
             if (merged.size() >= size * 2) {
                 break;
             }
         }
         return merged.values().stream().limit(size).toList();
-    }
-
-    private String dedupeKey(PlaceSuggestElasticsearchClient.SuggestDocument item) {
-        if (StringUtils.hasText(item.externalApiId())) {
-            return "ext:" + item.externalApiId().trim();
-        }
-        if (item.lat() != null && item.lng() != null) {
-            return "geo:" + normalizeText(item.name()) + ":" + round(item.lat(), 4) + ":" + round(item.lng(), 4);
-        }
-        return "name:" + normalizeText(item.name()) + "|" + normalizeText(item.address());
-    }
-
-    private String normalizeText(String value) {
-        if (!StringUtils.hasText(value)) {
-            return "";
-        }
-        return value.replaceAll("\\s+", "").toLowerCase();
-    }
-
-    private double round(double value, int precision) {
-        double scale = Math.pow(10, precision);
-        return Math.round(value * scale) / scale;
     }
 
     private PlaceSearchItemResponse toResponse(
@@ -187,7 +155,7 @@ public class PlaceSuggestService {
         Double distanceMeters = null;
 
         if (lat != null && lng != null && resolvedLat != null && resolvedLng != null) {
-            distanceMeters = distanceInMeter(lat, lng, resolvedLat, resolvedLng);
+            distanceMeters = PlaceSearchSupport.distanceInMeter(lat, lng, resolvedLat, resolvedLng);
         }
 
         return new PlaceSearchItemResponse(
@@ -202,14 +170,4 @@ public class PlaceSuggestService {
         );
     }
 
-    private double distanceInMeter(double lat1, double lng1, double lat2, double lng2) {
-        double earthRadius = 6_371_000.0;
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLng = Math.toRadians(lng2 - lng1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return earthRadius * c;
-    }
 }

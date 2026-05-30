@@ -1,6 +1,7 @@
-package com.insideout.backend.domain.place.service;
+package com.insideout.backend.domain.place.service.search;
 
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
+import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
@@ -45,4 +46,3 @@ public class PlaceSearchIndexingService {
                 && item.lng() != null;
     }
 }
-

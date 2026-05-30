@@ -1,7 +1,7 @@
 package com.insideout.backend.domain.place.controller;
 
-import com.insideout.backend.domain.place.service.PlaceSearchService;
-import com.insideout.backend.domain.place.service.PlaceSuggestService;
+import com.insideout.backend.domain.place.service.search.PlaceSearchService;
+import com.insideout.backend.domain.place.service.suggest.PlaceSuggestService;
 import com.insideout.backend.global.apiPayload.ApiResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

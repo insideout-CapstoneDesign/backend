@@ -785,7 +785,7 @@ public class NavigationService {
             int endIndex = startIndex + 1;
 
             while (endIndex < route.nodes().size()
-                    && sameFloor(route.nodes().get(endIndex).floorId(), startNode.floorId())) {
+                    && sameFloor(firstNonNull(route.nodes().get(endIndex).floorId(), fallbackFloorId), segmentFloorId)) {
                 endIndex++;
             }
 
@@ -801,7 +801,7 @@ public class NavigationService {
                     resolveSegmentMapImageUrl(segmentFloorId, fallbackMapImageUrl, floorImageUrlCache),
                     CoordinateType.PIXEL,
                     segmentPath,
-                    filterStepsForNodes(route.steps(), segmentNodes)
+                    stepsForNodeRange(route.steps(), startIndex, endIndex, route.nodes().size())
             ));
 
             startIndex = endIndex;
@@ -820,23 +820,25 @@ public class NavigationService {
         );
     }
 
-    private List<StepDto> filterStepsForNodes(List<StepDto> steps, List<RoutingNode> nodes) {
-        if (steps.isEmpty() || nodes.isEmpty()) {
+    private List<StepDto> stepsForNodeRange(List<StepDto> steps, int startIndex, int endIndex, int nodeCount) {
+        if (steps.isEmpty() || startIndex >= endIndex) {
             return List.of();
         }
 
-        return steps.stream()
-                .filter(step -> step.x() != null && step.y() != null)
-                .filter(step -> nodes.stream().anyMatch(node -> samePixel(node.x(), step.x()) && samePixel(node.y(), step.y())))
-                .toList();
+        int fromIndex = Math.min(Math.max(startIndex, 0), steps.size());
+        int toIndex = Math.min(endIndex, steps.size());
+        List<StepDto> segmentSteps = new ArrayList<>(steps.subList(fromIndex, toIndex));
+
+        int arrivalStepIndex = nodeCount;
+        if (endIndex == nodeCount && arrivalStepIndex < steps.size()) {
+            segmentSteps.add(steps.get(arrivalStepIndex));
+        }
+
+        return segmentSteps;
     }
 
     private boolean sameFloor(UUID first, UUID second) {
         return first == null ? second == null : first.equals(second);
-    }
-
-    private boolean samePixel(double first, double second) {
-        return Math.abs(first - second) < 0.000001;
     }
 
     private LegDto createFallbackCampusLeg(RouteTarget target) {

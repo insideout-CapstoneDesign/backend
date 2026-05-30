@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -44,6 +45,20 @@ public class BuildingController {
         return ApiResponse.success(
                 GeneralSuccessCode.OK,
                 buildingService.getBuildings(tenantId)
+        );
+    }
+
+    @Operation(summary = "테넌트 내 건물 단건 조회", description = "특정 테넌트 하위의 건물 상세 정보를 조회합니다.")
+    @GetMapping("/{buildingId}")
+    public ApiResponse<BuildingSummaryDTO> getBuilding(
+            @PathVariable UUID buildingId,
+            @RequestParam UUID tenantId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        validateTenantAccess(userDetails, tenantId);
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                buildingService.getBuilding(tenantId, buildingId)
         );
     }
 

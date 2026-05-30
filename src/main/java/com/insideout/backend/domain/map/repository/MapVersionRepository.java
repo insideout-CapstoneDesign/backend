@@ -18,4 +18,6 @@ public interface MapVersionRepository extends JpaRepository<MapVersion, UUID> {
     Optional<MapVersion> findFirstByBuildingIdAndMapTypeOrderByCreatedAtDesc(UUID buildingId, MapType mapType);
 
     Optional<MapVersion> findFirstByCampusIdAndMapTypeAndStatus(UUID campusId, MapType mapType, String status);
+
+    Optional<MapVersion> findFirstByCampusIdAndMapTypeAndStatusOrderByCreatedAtDesc(UUID campusId, MapType mapType, String status);
 }

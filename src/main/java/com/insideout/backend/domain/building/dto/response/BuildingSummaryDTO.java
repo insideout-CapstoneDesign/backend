@@ -27,24 +27,26 @@ public record BuildingSummaryDTO(
             int level,
             String name,
             UUID floorplanId,
-            String floorplanImageUrl
+            String floorplanImageUrl,
+            boolean analysisCompleted
     ) {
-        public static FloorDTO from(Floor floor, Floorplan floorplan, String imageUrl) {
+        public static FloorDTO from(Floor floor, Floorplan floorplan, String imageUrl, boolean analysisCompleted) {
             return new FloorDTO(
                     floor.getId(),
                     floor.getLevel(),
                     floor.getName(),
                     floorplan != null ? floorplan.getId() : null,
-                    imageUrl
+                    imageUrl,
+                    analysisCompleted
             );
         }
 
-        public static FloorDTO from(Floor floor, Floorplan floorplan) {
-            return from(floor, floorplan, floorplan != null ? floorplan.getImageUrl() : null);
+        public static FloorDTO from(Floor floor, Floorplan floorplan, boolean analysisCompleted) {
+            return from(floor, floorplan, floorplan != null ? floorplan.getImageUrl() : null, analysisCompleted);
         }
 
         public static FloorDTO from(Floor floor) {
-            return from(floor, null);
+            return from(floor, null, false);
         }
     }
 
@@ -57,10 +59,14 @@ public record BuildingSummaryDTO(
     }
 
     public static BuildingSummaryDTO from(Building building, List<Floor> floors, java.util.Map<UUID, Floorplan> floorplanByFloorId) {
-        return from(building, floors, floorplanByFloorId, java.util.Map.of());
+        return from(building, floors, floorplanByFloorId, java.util.Map.of(), java.util.Map.of());
     }
 
     public static BuildingSummaryDTO from(Building building, List<Floor> floors, java.util.Map<UUID, Floorplan> floorplanByFloorId, java.util.Map<UUID, String> presignedUrlByFloorplanId) {
+        return from(building, floors, floorplanByFloorId, presignedUrlByFloorplanId, java.util.Map.of());
+    }
+
+    public static BuildingSummaryDTO from(Building building, List<Floor> floors, java.util.Map<UUID, Floorplan> floorplanByFloorId, java.util.Map<UUID, String> presignedUrlByFloorplanId, java.util.Map<UUID, Boolean> analysisCompletedByFloorplanId) {
         return new BuildingSummaryDTO(
                 building.getId(),
                 building.getTenant().getId(),
@@ -76,7 +82,8 @@ public record BuildingSummaryDTO(
                         .map(floor -> {
                             Floorplan fp = floorplanByFloorId.get(floor.getId());
                             String url = fp != null ? presignedUrlByFloorplanId.get(fp.getId()) : null;
-                            return FloorDTO.from(floor, fp, url);
+                            boolean analysisCompleted = fp != null && Boolean.TRUE.equals(analysisCompletedByFloorplanId.get(fp.getId()));
+                            return FloorDTO.from(floor, fp, url, analysisCompleted);
                         })
                         .toList() : List.of()
         );
@@ -101,4 +108,3 @@ public record BuildingSummaryDTO(
         return "draft";
     }
 }
-

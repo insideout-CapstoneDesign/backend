@@ -1,5 +1,6 @@
 package com.insideout.backend.domain.building.service;
 
+import com.insideout.backend.domain.ai.repository.AiDetectionRepository;
 import com.insideout.backend.domain.building.dto.request.BuildingCreateRequestDTO;
 import com.insideout.backend.domain.building.dto.response.BuildingSummaryDTO;
 import com.insideout.backend.domain.building.entity.Building;
@@ -37,6 +38,7 @@ public class BuildingService {
     private final TenantRepository tenantRepository;
     private final FloorRepository floorRepository;
     private final FloorplanRepository floorplanRepository;
+    private final AiDetectionRepository aiDetectionRepository;
     private final S3StorageService s3StorageService;
 
     /**
@@ -48,6 +50,22 @@ public class BuildingService {
             return List.of();
         }
 
+        return buildBuildingSummaries(buildings);
+    }
+
+    /**
+     * 특정 테넌트에 속한 건물 단건을 조회합니다.
+     */
+    public BuildingSummaryDTO getBuilding(UUID tenantId, UUID buildingId) {
+        Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+
+        return buildBuildingSummaries(List.of(building)).stream()
+                .findFirst()
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+    }
+
+    private List<BuildingSummaryDTO> buildBuildingSummaries(List<Building> buildings) {
         List<UUID> buildingIds = buildings.stream()
                 .map(Building::getId)
                 .toList();
@@ -74,17 +92,30 @@ public class BuildingService {
                         (existing, replacement) -> existing
                 ));
 
+        List<UUID> floorplanIds = currentFloorplans.stream()
+                .map(Floorplan::getId)
+                .toList();
+        Map<UUID, Boolean> analysisCompletedByFloorplanId = aiDetectionRepository
+                .findAnalyzedFloorplanIdsByTenantIdAndFloorplanIds(
+                        buildings.get(0).getTenant().getId(),
+                        floorplanIds
+                ).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        java.util.function.Function.identity(),
+                        ignored -> true,
+                        (existing, replacement) -> existing
+                ));
+
         return buildings.stream()
                 .map(building -> BuildingSummaryDTO.from(
                         building,
                         floorsByBuildingId.getOrDefault(building.getId(), List.of()),
                         floorplanByFloorId,
-                        presignedUrlByFloorplanId
+                        presignedUrlByFloorplanId,
+                        analysisCompletedByFloorplanId
                 ))
                 .toList();
     }
-
-
 
     /**
      * 특정 테넌트 하위에 새로운 건물을 생성합니다.

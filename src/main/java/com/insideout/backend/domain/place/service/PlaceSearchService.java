@@ -28,16 +28,20 @@ public class PlaceSearchService {
     private static final int DEFAULT_RADIUS_METER = 30;
     private static final int MIN_RADIUS_METER = 1;
     private static final int MAX_RADIUS_METER = 20_000;
+    private static final int DEFAULT_SEARCH_SIZE = 15;
+    private static final int MAX_SEARCH_SIZE = 100;
 
     private final BuildingRepository buildingRepository;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
+    private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
 
-    public List<PlaceSearchItemResponse> search(String query, Double lat, Double lng, Integer radius) {
+    public List<PlaceSearchItemResponse> search(String query, Double lat, Double lng, Integer radius, Integer size) {
         if (query == null || query.isBlank()) {
             throw new ProjectException(GeneralErrorCode.BAD_REQUEST);
         }
 
         String normalizedQuery = query.trim();
+        int resolvedSize = normalizeSize(size);
         boolean hasCoordinate = lat != null || lng != null;
 
         Integer resolvedSearchRadius = null;
@@ -54,16 +58,23 @@ public class PlaceSearchService {
                 .map(this::toRegisteredSearchItem)
                 .toList();
 
-        List<PlaceSearchItemResponse> externalPlaces = hasCoordinate
-                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius)
-                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
+        List<PlaceSearchItemResponse> externalPlaces = fetchExternalPlaces(
+                normalizedQuery,
+                lat,
+                lng,
+                resolvedSearchRadius,
+                hasCoordinate,
+                resolvedSize
+        );
 
         List<PlaceSearchItemResponse> merged = mergeRegisteredAndExternal(registeredPlaces, externalPlaces, normalizedQuery, lat, lng);
         if (hasCoordinate) {
-            return sortWithCoordinates(merged, lat, lng, resolvedSearchRadius);
+            return sortWithCoordinates(merged, normalizedQuery, lat, lng, resolvedSearchRadius, resolvedSize);
         }
 
-        return sortWithoutCoordinates(merged, normalizedQuery);
+        return sortWithoutCoordinates(merged, normalizedQuery).stream()
+                .limit(resolvedSize)
+                .toList();
     }
 
     public Optional<PlaceNearestResponse> findNearest(Double lat, Double lng, Integer radius) {
@@ -100,6 +111,67 @@ public class PlaceSearchService {
         }
 
         return radius;
+    }
+
+    private int normalizeSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_SEARCH_SIZE;
+        }
+        if (size < 1) {
+            return DEFAULT_SEARCH_SIZE;
+        }
+        return Math.min(size, MAX_SEARCH_SIZE);
+    }
+
+    private List<PlaceSearchItemResponse> fetchExternalPlaces(
+            String normalizedQuery,
+            Double lat,
+            Double lng,
+            Integer resolvedSearchRadius,
+            boolean hasCoordinate,
+            int resolvedSize
+    ) {
+        List<PlaceSearchItemResponse> fromElasticsearch;
+        try {
+            fromElasticsearch = placeSuggestElasticsearchClient.search(
+                    normalizedQuery,
+                    resolvedSize,
+                    lat,
+                    lng,
+                    resolvedSearchRadius
+            ).stream()
+                    .map(this::toExternalSearchItem)
+                    .toList();
+        } catch (PlaceException e) {
+            if (e.getErrorCode() != PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE) {
+                throw e;
+            }
+            fromElasticsearch = List.of();
+        }
+
+        List<PlaceSearchItemResponse> fromKakao = hasCoordinate
+                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius)
+                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
+
+        if (fromElasticsearch.isEmpty()) {
+            return fromKakao;
+        }
+
+        if (fromElasticsearch.size() >= resolvedSize) {
+            return fromElasticsearch;
+        }
+
+        Map<String, PlaceSearchItemResponse> combined = new LinkedHashMap<>();
+        for (PlaceSearchItemResponse item : fromElasticsearch) {
+            combined.put(dedupeKey(item), item);
+        }
+        for (PlaceSearchItemResponse item : fromKakao) {
+            combined.putIfAbsent(dedupeKey(item), item);
+            if (combined.size() >= resolvedSize * 2) {
+                break;
+            }
+        }
+        return new ArrayList<>(combined.values());
     }
 
     private double distanceInMeter(double lat1, double lng1, double lat2, double lng2) {
@@ -164,19 +236,36 @@ public class PlaceSearchService {
 
     private List<PlaceSearchItemResponse> sortWithCoordinates(
             List<PlaceSearchItemResponse> items,
+            String query,
             double lat,
             double lng,
-            Integer radius
+            Integer radius,
+            int size
     ) {
         return items.stream()
                 .map(item -> toScoredPlace(item, lat, lng))
                 .filter(scored -> radius == null || (scored.distanceMeter() != null && scored.distanceMeter() <= radius))
                 .sorted(Comparator
-                        .comparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
+                        .comparingInt((ScoredPlace scored) -> keywordScore(scored.item().name(), query)).reversed()
+                        .thenComparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
                         .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
                         .thenComparing(scored -> normalizeText(scored.item().name())))
+                .limit(size)
                 .map(ScoredPlace::toResponse)
                 .toList();
+    }
+
+    private PlaceSearchItemResponse toExternalSearchItem(PlaceSuggestElasticsearchClient.SuggestDocument document) {
+        return new PlaceSearchItemResponse(
+                document.name(),
+                document.address(),
+                document.roadAddress(),
+                document.lat(),
+                document.lng(),
+                false,
+                document.externalApiId(),
+                null
+        );
     }
 
     private PlaceSearchItemResponse toRegisteredSearchItem(BuildingSearchProjection building) {

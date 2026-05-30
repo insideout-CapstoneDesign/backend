@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -23,6 +24,8 @@ public class PlaceSuggestService {
     private static final int MIN_QUERY_LENGTH = 2;
 
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
+    private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
+    private final PlaceSearchIndexingService placeSearchIndexingService;
     private final BuildingRepository buildingRepository;
 
     public List<PlaceSearchItemResponse> suggest(String query, Double lat, Double lng, Integer size) {
@@ -30,16 +33,23 @@ public class PlaceSuggestService {
         validateCoordinate(lat, lng);
         int resolvedSize = normalizeSize(size);
 
-        List<PlaceSuggestElasticsearchClient.SuggestDocument> suggested = placeSuggestElasticsearchClient
+        List<PlaceSuggestElasticsearchClient.SuggestDocument> fromElasticsearch = placeSuggestElasticsearchClient
                 .suggest(normalizedQuery, resolvedSize, lat, lng);
 
-        if (suggested.isEmpty()) {
+        List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng);
+        List<PlaceSuggestElasticsearchClient.SuggestDocument> mergedSuggested = mergeSuggested(fromElasticsearch, fromKakao, resolvedSize);
+
+        if (fromElasticsearch.size() < resolvedSize && !fromKakao.isEmpty()) {
+            placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(resolvedSize).toList());
+        }
+
+        if (mergedSuggested.isEmpty()) {
             return List.of();
         }
 
-        Map<String, BuildingSearchProjection> registeredByExternalApiId = resolveRegisteredMap(suggested);
+        Map<String, BuildingSearchProjection> registeredByExternalApiId = resolveRegisteredMap(mergedSuggested);
 
-        return suggested.stream()
+        return mergedSuggested.stream()
                 .map(item -> toResponse(item, registeredByExternalApiId, lat, lng))
                 .limit(resolvedSize)
                 .toList();
@@ -101,6 +111,61 @@ public class PlaceSuggestService {
                         item -> item,
                         (left, right) -> left
                 ));
+    }
+
+    private List<PlaceSearchItemResponse> fetchKakaoFallback(String query, Double lat, Double lng) {
+        if (lat != null && lng != null) {
+            return kakaoPlaceSearchClient.searchByKeyword(query, lat, lng, null);
+        }
+        return kakaoPlaceSearchClient.searchByKeyword(query);
+    }
+
+    private List<PlaceSuggestElasticsearchClient.SuggestDocument> mergeSuggested(
+            List<PlaceSuggestElasticsearchClient.SuggestDocument> fromElasticsearch,
+            List<PlaceSearchItemResponse> fromKakao,
+            int size
+    ) {
+        Map<String, PlaceSuggestElasticsearchClient.SuggestDocument> merged = new LinkedHashMap<>();
+        for (PlaceSuggestElasticsearchClient.SuggestDocument item : fromElasticsearch) {
+            merged.put(dedupeKey(item), item);
+        }
+        for (PlaceSearchItemResponse item : fromKakao) {
+            PlaceSuggestElasticsearchClient.SuggestDocument document = new PlaceSuggestElasticsearchClient.SuggestDocument(
+                    item.name(),
+                    item.address(),
+                    item.roadAddress(),
+                    item.externalApiId(),
+                    item.lat(),
+                    item.lng()
+            );
+            merged.putIfAbsent(dedupeKey(document), document);
+            if (merged.size() >= size * 2) {
+                break;
+            }
+        }
+        return merged.values().stream().limit(size).toList();
+    }
+
+    private String dedupeKey(PlaceSuggestElasticsearchClient.SuggestDocument item) {
+        if (StringUtils.hasText(item.externalApiId())) {
+            return "ext:" + item.externalApiId().trim();
+        }
+        if (item.lat() != null && item.lng() != null) {
+            return "geo:" + normalizeText(item.name()) + ":" + round(item.lat(), 4) + ":" + round(item.lng(), 4);
+        }
+        return "name:" + normalizeText(item.name()) + "|" + normalizeText(item.address());
+    }
+
+    private String normalizeText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("\\s+", "").toLowerCase();
+    }
+
+    private double round(double value, int precision) {
+        double scale = Math.pow(10, precision);
+        return Math.round(value * scale) / scale;
     }
 
     private PlaceSearchItemResponse toResponse(

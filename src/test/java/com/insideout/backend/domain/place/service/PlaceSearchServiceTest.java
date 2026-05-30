@@ -43,6 +43,9 @@ class PlaceSearchServiceTest {
     @Mock
     private PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
 
+    @Mock
+    private PlaceSearchIndexingService placeSearchIndexingService;
+
     @InjectMocks
     private PlaceSearchService placeSearchService;
 

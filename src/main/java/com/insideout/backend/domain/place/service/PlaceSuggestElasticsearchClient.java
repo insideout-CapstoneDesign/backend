@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -44,6 +45,35 @@ public class PlaceSuggestElasticsearchClient {
 
     public List<SuggestDocument> search(String query, int size, Double lat, Double lng, Integer radius) {
         return doSearch(query, size, lat, lng, radius);
+    }
+
+    public void upsertDocuments(List<SuggestDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return;
+        }
+
+        String body = documents.stream()
+                .filter(this::isIndexable)
+                .map(this::toBulkUpdateLine)
+                .collect(Collectors.joining());
+
+        if (!StringUtils.hasText(body)) {
+            return;
+        }
+
+        String primaryUri = resolvePrimaryUri(elasticsearchUris);
+        RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
+
+        try {
+            restClient.post()
+                    .uri("/_bulk")
+                    .contentType(MediaType.parseMediaType("application/x-ndjson"))
+                    .body(body)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException ignored) {
+            // Best-effort background indexing: ignore failures.
+        }
     }
 
     private List<SuggestDocument> doSearch(String query, int size, Double lat, Double lng, Integer radius) {
@@ -247,6 +277,52 @@ public class PlaceSuggestElasticsearchClient {
 
     private String nullableText(JsonNode node) {
         return node != null && !node.isMissingNode() && !node.isNull() ? node.asText() : null;
+    }
+
+    private boolean isIndexable(SuggestDocument document) {
+        return StringUtils.hasText(document.name())
+                && document.lat() != null
+                && document.lng() != null;
+    }
+
+    private String toBulkUpdateLine(SuggestDocument document) {
+        String docId;
+        if (StringUtils.hasText(document.externalApiId())) {
+            docId = "ext-" + document.externalApiId().trim();
+        } else {
+            docId = "name-" + normalize(document.name()) + "-" + rounded(document.lat()) + "-" + rounded(document.lng());
+        }
+
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("name", document.name());
+        doc.put("address", document.address());
+        doc.put("roadAddress", document.roadAddress());
+        doc.put("externalApiId", document.externalApiId());
+        doc.put("location", Map.of("lat", document.lat(), "lon", document.lng()));
+
+        Map<String, Object> root = Map.of(
+                "doc", doc,
+                "doc_as_upsert", true
+        );
+
+        try {
+            String action = objectMapper.writeValueAsString(Map.of("update", Map.of("_index", searchIndex, "_id", docId)));
+            String payload = objectMapper.writeValueAsString(root);
+            return action + "\n" + payload + "\n";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String normalize(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("\\s+", "").toLowerCase();
+    }
+
+    private double rounded(double value) {
+        return Math.round(value * 10_000d) / 10_000d;
     }
 
     private Double nullableDouble(JsonNode node) {

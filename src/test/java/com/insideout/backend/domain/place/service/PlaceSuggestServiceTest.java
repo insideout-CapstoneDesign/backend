@@ -6,6 +6,7 @@ import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -18,9 +19,13 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class PlaceSuggestServiceTest {
@@ -31,8 +36,20 @@ class PlaceSuggestServiceTest {
     @Mock
     private BuildingRepository buildingRepository;
 
+    @Mock
+    private KakaoPlaceSearchClient kakaoPlaceSearchClient;
+
+    @Mock
+    private PlaceSearchIndexingService placeSearchIndexingService;
+
     @InjectMocks
     private PlaceSuggestService placeSuggestService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString())).thenReturn(List.of());
+        lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString(), anyDouble(), anyDouble(), any())).thenReturn(List.of());
+    }
 
     @Test
     void suggest_shortQuery_throwsInvalidQuery() {
@@ -147,4 +164,3 @@ class PlaceSuggestServiceTest {
         };
     }
 }
-

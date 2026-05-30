@@ -34,6 +34,7 @@ public class PlaceSearchService {
     private final BuildingRepository buildingRepository;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
+    private final PlaceSearchIndexingService placeSearchIndexingService;
 
     public List<PlaceSearchItemResponse> search(String query, Double lat, Double lng, Integer radius, Integer size) {
         if (query == null || query.isBlank()) {
@@ -154,6 +155,7 @@ public class PlaceSearchService {
                 : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
 
         if (fromElasticsearch.isEmpty()) {
+            placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(resolvedSize * 2L).toList());
             return fromKakao;
         }
 
@@ -171,7 +173,18 @@ public class PlaceSearchService {
                 break;
             }
         }
+        List<PlaceSearchItemResponse> currentElasticsearch = fromElasticsearch;
+        List<PlaceSearchItemResponse> onlyFromKakao = fromKakao.stream()
+                .filter(item -> !containsByDedupeKey(currentElasticsearch, item))
+                .limit(resolvedSize)
+                .toList();
+        placeSearchIndexingService.upsertFromSearchResultsAsync(onlyFromKakao);
         return new ArrayList<>(combined.values());
+    }
+
+    private boolean containsByDedupeKey(List<PlaceSearchItemResponse> existing, PlaceSearchItemResponse target) {
+        String targetKey = dedupeKey(target);
+        return existing.stream().anyMatch(item -> dedupeKey(item).equals(targetKey));
     }
 
     private double distanceInMeter(double lat1, double lng1, double lat2, double lng2) {

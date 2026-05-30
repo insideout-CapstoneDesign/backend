@@ -120,6 +120,32 @@ public class S3StorageService {
     }
 
     /**
+     * s3://bucket-name/key 형식의 URL을 클라이언트 다운로드 가능한 presigned URL로 변환.
+     * 유효기간은 60분으로 지정합니다.
+     */
+    public String getPresignedUrlFromS3Url(String s3Url) {
+        if (s3Url == null || !s3Url.startsWith("s3://")) {
+            return s3Url;
+        }
+
+        try {
+            String bucketPrefix = "s3://";
+            int bucketEnd = s3Url.indexOf("/", bucketPrefix.length());
+            if (bucketEnd == -1) {
+                return s3Url;
+            }
+            String bucket = s3Url.substring(bucketPrefix.length(), bucketEnd);
+            String key = s3Url.substring(bucketEnd + 1);
+
+            return generatePresignedDownloadUrl(bucket, key, Duration.ofMinutes(60));
+        } catch (Exception e) {
+            log.error("Failed to parse S3 URL to presigned URL: {}", s3Url, e);
+            return s3Url;
+        }
+    }
+
+
+    /**
      * 파일 삭제.
      */
     public void delete(String key) {

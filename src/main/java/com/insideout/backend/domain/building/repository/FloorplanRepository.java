@@ -7,15 +7,20 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 
 @Repository
 public interface FloorplanRepository extends JpaRepository<Floorplan, UUID> {
 
     Optional<Floorplan> findByFloorIdAndIsCurrentTrue(UUID floorId);
 
+    List<Floorplan> findAllByFloorIdInAndIsCurrentTrue(java.util.List<UUID> floorIds);
+
     Optional<Floorplan> findByIdAndTenantId(UUID id, UUID tenantId);
+
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Floorplan f SET f.isCurrent = false WHERE f.floor.id = :floorId AND f.isCurrent = true")

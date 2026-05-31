@@ -50,3 +50,4 @@ place:
     bootstrap:
       enabled: ${PLACE_SEARCH_BOOTSTRAP_ENABLED:false}
       batch-size: ${PLACE_SEARCH_BOOTSTRAP_BATCH_SIZE:500}
+      lock-id: ${PLACE_SEARCH_BOOTSTRAP_LOCK_ID:91000001}

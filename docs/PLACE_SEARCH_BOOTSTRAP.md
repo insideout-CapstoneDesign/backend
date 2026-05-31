@@ -12,10 +12,17 @@
 ## 설정 값
 - `PLACE_SEARCH_BOOTSTRAP_ENABLED` (기본값: `false`)
 - `PLACE_SEARCH_BOOTSTRAP_BATCH_SIZE` (기본값: `500`, 최대: `2000`)
+- `PLACE_SEARCH_BOOTSTRAP_LOCK_ID` (기본값: `91000001`)
 
 `application.yml` 매핑:
 - `place.search.bootstrap.enabled`
 - `place.search.bootstrap.batch-size`
+- `place.search.bootstrap.lock-id`
+
+## 중복 실행 방지
+- bootstrap 실행 전 PostgreSQL advisory lock(`pg_try_advisory_lock`)을 획득합니다.
+- 같은 DB를 바라보는 다중 인스턴스 환경에서 lock을 획득한 1개 인스턴스만 백필을 수행합니다.
+- lock을 얻지 못한 인스턴스는 백필을 건너뜁니다.
 
 ## 1회 초기 적재 실행(권장)
 1. Elasticsearch가 실행 중이고 연결 가능한 상태인지 확인합니다.

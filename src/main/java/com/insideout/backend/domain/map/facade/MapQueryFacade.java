@@ -94,8 +94,16 @@ public class MapQueryFacade {
 
     public Optional<RoutingGraph> findPublishedRoutingGraph(MapType mapType, UUID ownerId) {
         Optional<MapVersion> mapVersion = switch (mapType) {
-            case CAMPUS -> mapVersionRepository.findFirstByCampusIdAndMapTypeAndStatus(ownerId, MapType.CAMPUS, "published");
-            case BUILDING -> mapVersionRepository.findFirstByBuildingIdAndMapTypeAndStatus(ownerId, MapType.BUILDING, "published");
+            case CAMPUS -> mapVersionRepository.findFirstByCampusIdAndMapTypeAndStatusOrderByCreatedAtDesc(
+                    ownerId,
+                    MapType.CAMPUS,
+                    "published"
+            );
+            case BUILDING -> mapVersionRepository.findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(
+                    ownerId,
+                    MapType.BUILDING,
+                    "published"
+            );
         };
 
         return mapVersion.map(version -> toRoutingGraph(mapType, ownerId, version));

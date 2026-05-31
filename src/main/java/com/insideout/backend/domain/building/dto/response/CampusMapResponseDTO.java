@@ -15,14 +15,19 @@ public record CampusMapResponseDTO(
         OffsetDateTime uploadedAt
 ) {
     public static CampusMapResponseDTO from(CampusMap map) {
+        return from(map, map.getImageUrl());
+    }
+
+    public static CampusMapResponseDTO from(CampusMap map, String imageUrl) {
         return new CampusMapResponseDTO(
                 map.getId(),
                 map.getCampus().getId(),
-                map.getImageUrl(),
+                imageUrl,
                 map.getWidthPx(),
                 map.getHeightPx(),
                 map.isCurrent(),
                 map.getUploadedAt()
         );
     }
+
 }

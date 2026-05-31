@@ -13,6 +13,7 @@ public record BuildingCreateRequestDTO(
         String address,
         @Min(0) int entranceCount,
         UUID campusId,
+        Boolean requiresFloorplan,
         String externalApiId,
         String longitude,
         String latitude,

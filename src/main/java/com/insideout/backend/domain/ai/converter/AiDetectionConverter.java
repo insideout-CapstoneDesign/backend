@@ -176,18 +176,22 @@ public class AiDetectionConverter {
         throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
     }
 
-    private String toBox2d(List<Double> bboxPx) {
+    private String toBox2d(List<?> bboxPx) {
         if (bboxPx == null || bboxPx.size() < 4) {
             return null;
         }
 
-        double x = bboxPx.get(0);
-        double y = bboxPx.get(1);
-        double width = bboxPx.get(2);
-        double height = bboxPx.get(3);
-        double maxX = x + width;
-        double maxY = y + height;
+        try {
+            double x = ((Number) bboxPx.get(0)).doubleValue();
+            double y = ((Number) bboxPx.get(1)).doubleValue();
+            double width = ((Number) bboxPx.get(2)).doubleValue();
+            double height = ((Number) bboxPx.get(3)).doubleValue();
+            double maxX = x + width;
+            double maxY = y + height;
 
-        return String.format("BOX(%s %s,%s %s)", x, y, maxX, maxY);
+            return String.format("BOX(%s %s,%s %s)", x, y, maxX, maxY);
+        } catch (ClassCastException | NullPointerException e) {
+            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+        }
     }
 }

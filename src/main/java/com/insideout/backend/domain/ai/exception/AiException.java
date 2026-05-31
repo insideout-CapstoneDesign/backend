@@ -7,4 +7,13 @@ public class AiException extends ProjectException {
     public AiException(BaseErrorCode errorCode) {
         super(errorCode);
     }
+
+    public AiException(BaseErrorCode errorCode, String customMessage) {
+        super(errorCode, customMessage);
+    }
+
+    public AiException(BaseErrorCode errorCode, String customMessage, Throwable cause) {
+        super(errorCode, customMessage, cause);
+    }
 }
+

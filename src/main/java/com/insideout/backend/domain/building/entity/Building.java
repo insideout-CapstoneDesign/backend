@@ -132,6 +132,13 @@ public class Building {
         return this.campus != null;
     }
 
+    public void updateEntranceCount(int entranceCount) {
+        if (entranceCount < 0) {
+            throw new BuildingException(BuildingErrorCode.NEGATIVE_ENTRANCE_COUNT);
+        }
+        this.entranceCount = entranceCount;
+    }
+
     private boolean hasDifferentTenant(Tenant tenant, Campus campus) {
         if (tenant == null || campus == null || campus.getTenant() == null) {
             return false;

@@ -89,4 +89,22 @@ public class Campus {
         this.primaryEntranceName = primaryEntranceName;
         this.meta = meta != null ? meta : Map.of();
     }
+
+    public void updateGeography(
+            String name,
+            String address,
+            Polygon boundary,
+            Point centroid,
+            Point primaryEntrance,
+            String primaryEntranceName,
+            Map<String, Object> meta
+    ) {
+        this.name = name;
+        this.address = address;
+        this.boundary = boundary;
+        this.centroid = centroid;
+        this.primaryEntrance = primaryEntrance;
+        this.primaryEntranceName = primaryEntranceName;
+        this.meta = meta != null ? meta : Map.of();
+    }
 }

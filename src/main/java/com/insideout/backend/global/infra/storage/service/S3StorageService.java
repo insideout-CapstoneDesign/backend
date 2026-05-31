@@ -23,10 +23,10 @@ import java.util.UUID;
 /**
  * S3/MinIO 스토리지 서비스.
  *
- * 파일 업로드/다운로드/삭제 책임만 가진다.
+ * 파일 업로드/다운로드/삭제 책임을 가진다.
  * 어떤 키(경로)로 저장할지는 호출자가 결정 (예: FloorplanService).
- *
- * AI 서버는 boto3로 직접 인증 다운로드하므로, 여기서 presigned URL 생성은 불필요.
+ * 추가로 getPresignedUrlFromS3Url, generatePresignedDownloadUrl 메서드를 통해
+ * 클라이언트가 직접 다운로드할 수 있는 presigned URL을 생성할 수 있다.
  */
 @Slf4j
 @Service
@@ -118,6 +118,32 @@ public class S3StorageService {
     public String defaultBucket() {
         return s3Properties.bucket();
     }
+
+    /**
+     * s3://bucket-name/key 형식의 URL을 클라이언트 다운로드 가능한 presigned URL로 변환.
+     * 유효기간은 60분으로 지정합니다.
+     */
+    public String getPresignedUrlFromS3Url(String s3Url) {
+        if (s3Url == null || !s3Url.startsWith("s3://")) {
+            return s3Url;
+        }
+
+        try {
+            String bucketPrefix = "s3://";
+            int bucketEnd = s3Url.indexOf("/", bucketPrefix.length());
+            if (bucketEnd == -1) {
+                return s3Url;
+            }
+            String bucket = s3Url.substring(bucketPrefix.length(), bucketEnd);
+            String key = s3Url.substring(bucketEnd + 1);
+
+            return generatePresignedDownloadUrl(bucket, key, Duration.ofMinutes(60));
+        } catch (Exception e) {
+            log.error("Failed to parse S3 URL to presigned URL: {}", s3Url, e);
+            return s3Url;
+        }
+    }
+
 
     /**
      * 파일 삭제.

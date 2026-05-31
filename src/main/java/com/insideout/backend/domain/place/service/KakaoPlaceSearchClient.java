@@ -21,26 +21,26 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class KakaoPlaceSearchClient {
 
-    private static final int DEFAULT_SIZE = 10;
+    private static final int DEFAULT_SIZE = 15;
+    private static final int MAX_PAGE = 45;
     private final @Qualifier("kakaoLocalRestClient") RestClient kakaoLocalRestClient;
 
     public List<PlaceSearchItemResponse> searchByKeyword(String query) {
-        try {
-            KakaoKeywordSearchResponse response = kakaoLocalRestClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/v2/local/search/keyword.json")
-                            .queryParam("query", query)
-                            .queryParam("size", DEFAULT_SIZE)
-                            .build())
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .body(KakaoKeywordSearchResponse.class);
+        return searchByKeyword(query, null, null, null);
+    }
 
-            if (response == null || response.documents() == null) {
+    public List<PlaceSearchItemResponse> searchByKeyword(String query, Double lat, Double lng) {
+        return searchByKeyword(query, lat, lng, null);
+    }
+
+    public List<PlaceSearchItemResponse> searchByKeyword(String query, Double lat, Double lng, Integer radius) {
+        try {
+            List<KakaoKeywordSearchDocument> documents = fetchAllKeywordSearchDocuments(query, lat, lng, radius);
+            if (documents.isEmpty()) {
                 return Collections.emptyList();
             }
 
-            return response.documents().stream()
+            return documents.stream()
                     .map(document -> new PlaceSearchItemResponse(
                             document.placeName(),
                             document.addressName(),
@@ -48,12 +48,75 @@ public class KakaoPlaceSearchClient {
                             parseDouble(document.y()),
                             parseDouble(document.x()),
                             false,
-                            document.id()
+                            document.id(),
+                            null
                     ))
                     .toList();
         } catch (RestClientException e) {
             throw new PlaceException(PlaceErrorCode.KAKAO_LOCAL_API_UNAVAILABLE);
         }
+    }
+
+    private List<KakaoKeywordSearchDocument> fetchAllKeywordSearchDocuments(
+            String query,
+            Double lat,
+            Double lng,
+            Integer radius
+    ) {
+        List<KakaoKeywordSearchDocument> allDocuments = new java.util.ArrayList<>();
+        int page = 1;
+
+        while (page <= MAX_PAGE) {
+            KakaoKeywordSearchResponse response = requestKeywordSearchPage(query, lat, lng, radius, page);
+            if (response == null || response.documents() == null || response.documents().isEmpty()) {
+                break;
+            }
+
+            allDocuments.addAll(response.documents());
+
+            KakaoKeywordSearchMeta meta = response.meta();
+            if (meta == null) {
+                break;
+            }
+
+            if (Boolean.TRUE.equals(meta.isEnd())) {
+                break;
+            }
+
+            Integer pageableCount = meta.pageableCount();
+            if (pageableCount != null && pageableCount > 0) {
+                int maxPageByCount = Math.min(MAX_PAGE, (int) Math.ceil((double) pageableCount / DEFAULT_SIZE));
+                if (page >= maxPageByCount) {
+                    break;
+                }
+            }
+
+            page++;
+        }
+
+        return allDocuments;
+    }
+
+    private KakaoKeywordSearchResponse requestKeywordSearchPage(
+            String query,
+            Double lat,
+            Double lng,
+            Integer radius,
+            int page
+    ) {
+        return kakaoLocalRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v2/local/search/keyword.json")
+                        .queryParam("query", query)
+                        .queryParam("size", DEFAULT_SIZE)
+                        .queryParam("page", page)
+                        .queryParamIfPresent("x", Optional.ofNullable(lng))
+                        .queryParamIfPresent("y", Optional.ofNullable(lat))
+                        .queryParamIfPresent("radius", Optional.ofNullable(radius))
+                        .build())
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .body(KakaoKeywordSearchResponse.class);
     }
 
     public Optional<PlaceNearestResponse> findNearestByCoordinate(double lat, double lng, int radius) {
@@ -173,7 +236,16 @@ public class KakaoPlaceSearchClient {
     }
 
     private record KakaoKeywordSearchResponse(
+            KakaoKeywordSearchMeta meta,
             List<KakaoKeywordSearchDocument> documents
+    ) {
+    }
+
+    private record KakaoKeywordSearchMeta(
+            @JsonProperty("is_end")
+            Boolean isEnd,
+            @JsonProperty("pageable_count")
+            Integer pageableCount
     ) {
     }
 

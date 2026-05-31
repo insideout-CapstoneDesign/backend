@@ -127,23 +127,10 @@ public class Obstacle {
         }
     }
 
-    // TODO: Obstacle 생성 시 아래 불변식을 Service에서 반드시 검증해야 합니다.
-    //       building.getTenant() 및 floor.getBuilding()은 LAZY 로딩 연관 엔티티 호출이므로
-    //       생성자 안에서 호출 시 LazyInitializationException이 발생합니다.
-    //       ObstacleService에서 building, floor를 완전히 로딩한 후 검증하세요:
-    //
-    //       1. tenantId가 building의 tenant와 일치하는지:
-    //          if (!tenantId.equals(building.getTenant().getId()))
-    //              throw new MapException(MapErrorCode.OBSTACLE_TENANT_MISMATCH);
-    //
-    //       2. floor가 building 소속인지:
-    //          if (!floor.getBuilding().getId().equals(building.getId()))
-    //              throw new MapException(MapErrorCode.OBSTACLE_BUILDING_MISMATCH);
     @Builder
     public Obstacle(UUID tenantId, Building building, Campus campus, Floor floor, String kind, Geometry geomPx, List<UUID> affectedEdgeIds, BigDecimal extraCost, boolean isBlocking, OffsetDateTime activeFrom, OffsetDateTime activeTo, String note) {
         BigDecimal finalExtraCost = extraCost != null ? extraCost : BigDecimal.ZERO;
 
-        // 필수 필드 null 선검증 (DB nullable=false 콜럼과 동기화)
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         Objects.requireNonNull(kind, "kind must not be null");
 
@@ -160,7 +147,6 @@ public class Obstacle {
         if (activeFrom != null && activeTo != null && activeFrom.isAfter(activeTo)) {
             throw new MapException(MapErrorCode.INVALID_ACTIVE_PERIOD);
         }
-        // floor.getTenantId()는 UUID 직접 필드이므로 생성자에서 안전하게 검증 가능
         if (floor != null && floor.getTenantId() != null
                 && !tenantId.equals(floor.getTenantId())) {
             throw new MapException(MapErrorCode.OBSTACLE_TENANT_MISMATCH);

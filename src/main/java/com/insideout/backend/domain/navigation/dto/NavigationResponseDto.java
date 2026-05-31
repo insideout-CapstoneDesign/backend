@@ -1,6 +1,6 @@
 package com.insideout.backend.domain.navigation.dto;
 
-import com.insideout.backend.domain.map.entity.MapType;
+import com.insideout.backend.domain.map.enums.MapType;
 
 import java.util.List;
 import java.util.UUID;
@@ -90,6 +90,7 @@ public record NavigationResponseDto(
             String floorName,
             CoordinateType coordinateType,
             List<CoordinateDto> path,
+            List<FloorSegmentDto> floorSegments,
             List<StepDto> steps
     ) {
         public LegDto(
@@ -104,8 +105,19 @@ public record NavigationResponseDto(
                 List<StepDto> steps
         ) {
             this(mode, routeName, transitType, durationSeconds, distanceMeters, stationCount,
-                    startName, endName, null, null, null, null, null, null, steps);
+                    startName, endName, null, null, null, null, null, null, List.of(), steps);
         }
+    }
+
+    public record FloorSegmentDto(
+            MapType mapType,
+            UUID floorId,
+            String floorName,
+            String mapImageUrl,
+            CoordinateType coordinateType,
+            List<CoordinateDto> path,
+            List<StepDto> steps
+    ) {
     }
 
     public record StepDto(

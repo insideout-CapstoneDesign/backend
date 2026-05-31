@@ -7,13 +7,13 @@ import com.insideout.backend.domain.building.entity.BuildingDirectory;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.map.entity.Edge;
-import com.insideout.backend.domain.map.entity.MapType;
 import com.insideout.backend.domain.map.entity.MapVersion;
 import com.insideout.backend.domain.map.entity.Node;
 import com.insideout.backend.domain.map.entity.Obstacle;
 import com.insideout.backend.domain.map.entity.Poi;
 import com.insideout.backend.domain.map.entity.VerticalConnector;
 import com.insideout.backend.domain.map.entity.VerticalConnectorNode;
+import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.domain.map.repository.EdgeRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
@@ -21,6 +21,7 @@ import com.insideout.backend.domain.map.repository.ObstacleRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
 import com.insideout.backend.domain.map.storage.MapAssetStorage;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
@@ -46,7 +47,6 @@ public class MapQueryFacade {
 
     private static final double REGISTERED_BUILDING_SEARCH_RADIUS_METERS = 50.0;
 
-    // 내부적으로 자기 도메인의 Repository는 자유롭게 주입받아 사용합니다.
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
     private final BuildingRepository buildingRepository;
@@ -141,41 +141,41 @@ public class MapQueryFacade {
                 .flatMap(this::toVerticalRoutingLinks)
                 .toList();
 
-        return new RoutingGraph(
-                mapVersion.getId(),
-                mapType,
-                resolveMapImageUrl(mapType, ownerId),
-                nodes,
-                edges,
-                verticalLinks,
-                findActiveObstacles(mapType, ownerId)
-        );
+        return RoutingGraph.builder()
+                .mapVersionId(mapVersion.getId())
+                .mapType(mapType)
+                .mapImageUrl(resolveMapImageUrl(mapType, ownerId))
+                .nodes(nodes)
+                .edges(edges)
+                .verticalLinks(verticalLinks)
+                .obstacles(findActiveObstacles(mapType, ownerId))
+                .build();
     }
 
     private RoutingNode toRoutingNode(Node node) {
         Point point = node.getGeomPx();
         Floor floor = node.getFloor();
-        return new RoutingNode(
-                node.getId(),
-                node.getKindCode(),
-                node.getNameKo(),
-                floor == null ? null : floor.getId(),
-                floor == null ? null : floor.getName(),
-                point.getX(),
-                point.getY()
-        );
+        return RoutingNode.builder()
+                .id(node.getId())
+                .kind(node.getKindCode())
+                .name(node.getNameKo())
+                .floorId(floor == null ? null : floor.getId())
+                .floorName(floor == null ? null : floor.getName())
+                .x(point.getX())
+                .y(point.getY())
+                .build();
     }
 
     private RoutingEdge toRoutingEdge(Edge edge) {
-        return new RoutingEdge(
-                edge.getId(),
-                edge.getFromNode().getId(),
-                edge.getToNode().getId(),
-                edge.getKindCode(),
-                edge.isDirected(),
-                decimalToDouble(edge.getLengthM()),
-                decimalToDouble(edge.getBaseWeight())
-        );
+        return RoutingEdge.builder()
+                .id(edge.getId())
+                .fromNodeId(edge.getFromNode().getId())
+                .toNodeId(edge.getToNode().getId())
+                .kind(edge.getKindCode())
+                .directed(edge.isDirected())
+                .length(decimalToDouble(edge.getLengthM()))
+                .baseWeight(decimalToDouble(edge.getBaseWeight()))
+                .build();
     }
 
     private java.util.stream.Stream<VerticalRoutingLink> toVerticalRoutingLinks(List<VerticalConnectorNode> nodes) {
@@ -187,15 +187,15 @@ public class MapQueryFacade {
 
     private VerticalRoutingLink toVerticalRoutingLink(VerticalConnectorNode from, VerticalConnectorNode to) {
         VerticalConnector connector = from.getConnector();
-        return new VerticalRoutingLink(
-                from.getNode().getId(),
-                to.getNode().getId(),
-                connector.getKind(),
-                connector.getName(),
-                from.getFloor().getName(),
-                to.getFloor().getName(),
-                connector.getAvgWaitSeconds()
-        );
+        return VerticalRoutingLink.builder()
+                .fromNodeId(from.getNode().getId())
+                .toNodeId(to.getNode().getId())
+                .connectorKind(connector.getKind())
+                .connectorName(connector.getName())
+                .fromFloorName(from.getFloor().getName())
+                .toFloorName(to.getFloor().getName())
+                .avgWaitSeconds(connector.getAvgWaitSeconds())
+                .build();
     }
 
     private String resolveMapImageUrl(MapType mapType, UUID ownerId) {
@@ -220,11 +220,11 @@ public class MapQueryFacade {
     }
 
     private RoutingObstacle toRoutingObstacle(Obstacle obstacle) {
-        return new RoutingObstacle(
-                obstacle.getAffectedEdgeIds() == null ? List.of() : obstacle.getAffectedEdgeIds(),
-                decimalToDouble(obstacle.getExtraCost()),
-                obstacle.isBlocking()
-        );
+        return RoutingObstacle.builder()
+                .affectedEdgeIds(obstacle.getAffectedEdgeIds() == null ? List.of() : obstacle.getAffectedEdgeIds())
+                .extraCost(decimalToDouble(obstacle.getExtraCost()))
+                .blocking(obstacle.isBlocking())
+                .build();
     }
 
     private double decimalToDouble(BigDecimal value) {
@@ -241,19 +241,19 @@ public class MapQueryFacade {
         Campus campus = buildingEntity.map(Building::getCampus).orElse(null);
         Point campusEntrance = campus == null ? null : campus.getPrimaryEntrance();
 
-        return Optional.of(new IndoorDestinationAnchor(
-                campus == null ? null : campus.getId(),
-                campus == null ? null : campus.getName(),
-                campus == null ? null : campus.getPrimaryEntranceName(),
-                campusEntrance == null ? null : campusEntrance.getX(),
-                campusEntrance == null ? null : campusEntrance.getY(),
-                building.getId(),
-                building.getName(),
-                node.getId(),
-                node.getNameKo(),
-                point.getX(),
-                point.getY()
-        ));
+        return Optional.of(IndoorDestinationAnchor.builder()
+                .campusId(campus == null ? null : campus.getId())
+                .campusName(campus == null ? null : campus.getName())
+                .campusEntranceName(campus == null ? null : campus.getPrimaryEntranceName())
+                .campusEntranceX(campusEntrance == null ? null : campusEntrance.getX())
+                .campusEntranceY(campusEntrance == null ? null : campusEntrance.getY())
+                .buildingId(building.getId())
+                .buildingName(building.getName())
+                .entranceNodeId(node.getId())
+                .entranceName(node.getNameKo())
+                .x(point.getX())
+                .y(point.getY())
+                .build());
     }
 
     private Optional<IndoorPoiDestination> toIndoorPoiDestination(Poi poi) {
@@ -268,20 +268,21 @@ public class MapQueryFacade {
         }
 
         Campus campus = building.getCampus();
-        return Optional.of(new IndoorPoiDestination(
-                poi.getPublicId(),
-                poi.getId(),
-                poi.getName(),
-                poi.getAnchorNodeId(),
-                floor.getId(),
-                floor.getName(),
-                building.getId(),
-                building.getName(),
-                campus == null ? null : campus.getId(),
-                campus == null ? null : campus.getName()
-        ));
+        return Optional.of(IndoorPoiDestination.builder()
+                .publicId(poi.getPublicId())
+                .poiId(poi.getId())
+                .name(poi.getName())
+                .anchorNodeId(poi.getAnchorNodeId())
+                .floorId(floor.getId())
+                .floorName(floor.getName())
+                .buildingId(building.getId())
+                .buildingName(building.getName())
+                .campusId(campus == null ? null : campus.getId())
+                .campusName(campus == null ? null : campus.getName())
+                .build());
     }
 
+    @Builder
     public record IndoorDestinationAnchor(
             UUID campusId,
             String campusName,
@@ -332,6 +333,7 @@ public class MapQueryFacade {
         }
     }
 
+    @Builder
     public record IndoorPoiDestination(
             Long publicId,
             UUID poiId,
@@ -349,6 +351,7 @@ public class MapQueryFacade {
         }
     }
 
+    @Builder
     public record RoutingGraph(
             UUID mapVersionId,
             MapType mapType,
@@ -363,6 +366,7 @@ public class MapQueryFacade {
         }
     }
 
+    @Builder
     public record RoutingNode(
             UUID id,
             String kind,
@@ -377,6 +381,7 @@ public class MapQueryFacade {
         }
     }
 
+    @Builder
     public record RoutingEdge(
             UUID id,
             UUID fromNodeId,
@@ -388,6 +393,7 @@ public class MapQueryFacade {
     ) {
     }
 
+    @Builder
     public record RoutingObstacle(
             List<UUID> affectedEdgeIds,
             double extraCost,
@@ -395,6 +401,7 @@ public class MapQueryFacade {
     ) {
     }
 
+    @Builder
     public record VerticalRoutingLink(
             UUID fromNodeId,
             UUID toNodeId,
@@ -408,11 +415,4 @@ public class MapQueryFacade {
             return connectorName == null || connectorName.isBlank() ? connectorKind : connectorName;
         }
     }
-
-    /*
-    // 예시: Navigation 팀원이 호출할 메서드 껍데기
-    public List<Node> getNodesForRouting(UUID mapVersionId) {
-        return nodeRepository.findByMapVersionId(mapVersionId);
-    }
-    */
 }

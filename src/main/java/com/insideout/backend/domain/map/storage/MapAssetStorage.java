@@ -1,6 +1,6 @@
 package com.insideout.backend.domain.map.storage;
 
-import com.insideout.backend.domain.map.entity.MapType;
+import com.insideout.backend.domain.map.enums.MapType;
 
 import java.util.Optional;
 import java.util.UUID;

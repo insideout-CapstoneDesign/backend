@@ -43,24 +43,31 @@ public class PlaceSuggestElasticsearchClient {
     }
 
     public void upsertDocuments(List<SuggestDocument> documents) {
+        try {
+            upsertDocumentsStrict(documents);
+        } catch (RestClientException ignored) {
+            // Best-effort background indexing: ignore failures.
+        } catch (Exception ignored) {
+            // Best-effort background indexing: ignore failures.
+        }
+    }
+
+    public int upsertDocumentsStrict(List<SuggestDocument> documents) {
         String body = PlaceEsBulkUpsertBodyBuilder.build(documents, searchIndex, objectMapper);
         if (!StringUtils.hasText(body)) {
-            return;
+            return 0;
         }
 
         String primaryUri = resolvePrimaryUri(elasticsearchUris);
         RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
 
-        try {
-            restClient.post()
-                    .uri("/_bulk")
-                    .contentType(MediaType.parseMediaType("application/x-ndjson"))
-                    .body(body)
-                    .retrieve()
-                    .toBodilessEntity();
-        } catch (RestClientException ignored) {
-            // Best-effort background indexing: ignore failures.
-        }
+        restClient.post()
+                .uri("/_bulk")
+                .contentType(MediaType.parseMediaType("application/x-ndjson"))
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+        return documents.size();
     }
 
     private List<SuggestDocument> doSearch(String query, int size, Double lat, Double lng, Integer radius) {

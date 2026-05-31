@@ -6,6 +6,8 @@ import com.insideout.backend.domain.place.exception.PlaceException;
 import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
 import org.springframework.util.StringUtils;
 
+import java.util.Locale;
+
 public final class PlaceSearchSupport {
 
     private PlaceSearchSupport() {
@@ -30,7 +32,8 @@ public final class PlaceSearchSupport {
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double normalizedA = Math.max(0.0, Math.min(1.0, a));
+        double c = 2 * Math.atan2(Math.sqrt(normalizedA), Math.sqrt(1 - normalizedA));
         return earthRadius * c;
     }
 
@@ -38,7 +41,7 @@ public final class PlaceSearchSupport {
         if (!StringUtils.hasText(value)) {
             return "";
         }
-        return value.replaceAll("\\s+", "").toLowerCase();
+        return value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
     public static double round(double value, int precision) {

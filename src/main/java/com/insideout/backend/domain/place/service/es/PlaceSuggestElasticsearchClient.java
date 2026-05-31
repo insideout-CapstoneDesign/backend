@@ -1,6 +1,7 @@
 package com.insideout.backend.domain.place.service.es;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
 import lombok.RequiredArgsConstructor;
@@ -61,13 +62,46 @@ public class PlaceSuggestElasticsearchClient {
         String primaryUri = resolvePrimaryUri(elasticsearchUris);
         RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
 
-        restClient.post()
+        String response = restClient.post()
                 .uri("/_bulk")
                 .contentType(MediaType.parseMediaType("application/x-ndjson"))
                 .body(body)
                 .retrieve()
-                .toBodilessEntity();
-        return documents.size();
+                .body(String.class);
+        return parseBulkSuccessCount(response);
+    }
+
+    private int parseBulkSuccessCount(String response) {
+        if (!StringUtils.hasText(response)) {
+            throw new IllegalStateException("Elasticsearch bulk response is empty");
+        }
+        try {
+            JsonNode root = objectMapper.readTree(response);
+            if (root.path("errors").asBoolean(false)) {
+                throw new IllegalStateException("Elasticsearch bulk response contains item-level errors");
+            }
+
+            JsonNode items = root.path("items");
+            if (!items.isArray()) {
+                throw new IllegalStateException("Elasticsearch bulk response has invalid items");
+            }
+
+            int successCount = 0;
+            for (JsonNode item : items) {
+                JsonNode update = item.path("update");
+                int status = update.path("status").asInt(-1);
+                if (status >= 200 && status < 300) {
+                    successCount++;
+                    continue;
+                }
+                throw new IllegalStateException("Elasticsearch bulk response contains non-success item status: " + status);
+            }
+            return successCount;
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to parse Elasticsearch bulk response", e);
+        }
     }
 
     private List<SuggestDocument> doSearch(String query, int size, Double lat, Double lng, Integer radius) {

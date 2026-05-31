@@ -58,7 +58,7 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                 b.external_api_id AS externalApiId
             FROM building b
             WHERE b.footprint IS NOT NULL
-            ORDER BY b.created_at DESC
+            ORDER BY b.created_at DESC, b.id DESC
             """,
             countQuery = """
                     SELECT COUNT(*)

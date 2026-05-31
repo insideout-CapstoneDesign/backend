@@ -62,7 +62,7 @@ final class PlaceEsBulkUpsertBodyBuilder {
             String payload = objectMapper.writeValueAsString(root);
             return action + "\n" + payload + "\n";
         } catch (Exception e) {
-            return "";
+            throw new IllegalStateException("Failed to build Elasticsearch bulk payload", e);
         }
     }
 }

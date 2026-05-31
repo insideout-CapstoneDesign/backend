@@ -1,4 +1,4 @@
-package com.insideout.backend.domain.place.service;
+package com.insideout.backend.domain.place.service.kakao;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
@@ -26,16 +26,26 @@ public class KakaoPlaceSearchClient {
     private final @Qualifier("kakaoLocalRestClient") RestClient kakaoLocalRestClient;
 
     public List<PlaceSearchItemResponse> searchByKeyword(String query) {
-        return searchByKeyword(query, null, null, null);
+        return searchByKeyword(query, null, null, null, null);
     }
 
     public List<PlaceSearchItemResponse> searchByKeyword(String query, Double lat, Double lng) {
-        return searchByKeyword(query, lat, lng, null);
+        return searchByKeyword(query, lat, lng, null, null);
     }
 
     public List<PlaceSearchItemResponse> searchByKeyword(String query, Double lat, Double lng, Integer radius) {
+        return searchByKeyword(query, lat, lng, radius, null);
+    }
+
+    public List<PlaceSearchItemResponse> searchByKeyword(
+            String query,
+            Double lat,
+            Double lng,
+            Integer radius,
+            Integer maxSize
+    ) {
         try {
-            List<KakaoKeywordSearchDocument> documents = fetchAllKeywordSearchDocuments(query, lat, lng, radius);
+            List<KakaoKeywordSearchDocument> documents = fetchAllKeywordSearchDocuments(query, lat, lng, radius, maxSize);
             if (documents.isEmpty()) {
                 return Collections.emptyList();
             }
@@ -61,18 +71,30 @@ public class KakaoPlaceSearchClient {
             String query,
             Double lat,
             Double lng,
-            Integer radius
+            Integer radius,
+            Integer maxSize
     ) {
         List<KakaoKeywordSearchDocument> allDocuments = new java.util.ArrayList<>();
         int page = 1;
+        int remaining = maxSize != null && maxSize > 0 ? maxSize : Integer.MAX_VALUE;
 
         while (page <= MAX_PAGE) {
-            KakaoKeywordSearchResponse response = requestKeywordSearchPage(query, lat, lng, radius, page);
+            if (remaining <= 0) {
+                break;
+            }
+            int requestSize = Math.min(DEFAULT_SIZE, remaining);
+            KakaoKeywordSearchResponse response = requestKeywordSearchPage(query, lat, lng, radius, page, requestSize);
             if (response == null || response.documents() == null || response.documents().isEmpty()) {
                 break;
             }
 
-            allDocuments.addAll(response.documents());
+            if (response.documents().size() <= remaining) {
+                allDocuments.addAll(response.documents());
+                remaining -= response.documents().size();
+            } else {
+                allDocuments.addAll(response.documents().subList(0, remaining));
+                remaining = 0;
+            }
 
             KakaoKeywordSearchMeta meta = response.meta();
             if (meta == null) {
@@ -102,13 +124,14 @@ public class KakaoPlaceSearchClient {
             Double lat,
             Double lng,
             Integer radius,
-            int page
+            int page,
+            int size
     ) {
         return kakaoLocalRestClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v2/local/search/keyword.json")
                         .queryParam("query", query)
-                        .queryParam("size", DEFAULT_SIZE)
+                        .queryParam("size", size)
                         .queryParam("page", page)
                         .queryParamIfPresent("x", Optional.ofNullable(lng))
                         .queryParamIfPresent("y", Optional.ofNullable(lat))

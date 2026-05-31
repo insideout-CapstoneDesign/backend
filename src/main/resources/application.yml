@@ -45,3 +45,9 @@ ai:
     api-key: ${AI_API_KEY:default-key-for-local-dev}
     timeout-seconds: ${AI_SERVICE_TIMEOUT:120}
 
+place:
+  search:
+    bootstrap:
+      enabled: ${PLACE_SEARCH_BOOTSTRAP_ENABLED:false}
+      batch-size: ${PLACE_SEARCH_BOOTSTRAP_BATCH_SIZE:500}
+      lock-id: ${PLACE_SEARCH_BOOTSTRAP_LOCK_ID:91000001}

@@ -56,6 +56,7 @@ class PlaceSearchServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(buildingRepository.searchRegisteredPlaces(anyString())).thenReturn(List.of());
+        lenient().when(buildingRepository.searchRegisteredPlacesLimited(anyString(), anyInt())).thenReturn(List.of());
         lenient().when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
         lenient().when(buildingRepository.findNearestRegisteredPlace(anyDouble(), anyDouble(), anyInt())).thenReturn(Optional.empty());
         lenient().when(placeSuggestElasticsearchClient.search(anyString(), anyInt(), any(), any(), any()))
@@ -144,7 +145,7 @@ class PlaceSearchServiceTest {
 
     @Test
     void search_mergesRegisteredByExternalApiId_andUsesRegisteredName() {
-        when(buildingRepository.searchRegisteredPlaces("신세계"))
+        when(buildingRepository.searchRegisteredPlacesLimited("신세계", 45))
                 .thenReturn(List.of());
         when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
                 .thenReturn(List.of(

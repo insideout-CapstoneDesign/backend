@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +54,7 @@ class PlaceSuggestServiceTest {
     void setUp() {
         lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString())).thenReturn(List.of());
         lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString(), anyDouble(), anyDouble(), any())).thenReturn(List.of());
+        lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString(), any(), any(), any(), anyInt())).thenReturn(List.of());
     }
 
     @Test

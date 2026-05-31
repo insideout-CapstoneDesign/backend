@@ -26,6 +26,8 @@ public class PlaceSearchService {
     private static final int MAX_RADIUS_METER = 20_000;
     private static final int DEFAULT_SEARCH_SIZE = 15;
     private static final int MAX_SEARCH_SIZE = 100;
+    private static final int REGISTERED_FETCH_MULTIPLIER = 3;
+    private static final int MAX_REGISTERED_FETCH_SIZE = 300;
 
     private final BuildingRepository buildingRepository;
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
@@ -51,7 +53,13 @@ public class PlaceSearchService {
             throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
         }
 
-        List<PlaceSearchItemResponse> registeredPlaces = buildingRepository.searchRegisteredPlaces(normalizedQuery).stream()
+        int registeredFetchSize = Math.min(
+                Math.max(resolvedSize * REGISTERED_FETCH_MULTIPLIER, resolvedSize),
+                MAX_REGISTERED_FETCH_SIZE
+        );
+
+        List<PlaceSearchItemResponse> registeredPlaces = buildingRepository
+                .searchRegisteredPlacesLimited(normalizedQuery, registeredFetchSize).stream()
                 .map(PlaceSearchResultComposer::toRegisteredSearchItem)
                 .toList();
 

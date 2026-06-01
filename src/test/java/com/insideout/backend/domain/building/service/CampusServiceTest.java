@@ -113,7 +113,9 @@ class CampusServiceTest {
                 new CoordinateDTO(127.05, 37.05),
                 new CoordinateDTO(127.0, 37.0),
                 "Gate 1",
-                Map.of("key", "value")
+                null,
+                null,
+                Map.<String, Object>of("key", "value")
         );
 
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
@@ -146,7 +148,7 @@ class CampusServiceTest {
     @Test
     void createCampus_throwsTenantNotFound() {
         CampusCreateRequestDTO request = new CampusCreateRequestDTO(
-                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null
+                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null, null, null
         );
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.empty());
 
@@ -174,13 +176,15 @@ class CampusServiceTest {
         User uploader = User.builder().email("test@example.com").build();
         byte[] pngBytes = createTinyPngBytes();
         MockMultipartFile file = new MockMultipartFile("file", "map.png", "image/png", pngBytes);
+        String imageUrl = "s3://my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png";
+        String presignedUrl = "http://localhost:9000/my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png";
 
         when(tenantQueryFacade.isUserMemberOfTenant(userId, tenantId)).thenReturn(true);
         when(campusRepository.findByIdAndTenant_IdForUpdate(campusId, tenantId)).thenReturn(Optional.of(campus));
         when(userRepository.findById(userId)).thenReturn(Optional.of(uploader));
         when(imageStorageService.uploadCampusMapImage(tenantId, campusId, file))
-                .thenReturn("s3://my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png");
-        when(s3StorageService.defaultBucket()).thenReturn("my-bucket");
+                .thenReturn(imageUrl);
+        when(s3StorageService.getPresignedUrlFromS3Url(imageUrl)).thenReturn(presignedUrl);
 
         when(campusMapRepository.save(any(CampusMap.class))).thenAnswer(invocation -> {
             CampusMap saved = invocation.getArgument(0);
@@ -196,7 +200,7 @@ class CampusServiceTest {
         CampusMapResponseDTO response = campusService.uploadCampusMap(tenantId, campusId, file, userDetails);
 
         assertThat(response.campusId()).isEqualTo(campusId);
-        assertThat(response.imageUrl()).contains("s3://my-bucket/");
+        assertThat(response.imageUrl()).isEqualTo(presignedUrl);
         assertThat(response.widthPx()).isEqualTo(10);
         assertThat(response.heightPx()).isEqualTo(10);
         assertThat(response.isCurrent()).isTrue();
@@ -207,7 +211,7 @@ class CampusServiceTest {
     @Test
     void createCampus_throwsInvalidCampusBoundary_whenBoundaryIsEmpty() {
         CampusCreateRequestDTO request = new CampusCreateRequestDTO(
-                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null
+                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null, null, null
         );
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
 
@@ -220,7 +224,7 @@ class CampusServiceTest {
     @Test
     void createCampus_throwsInvalidCampusBoundary_whenBoundaryIsNull() {
         CampusCreateRequestDTO request = new CampusCreateRequestDTO(
-                "Test Campus", "Address", null, null, new CoordinateDTO(127.0, 37.0), "Gate", null
+                "Test Campus", "Address", null, null, new CoordinateDTO(127.0, 37.0), "Gate", null, null, null
         );
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
 

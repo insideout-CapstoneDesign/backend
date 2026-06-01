@@ -113,6 +113,8 @@ class CampusServiceTest {
                 new CoordinateDTO(127.05, 37.05),
                 new CoordinateDTO(127.0, 37.0),
                 "Gate 1",
+                null,
+                null,
                 Map.of("key", "value")
         );
 
@@ -146,7 +148,7 @@ class CampusServiceTest {
     @Test
     void createCampus_throwsTenantNotFound() {
         CampusCreateRequestDTO request = new CampusCreateRequestDTO(
-                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null
+                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null, null, null
         );
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.empty());
 
@@ -160,7 +162,13 @@ class CampusServiceTest {
     void uploadCampusMap_succeeds() throws Exception {
         UUID campusId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
-        CustomUserDetails userDetails = new CustomUserDetails(userId, "test@example.com", "passwordHash", GlobalRole.TENANT_USER);
+        CustomUserDetails userDetails = new CustomUserDetails(
+                userId,
+                "test@example.com",
+                "passwordHash",
+                "tester",
+                GlobalRole.TENANT_USER
+        );
 
         Campus campus = Campus.builder()
                 .tenant(tenant)
@@ -181,6 +189,7 @@ class CampusServiceTest {
         when(imageStorageService.uploadCampusMapImage(tenantId, campusId, file))
                 .thenReturn("s3://my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png");
         when(s3StorageService.defaultBucket()).thenReturn("my-bucket");
+        when(s3StorageService.getPresignedUrlFromS3Url(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         when(campusMapRepository.save(any(CampusMap.class))).thenAnswer(invocation -> {
             CampusMap saved = invocation.getArgument(0);
@@ -207,7 +216,7 @@ class CampusServiceTest {
     @Test
     void createCampus_throwsInvalidCampusBoundary_whenBoundaryIsEmpty() {
         CampusCreateRequestDTO request = new CampusCreateRequestDTO(
-                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null
+                "Test Campus", "Address", List.of(), null, new CoordinateDTO(127.0, 37.0), "Gate", null, null, null
         );
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
 
@@ -220,7 +229,7 @@ class CampusServiceTest {
     @Test
     void createCampus_throwsInvalidCampusBoundary_whenBoundaryIsNull() {
         CampusCreateRequestDTO request = new CampusCreateRequestDTO(
-                "Test Campus", "Address", null, null, new CoordinateDTO(127.0, 37.0), "Gate", null
+                "Test Campus", "Address", null, null, new CoordinateDTO(127.0, 37.0), "Gate", null, null, null
         );
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
 

@@ -6,32 +6,32 @@ import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
 import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
-import com.insideout.backend.domain.place.service.kakao.KakaoPlaceSearchClient;
 import com.insideout.backend.domain.place.service.search.PlaceSearchIndexingService;
 import com.insideout.backend.domain.place.service.suggest.PlaceSuggestService;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class PlaceSuggestServiceTest {
@@ -55,7 +55,7 @@ class PlaceSuggestServiceTest {
     void setUp() {
         lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString())).thenReturn(List.of());
         lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString(), anyDouble(), anyDouble(), any())).thenReturn(List.of());
-        lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString(), any(), any(), any(), anyInt())).thenReturn(List.of());
+        lenient().when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
     }
 
     @Test
@@ -110,7 +110,6 @@ class PlaceSuggestServiceTest {
                                 126.9811
                         )
                 ));
-        when(buildingRepository.findRegisteredPlacesByExternalApiIds(anySet())).thenReturn(List.of());
 
         List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", 37.5609, 126.9810, 10);
 
@@ -134,7 +133,7 @@ class PlaceSuggestServiceTest {
 
         placeSuggestService.suggest("신세계", null, null, 10);
 
-        verify(buildingRepository, never()).findRegisteredPlacesByExternalApiIds(anySet());
+        verify(buildingRepository, never()).findRegisteredPlacesByExternalApiIds(anyCollection());
     }
 
     @Test
@@ -158,13 +157,11 @@ class PlaceSuggestServiceTest {
                                 127.0032
                         )
                 ));
-        when(buildingRepository.findRegisteredPlacesByExternalApiIds(Set.of("1", "2")))
-                .thenReturn(List.of());
 
         List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", null, null, 2);
 
         assertThat(result).hasSize(2);
-        verify(kakaoPlaceSearchClient, never()).searchByKeyword("신세계");
+        verify(kakaoPlaceSearchClient, never()).searchByKeyword("신세계", null, null, null);
         verify(placeSearchIndexingService, never()).upsertFromSearchResultsAsync(any());
     }
 
@@ -181,7 +178,7 @@ class PlaceSuggestServiceTest {
                                 126.9810
                         )
                 ));
-        lenient().when(kakaoPlaceSearchClient.searchByKeyword("신세계", null, null, null, 10))
+        lenient().when(kakaoPlaceSearchClient.searchByKeyword("신세계", null, null, null))
                 .thenThrow(new PlaceException(PlaceErrorCode.KAKAO_LOCAL_API_UNAVAILABLE));
 
         List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", null, null, 10);
@@ -205,17 +202,16 @@ class PlaceSuggestServiceTest {
                         new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 I", "서울", "서울", "9", 37.6800, 127.0800),
                         new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 J", "서울", "서울", "10", 37.6900, 127.0900)
                 ));
-        when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5609, 126.9810, null, 10))
+        when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5609, 126.9810, null))
                 .thenReturn(List.of(
                         new PlaceSearchItemResponse("스타벅스 동국대점", "서울", "서울", 37.5599, 126.9990, false, "11", null)
                 ));
-        when(buildingRepository.findRegisteredPlacesByExternalApiIds(anySet())).thenReturn(List.of());
 
         List<PlaceSearchItemResponse> result = placeSuggestService.suggest("스타벅스", 37.5609, 126.9810, 10);
 
         assertThat(result).isNotEmpty();
         verify(kakaoPlaceSearchClient, times(1))
-                .searchByKeyword("스타벅스", 37.5609, 126.9810, null, 10);
+                .searchByKeyword("스타벅스", 37.5609, 126.9810, null);
     }
 
     @Test

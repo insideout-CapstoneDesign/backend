@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,6 +27,7 @@ public class PlaceSuggestService {
     private static final int DEFAULT_SIZE = 10;
     private static final int MAX_SIZE = 50;
     private static final int MIN_QUERY_LENGTH = 2;
+    private static final int MIN_NEARBY_FALLBACK_SIZE = 10;
 
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
@@ -41,12 +43,12 @@ public class PlaceSuggestService {
                 .suggest(normalizedQuery, resolvedSize, lat, lng);
 
         List<PlaceSuggestElasticsearchClient.SuggestDocument> mergedSuggested = fromElasticsearch;
-        if (fromElasticsearch.size() < resolvedSize) {
-            int needed = resolvedSize - fromElasticsearch.size();
-            List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng, needed);
+        int fallbackSize = resolveFallbackSize(resolvedSize, fromElasticsearch.size(), lat, lng);
+        if (fallbackSize > 0) {
+            List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng, fallbackSize);
             mergedSuggested = mergeSuggested(fromElasticsearch, fromKakao, resolvedSize);
             if (!fromKakao.isEmpty()) {
-                placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(needed).toList());
+                placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(fallbackSize).toList());
             }
         }
 
@@ -58,6 +60,7 @@ public class PlaceSuggestService {
 
         return mergedSuggested.stream()
                 .map(item -> toResponse(item, registeredByExternalApiId, lat, lng))
+                .sorted(buildComparator(normalizedQuery, lat, lng))
                 .limit(resolvedSize)
                 .toList();
     }
@@ -82,6 +85,15 @@ public class PlaceSuggestService {
             return DEFAULT_SIZE;
         }
         return Math.min(size, MAX_SIZE);
+    }
+
+    private int resolveFallbackSize(int resolvedSize, int esResultSize, Double lat, Double lng) {
+        int needed = Math.max(0, resolvedSize - esResultSize);
+        if (lat == null || lng == null) {
+            return needed;
+        }
+        int nearbyFallback = Math.min(resolvedSize, MIN_NEARBY_FALLBACK_SIZE);
+        return Math.max(needed, nearbyFallback);
     }
 
     private Map<String, BuildingSearchProjection> resolveRegisteredMap(
@@ -136,7 +148,7 @@ public class PlaceSuggestService {
                 break;
             }
         }
-        return merged.values().stream().limit(size).toList();
+        return merged.values().stream().limit(size * 2L).toList();
     }
 
     private PlaceSearchItemResponse toResponse(
@@ -171,6 +183,40 @@ public class PlaceSuggestService {
                 suggested.externalApiId(),
                 distanceMeters
         );
+    }
+
+    private Comparator<PlaceSearchItemResponse> buildComparator(String query, Double lat, Double lng) {
+        Comparator<PlaceSearchItemResponse> comparator = Comparator
+                .comparingInt((PlaceSearchItemResponse item) -> keywordScore(item.name(), query)).reversed();
+
+        if (lat != null && lng != null) {
+            comparator = comparator.thenComparing(
+                    PlaceSearchItemResponse::distanceMeters,
+                    Comparator.nullsLast(Double::compareTo)
+            );
+        }
+
+        return comparator
+                .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
+                .thenComparing(item -> PlaceSearchSupport.normalizeText(item.name()));
+    }
+
+    private int keywordScore(String name, String query) {
+        String target = PlaceSearchSupport.normalizeText(name);
+        String keyword = PlaceSearchSupport.normalizeText(query);
+        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
+            return 0;
+        }
+        if (target.equals(keyword)) {
+            return 3;
+        }
+        if (target.startsWith(keyword)) {
+            return 2;
+        }
+        if (target.contains(keyword)) {
+            return 1;
+        }
+        return 0;
     }
 
 }

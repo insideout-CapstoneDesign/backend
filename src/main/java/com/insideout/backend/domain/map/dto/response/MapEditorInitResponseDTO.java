@@ -50,7 +50,7 @@ public record MapEditorInitResponseDTO(
                 floor.getId(),
                 floor.getName(),
                 floorplan != null ? floorplan.getId() : null,
-                floorplanImageUrl,
+                floorplan != null? floorplanImageUrl : null,
                 floorplan != null ? floorplan.getWidthPx() : null,
                 floorplan != null ? floorplan.getHeightPx() : null,
                 mapVersion.getId(),

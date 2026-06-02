@@ -47,6 +47,7 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.Polygon;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,17 +101,10 @@ public class MapEditorService {
                 ? aiDetectionRepository.findByFloorplanIdAndTenantId(currentFloorplan.getId(), tenantId)
                 : List.of();
 
-        MapVersion draftMapVersion = mapVersionRepository
-                .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(buildingId, MapType.BUILDING, "draft")
-                .orElse(null);
-
-        boolean draftCreated = false;
         boolean initializedFromAi = false;
-
-        if (draftMapVersion == null) {
-            draftMapVersion = createDraftMapVersion(building, userId);
-            draftCreated = true;
-        }
+        DraftMapVersionResult draftResult = getOrCreateBuildingDraftMapVersion(building, userId);
+        MapVersion draftMapVersion = draftResult.mapVersion();
+        boolean draftCreated = draftResult.created();
 
         FloorDraftContentState contentState = getFloorDraftContentState(draftMapVersion.getId(), floorId);
         if (contentState.hasMissingContent() && !aiDetections.isEmpty()) {
@@ -159,15 +153,9 @@ public class MapEditorService {
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
         List<Floor> floors = floorRepository.findAllByBuilding_IdOrderByLevelDesc(buildingId);
 
-        MapVersion draftMapVersion = mapVersionRepository
-                .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(buildingId, MapType.BUILDING, "draft")
-                .orElse(null);
-
-        boolean draftCreated = false;
-        if (draftMapVersion == null) {
-            draftMapVersion = createDraftMapVersion(building, userId);
-            draftCreated = true;
-        }
+        DraftMapVersionResult draftResult = getOrCreateBuildingDraftMapVersion(building, userId);
+        MapVersion draftMapVersion = draftResult.mapVersion();
+        boolean draftCreated = draftResult.created();
 
         List<UUID> floorIds = floors.stream().map(Floor::getId).toList();
         Map<UUID, Floorplan> currentFloorplansByFloorId = floorIds.isEmpty()
@@ -212,7 +200,7 @@ public class MapEditorService {
                 }
             }
 
-            if (hasDraftContent) {
+            if (contentState.isFullyReady()) {
                 draftReadyFloorCount++;
             }
 
@@ -245,6 +233,24 @@ public class MapEditorService {
         );
     }
 
+    private DraftMapVersionResult getOrCreateBuildingDraftMapVersion(Building building, UUID userId) {
+        return mapVersionRepository
+                .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(building.getId(), MapType.BUILDING, "draft")
+                .map(mapVersion -> new DraftMapVersionResult(mapVersion, false))
+                .orElseGet(() -> createOrReuseBuildingDraftMapVersion(building, userId));
+    }
+
+    private DraftMapVersionResult createOrReuseBuildingDraftMapVersion(Building building, UUID userId) {
+        try {
+            return new DraftMapVersionResult(createDraftMapVersion(building, userId), true);
+        } catch (DataIntegrityViolationException exception) {
+            return mapVersionRepository
+                    .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(building.getId(), MapType.BUILDING, "draft")
+                    .map(mapVersion -> new DraftMapVersionResult(mapVersion, false))
+                    .orElseThrow(() -> exception);
+        }
+    }
+
     private MapVersion createDraftMapVersion(Building building, UUID userId) {
         User createdBy = userId != null ? userRepository.findById(userId).orElse(null) : null;
         UUID parentVersionId = mapVersionRepository
@@ -267,6 +273,9 @@ public class MapEditorService {
                         .createdBy(createdBy)
                         .build()
         );
+    }
+
+    private record DraftMapVersionResult(MapVersion mapVersion, boolean created) {
     }
 
     private void initializeFloorDraftFromAi(
@@ -719,7 +728,10 @@ public class MapEditorService {
 
     private Map<String, Object> buildDetectionProperties(AiDetection detection) {
         Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put("detectType", detection.getDetectType());
+        if(detection.getAttrs() != null && !detection.getAttrs().isEmpty()) {
+            properties.putAll(detection.getAttrs());
+        }
+        properties.put("detectType",detection.getDetectType());
         if (detection.getConfidence() != null) {
             properties.put("confidence", detection.getConfidence().setScale(4, RoundingMode.HALF_UP));
         }

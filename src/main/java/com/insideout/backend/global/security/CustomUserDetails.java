@@ -17,6 +17,7 @@ public class CustomUserDetails implements UserDetails {
 	private final UUID userId;
 	private final String email;
 	private final String passwordHash;
+	private final String displayName;
 	private final GlobalRole globalRole;
 
 	@Override

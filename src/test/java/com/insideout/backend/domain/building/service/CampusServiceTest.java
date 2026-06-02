@@ -162,7 +162,13 @@ class CampusServiceTest {
     void uploadCampusMap_succeeds() throws Exception {
         UUID campusId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
-        CustomUserDetails userDetails = new CustomUserDetails(userId, "test@example.com", "passwordHash", GlobalRole.TENANT_USER);
+        CustomUserDetails userDetails = new CustomUserDetails(
+                userId,
+                "test@example.com",
+                "passwordHash",
+                "tester",
+                GlobalRole.TENANT_USER
+        );
 
         Campus campus = Campus.builder()
                 .tenant(tenant)
@@ -184,6 +190,7 @@ class CampusServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(uploader));
         when(imageStorageService.uploadCampusMapImage(tenantId, campusId, file))
                 .thenReturn(imageUrl);
+        when(s3StorageService.defaultBucket()).thenReturn("my-bucket");
         when(s3StorageService.getPresignedUrlFromS3Url(imageUrl)).thenReturn(presignedUrl);
 
         when(campusMapRepository.save(any(CampusMap.class))).thenAnswer(invocation -> {

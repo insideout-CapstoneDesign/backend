@@ -14,4 +14,6 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
     Optional<Poi> findByPublicId(Long publicId);
 
     List<Poi> findByAnchorNodeIdIn(List<UUID> anchorNodeIds);
+
+    List<Poi> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
 }

@@ -57,4 +57,6 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
             @Param("x") double x,
             @Param("y") double y
     );
+
+    List<Node> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
 }

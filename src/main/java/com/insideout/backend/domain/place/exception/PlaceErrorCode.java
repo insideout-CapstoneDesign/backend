@@ -9,6 +9,12 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum PlaceErrorCode implements BaseErrorCode {
 
+    SEARCH_INVALID_QUERY(
+            HttpStatus.BAD_REQUEST,
+            "PLACE400_0",
+            "검색어가 올바르지 않습니다."
+    ),
+
     INVALID_COORDINATE(
             HttpStatus.BAD_REQUEST,
             "PLACE400_1",
@@ -23,6 +29,11 @@ public enum PlaceErrorCode implements BaseErrorCode {
             HttpStatus.SERVICE_UNAVAILABLE,
             "PLACE503_1",
             "카카오 장소 서비스와 통신할 수 없습니다."
+    ),
+    SEARCH_SERVICE_UNAVAILABLE(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "PLACE503_2",
+            "장소 검색 서비스와 통신할 수 없습니다."
     );
 
     private final HttpStatus status;

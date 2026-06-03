@@ -6,6 +6,7 @@ import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
 import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
+import com.insideout.backend.domain.place.service.kakao.KakaoPlaceSearchClient;
 import com.insideout.backend.domain.place.service.search.PlaceSearchIndexingService;
 import com.insideout.backend.domain.place.service.suggest.PlaceSuggestService;
 import org.junit.jupiter.api.BeforeEach;

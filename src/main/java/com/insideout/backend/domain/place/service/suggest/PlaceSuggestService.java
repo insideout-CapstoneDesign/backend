@@ -10,6 +10,7 @@ import com.insideout.backend.domain.place.service.kakao.KakaoPlaceSearchClient;
 import com.insideout.backend.domain.place.service.search.PlaceSearchIndexingService;
 import com.insideout.backend.domain.place.service.support.PlaceSearchSupport;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class PlaceSuggestService {
 
@@ -40,10 +42,20 @@ public class PlaceSuggestService {
         List<PlaceSuggestElasticsearchClient.SuggestDocument> mergedSuggested = fromElasticsearch;
         int fallbackSize = PlaceSuggestFallbackPolicy.resolveFallbackSize(resolvedSize, fromElasticsearch.size(), lat, lng);
         if (fallbackSize > 0) {
-            List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng, fallbackSize);
-            mergedSuggested = PlaceSuggestDocumentMerger.merge(fromElasticsearch, fromKakao, resolvedSize);
-            if (!fromKakao.isEmpty()) {
-                placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(fallbackSize).toList());
+            try {
+                List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng, fallbackSize);
+                mergedSuggested = PlaceSuggestDocumentMerger.merge(fromElasticsearch, fromKakao, resolvedSize);
+                if (!fromKakao.isEmpty()) {
+                    placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(fallbackSize).toList());
+                }
+            } catch (PlaceException ex) {
+                if (ex.getErrorCode() == PlaceErrorCode.KAKAO_LOCAL_API_UNAVAILABLE) {
+                    log.warn("Kakao fallback unavailable for suggest query='{}' lat={} lng={} size={}. Returning ES results only.",
+                            normalizedQuery, lat, lng, fallbackSize, ex);
+                    mergedSuggested = fromElasticsearch;
+                } else {
+                    throw ex;
+                }
             }
         }
 

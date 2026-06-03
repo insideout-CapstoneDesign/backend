@@ -169,6 +169,28 @@ class PlaceSuggestServiceTest {
     }
 
     @Test
+    void suggest_whenKakaoFallbackUnavailable_returnsElasticsearchOnly() {
+        when(placeSuggestElasticsearchClient.suggest("신세계", 10, null, null))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 본점",
+                                "서울 중구",
+                                "서울 중구 소공로 63",
+                                "1",
+                                37.5609,
+                                126.9810
+                        )
+                ));
+        lenient().when(kakaoPlaceSearchClient.searchByKeyword("신세계", null, null, null, 10))
+                .thenThrow(new PlaceException(PlaceErrorCode.KAKAO_LOCAL_API_UNAVAILABLE));
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", null, null, 10);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("신세계백화점 본점");
+    }
+
+    @Test
     void suggest_withCoordinate_evenWhenElasticsearchHasEnoughResults_fetchesNearbyFallback() {
         when(placeSuggestElasticsearchClient.suggest("스타벅스", 10, 37.5609, 126.9810))
                 .thenReturn(List.of(

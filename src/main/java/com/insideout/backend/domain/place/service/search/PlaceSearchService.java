@@ -89,7 +89,7 @@ public class PlaceSearchService {
 
     public Optional<PlaceNearestResponse> findNearest(Double lat, Double lng, Integer radius) {
         PlaceSearchSupport.validateCoordinate(lat, lng, false);
-        int resolvedRadius = normalizeRadius(radius);
+        int resolvedRadius = normalizeNearestRadius(radius);
         Optional<PlaceNearestResponse> registeredPlace = buildingRepository
                 .findNearestRegisteredPlace(lat, lng, resolvedRadius)
                 .map(this::toRegisteredNearestResponse);
@@ -99,6 +99,18 @@ public class PlaceSearchService {
         }
 
         return kakaoPlaceSearchClient.findNearestByCoordinate(lat, lng, resolvedRadius);
+    }
+
+    private int normalizeNearestRadius(Integer radius) {
+        if (radius == null) {
+            return DEFAULT_RADIUS_METER;
+        }
+
+        if (radius < MIN_RADIUS_METER) {
+            throw new PlaceException(PlaceErrorCode.INVALID_RADIUS);
+        }
+
+        return Math.min(radius, DEFAULT_RADIUS_METER);
     }
 
     private int normalizeRadius(Integer radius) {

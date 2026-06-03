@@ -31,6 +31,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class PlaceSuggestServiceTest {
@@ -165,6 +166,113 @@ class PlaceSuggestServiceTest {
         assertThat(result).hasSize(2);
         verify(kakaoPlaceSearchClient, never()).searchByKeyword("신세계");
         verify(placeSearchIndexingService, never()).upsertFromSearchResultsAsync(any());
+    }
+
+    @Test
+    void suggest_whenKakaoFallbackUnavailable_returnsElasticsearchOnly() {
+        when(placeSuggestElasticsearchClient.suggest("신세계", 10, null, null))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 본점",
+                                "서울 중구",
+                                "서울 중구 소공로 63",
+                                "1",
+                                37.5609,
+                                126.9810
+                        )
+                ));
+        lenient().when(kakaoPlaceSearchClient.searchByKeyword("신세계", null, null, null, 10))
+                .thenThrow(new PlaceException(PlaceErrorCode.KAKAO_LOCAL_API_UNAVAILABLE));
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", null, null, 10);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("신세계백화점 본점");
+    }
+
+    @Test
+    void suggest_withCoordinate_evenWhenElasticsearchHasEnoughResults_fetchesNearbyFallback() {
+        when(placeSuggestElasticsearchClient.suggest("스타벅스", 10, 37.5609, 126.9810))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 A", "서울", "서울", "1", 37.6000, 127.0000),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 B", "서울", "서울", "2", 37.6100, 127.0100),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 C", "서울", "서울", "3", 37.6200, 127.0200),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 D", "서울", "서울", "4", 37.6300, 127.0300),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 E", "서울", "서울", "5", 37.6400, 127.0400),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 F", "서울", "서울", "6", 37.6500, 127.0500),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 G", "서울", "서울", "7", 37.6600, 127.0600),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 H", "서울", "서울", "8", 37.6700, 127.0700),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 I", "서울", "서울", "9", 37.6800, 127.0800),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument("스타벅스 J", "서울", "서울", "10", 37.6900, 127.0900)
+                ));
+        when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5609, 126.9810, null, 10))
+                .thenReturn(List.of(
+                        new PlaceSearchItemResponse("스타벅스 동국대점", "서울", "서울", 37.5599, 126.9990, false, "11", null)
+                ));
+        when(buildingRepository.findRegisteredPlacesByExternalApiIds(anySet())).thenReturn(List.of());
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("스타벅스", 37.5609, 126.9810, 10);
+
+        assertThat(result).isNotEmpty();
+        verify(kakaoPlaceSearchClient, times(1))
+                .searchByKeyword("스타벅스", 37.5609, 126.9810, null, 10);
+    }
+
+    @Test
+    void suggest_sortsByKeywordScoreFirst_thenDistance() {
+        when(placeSuggestElasticsearchClient.suggest("스타벅스", 10, 37.5609, 126.9810))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "스타벅",
+                                "서울",
+                                "서울",
+                                null,
+                                37.56091,
+                                126.98101
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "스타벅스 본점",
+                                "서울",
+                                "서울",
+                                null,
+                                37.6000,
+                                127.0000
+                        )
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("스타벅스", 37.5609, 126.9810, 10);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).name()).isEqualTo("스타벅스 본점");
+    }
+
+    @Test
+    void suggest_whenKeywordScoreSame_sortsByDistance() {
+        when(placeSuggestElasticsearchClient.suggest("신세계", 10, 37.5609, 126.9810))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 B",
+                                "서울",
+                                "서울",
+                                null,
+                                37.5700,
+                                126.9900
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "신세계백화점 A",
+                                "서울",
+                                "서울",
+                                null,
+                                37.56091,
+                                126.98101
+                        )
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계", 37.5609, 126.9810, 10);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).name()).isEqualTo("신세계백화점 A");
+        assertThat(result.get(0).distanceMeters()).isLessThan(result.get(1).distanceMeters());
     }
 
     private BuildingSearchProjection projection(String name, String address, Double lat, Double lng, String externalApiId) {

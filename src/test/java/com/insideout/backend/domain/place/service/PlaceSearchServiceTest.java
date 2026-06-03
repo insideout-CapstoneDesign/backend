@@ -244,6 +244,26 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void findNearest_capsRadiusToThirtyMeters() {
+        PlaceNearestResponse expected = new PlaceNearestResponse(
+                "테스트 건물",
+                "서울시 중구 테스트로 1",
+                null,
+                37.5,
+                127.0,
+                false,
+                null
+        );
+        when(kakaoPlaceSearchClient.findNearestByCoordinate(37.5, 127.0, 30))
+                .thenReturn(Optional.of(expected));
+
+        Optional<PlaceNearestResponse> result = placeSearchService.findNearest(37.5, 127.0, 100);
+
+        assertThat(result).contains(expected);
+        verify(kakaoPlaceSearchClient).findNearestByCoordinate(37.5, 127.0, 30);
+    }
+
+    @Test
     void findNearest_returnsRegisteredBuildingFirst_whenInsideRegisteredFootprint() {
         when(buildingRepository.findNearestRegisteredPlace(37.5, 127.0, 30))
                 .thenReturn(Optional.of(projection("등록건물", "서울시", 37.5, 127.0, "111")));

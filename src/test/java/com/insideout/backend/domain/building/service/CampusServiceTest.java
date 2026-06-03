@@ -115,7 +115,7 @@ class CampusServiceTest {
                 "Gate 1",
                 null,
                 null,
-                Map.of("key", "value")
+                Map.<String, Object>of("key", "value")
         );
 
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
@@ -182,14 +182,16 @@ class CampusServiceTest {
         User uploader = User.builder().email("test@example.com").build();
         byte[] pngBytes = createTinyPngBytes();
         MockMultipartFile file = new MockMultipartFile("file", "map.png", "image/png", pngBytes);
+        String imageUrl = "s3://my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png";
+        String presignedUrl = "http://localhost:9000/my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png";
 
         when(tenantQueryFacade.isUserMemberOfTenant(userId, tenantId)).thenReturn(true);
         when(campusRepository.findByIdAndTenant_IdForUpdate(campusId, tenantId)).thenReturn(Optional.of(campus));
         when(userRepository.findById(userId)).thenReturn(Optional.of(uploader));
         when(imageStorageService.uploadCampusMapImage(tenantId, campusId, file))
-                .thenReturn("s3://my-bucket/tenants/" + tenantId + "/campuses/" + campusId + "/maps/file.png");
+                .thenReturn(imageUrl);
         when(s3StorageService.defaultBucket()).thenReturn("my-bucket");
-        when(s3StorageService.getPresignedUrlFromS3Url(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(s3StorageService.getPresignedUrlFromS3Url(imageUrl)).thenReturn(presignedUrl);
 
         when(campusMapRepository.save(any(CampusMap.class))).thenAnswer(invocation -> {
             CampusMap saved = invocation.getArgument(0);
@@ -205,7 +207,7 @@ class CampusServiceTest {
         CampusMapResponseDTO response = campusService.uploadCampusMap(tenantId, campusId, file, userDetails);
 
         assertThat(response.campusId()).isEqualTo(campusId);
-        assertThat(response.imageUrl()).contains("s3://my-bucket/");
+        assertThat(response.imageUrl()).isEqualTo(presignedUrl);
         assertThat(response.widthPx()).isEqualTo(10);
         assertThat(response.heightPx()).isEqualTo(10);
         assertThat(response.isCurrent()).isTrue();

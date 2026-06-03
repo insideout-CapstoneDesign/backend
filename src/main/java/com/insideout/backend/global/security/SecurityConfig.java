@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/places/**").permitAll()
+                        .requestMatchers("/api/v1/navigation/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SYS_ADMIN")
                         .requestMatchers("/api/v1/tenant/**").hasRole("TENANT_USER")
                         .requestMatchers("/api/v1/user/**").hasRole("END_USER")

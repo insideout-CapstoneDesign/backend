@@ -3,7 +3,8 @@ package com.insideout.backend.domain.place.controller;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceSuccessCode;
-import com.insideout.backend.domain.place.service.PlaceSearchService;
+import com.insideout.backend.domain.place.service.search.PlaceSearchService;
+import com.insideout.backend.domain.place.service.suggest.PlaceSuggestService;
 import com.insideout.backend.global.apiPayload.ApiResponse;
 import com.insideout.backend.global.apiPayload.code.GeneralSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +24,7 @@ import java.util.List;
 public class PlaceSearchController {
 
     private final PlaceSearchService placeSearchService;
+    private final PlaceSuggestService placeSuggestService;
 
     @Operation(summary = "장소 키워드 검색", description = "키워드로 장소를 검색합니다.")
     @GetMapping("/search")
@@ -30,9 +32,10 @@ public class PlaceSearchController {
             @RequestParam("q") String query,
             @RequestParam(value = "lat", required = false) Double lat,
             @RequestParam(value = "lng", required = false) Double lng,
-            @RequestParam(value = "radius", required = false) Integer radius
+            @RequestParam(value = "radius", required = false) Integer radius,
+            @RequestParam(value = "size", required = false) Integer size
     ) {
-        return ApiResponse.success(GeneralSuccessCode.OK, placeSearchService.search(query, lat, lng, radius));
+        return ApiResponse.success(GeneralSuccessCode.OK, placeSearchService.search(query, lat, lng, radius, size));
     }
 
     @Operation(
@@ -48,5 +51,16 @@ public class PlaceSearchController {
         return placeSearchService.findNearest(lat, lng, radius)
                 .map(item -> ApiResponse.success(GeneralSuccessCode.OK, item))
                 .orElseGet(() -> ApiResponse.success(PlaceSuccessCode.PLACE_INFO_NOT_AVAILABLE, null));
+    }
+
+    @Operation(summary = "장소 자동완성", description = "입력 중인 키워드에 대해 자동완성 후보를 조회합니다.")
+    @GetMapping("/suggest")
+    public ApiResponse<List<PlaceSearchItemResponse>> suggest(
+            @RequestParam("q") String query,
+            @RequestParam(value = "lat", required = false) Double lat,
+            @RequestParam(value = "lng", required = false) Double lng,
+            @RequestParam(value = "size", required = false) Integer size
+    ) {
+        return ApiResponse.success(GeneralSuccessCode.OK, placeSuggestService.suggest(query, lat, lng, size));
     }
 }

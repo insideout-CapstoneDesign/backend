@@ -2,6 +2,7 @@ package com.insideout.backend.domain.map.entity;
 
 import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.Building;
+import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;

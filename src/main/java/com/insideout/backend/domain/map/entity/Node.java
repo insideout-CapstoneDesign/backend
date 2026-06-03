@@ -114,32 +114,6 @@ public class Node {
         }
     }
 
-    // TODO: Node 생성 시 mapVersion과 floor가 동일한 Building을 참조하는지 반드시 검증해야 합니다.
-    //       LAZY 로딩 특성상 이 생성자 안에서 검증하면 LazyInitializationException이 발생할 수 있으므로,
-    //       NodeService에서 두 엔티티를 완전히 로딩한 후 아래와 같이 검증하고 생성하세요:
-    //
-    //       if (!floor.getBuilding().getId().equals(mapVersion.getBuilding().getId())) {
-    //           throw new MapException(MapErrorCode.BUILDING_MISMATCH);
-    //       }
-
-//    // NodeService 또는 NodeFactory 내부 (트랜잭션 컨텍스트 안)
-//    public Node createNode(CreateNodeRequest request) {
-//        MapVersion mapVersion = mapVersionRepository.findById(request.mapVersionId())
-//                .orElseThrow(...);
-//        Floor floor = floorRepository.findById(request.floorId())
-//                .orElseThrow(...);
-//
-//        // Building 일관성 검증 — 두 엔티티가 이미 로드된 상태이므로 안전
-//        if (!floor.getBuilding().getId().equals(mapVersion.getBuilding().getId())) {
-//            throw new MapException(MapErrorCode.BUILDING_MISMATCH);
-//        }
-//
-//        return nodeRepository.save(Node.builder()
-//                .mapVersion(mapVersion)
-//                .floor(floor)
-//        ...
-//        .build());
-//    }
     @Builder
     public Node(UUID tenantId, MapVersion mapVersion, Floor floor, String kindCode, Point geomPx, Point geomWgs84, String nameKo, Map<String, Object> properties, String source, UUID aiDetectionId) {
         this.tenantId = tenantId;

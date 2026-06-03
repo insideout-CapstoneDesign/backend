@@ -17,11 +17,15 @@ public record FloorplanResponseDTO(
         OffsetDateTime uploadedAt
 ) {
     public static FloorplanResponseDTO from(Floorplan floorplan) {
+        return from(floorplan, floorplan.getImageUrl());
+    }
+
+    public static FloorplanResponseDTO from(Floorplan floorplan, String imageUrl) {
         return new FloorplanResponseDTO(
                 floorplan.getId(),
                 floorplan.getTenantId(),
                 floorplan.getFloor() != null ? floorplan.getFloor().getId() : null,
-                floorplan.getImageUrl(),
+                imageUrl,
                 floorplan.getImageSha256(),
                 floorplan.getWidthPx(),
                 floorplan.getHeightPx(),
@@ -31,3 +35,4 @@ public record FloorplanResponseDTO(
         );
     }
 }
+

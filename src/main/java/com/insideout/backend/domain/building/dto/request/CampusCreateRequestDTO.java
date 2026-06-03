@@ -1,6 +1,7 @@
 package com.insideout.backend.domain.building.dto.request;
 
 import com.insideout.backend.domain.building.dto.CoordinateDTO;
+import com.insideout.backend.domain.building.dto.CampusGateDTO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,7 +14,9 @@ public record CampusCreateRequestDTO(
         String address,
         List<@NotNull @Valid CoordinateDTO> boundary,
         @Valid CoordinateDTO centroid,
-        @NotNull @Valid CoordinateDTO primaryEntrance,
+        @Valid CoordinateDTO primaryEntrance,
         String primaryEntranceName,
+        List<@NotNull @Valid CampusGateDTO> gates,
+        Boolean requiresFloorplan,
         Map<String, Object> meta
 ) {}

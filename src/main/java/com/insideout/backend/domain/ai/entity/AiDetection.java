@@ -126,4 +126,10 @@ public class AiDetection {
         this.committedEntityType = committedEntityType;
         this.committedEntityId = committedEntityId;
     }
+
+    public void markCommitted(String committedEntityType, UUID committedEntityId) {
+        this.status = "accepted";
+        this.committedEntityType = committedEntityType;
+        this.committedEntityId = committedEntityId;
+    }
 }

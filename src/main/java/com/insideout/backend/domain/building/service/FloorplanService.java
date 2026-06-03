@@ -28,6 +28,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
+import com.insideout.backend.global.infra.storage.service.S3StorageService;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,7 +40,9 @@ public class FloorplanService {
     private final FloorplanRepository floorplanRepository;
     private final UserRepository userRepository;
     private final ImageStorageService imageStorageService;
+    private final S3StorageService s3StorageService;
     private final TenantQueryFacade tenantQueryFacade;
+
 
     /**
      * 도면 이미지를 검증 및 업로드하고 DB에 저장합니다.
@@ -108,8 +112,9 @@ public class FloorplanService {
 
         Floorplan savedFloorplan = floorplanRepository.save(floorplan);
 
-        return FloorplanResponseDTO.from(savedFloorplan);
+        return FloorplanResponseDTO.from(savedFloorplan, s3StorageService.getPresignedUrlFromS3Url(savedFloorplan.getImageUrl()));
     }
+
 
     private String calculateSha256(MultipartFile file) {
         try {

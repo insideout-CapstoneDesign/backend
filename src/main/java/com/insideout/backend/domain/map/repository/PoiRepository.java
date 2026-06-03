@@ -1,9 +1,13 @@
 package com.insideout.backend.domain.map.repository;
 
 import com.insideout.backend.domain.map.entity.Poi;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +15,18 @@ import java.util.UUID;
 public interface PoiRepository extends JpaRepository<Poi, UUID> {
 
     Optional<Poi> findByPublicId(Long publicId);
+
+    @Query(value = """
+            SELECT
+                p.name AS name,
+                b.address AS address,
+                p.external_api_id AS externalApiId
+            FROM poi p
+                JOIN floor f ON f.id = p.floor_id
+                JOIN building b ON b.id = f.building_id
+                JOIN map_version mv ON mv.id = p.map_version_id
+            WHERE p.external_api_id IN (:externalApiIds)
+              AND mv.status = 'published'
+            """, nativeQuery = true)
+    List<RegisteredPoiSearchProjection> findRegisteredPlacesByExternalApiIds(@Param("externalApiIds") Collection<String> externalApiIds);
 }

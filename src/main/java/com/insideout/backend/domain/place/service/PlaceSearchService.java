@@ -6,6 +6,8 @@ import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
+import com.insideout.backend.domain.map.repository.PoiRepository;
+import com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection;
 import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
 import com.insideout.backend.global.apiPayload.exception.ProjectException;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class PlaceSearchService {
     private static final int MAX_RADIUS_METER = 20_000;
 
     private final BuildingRepository buildingRepository;
+    private final PoiRepository poiRepository;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
 
     public List<PlaceSearchItemResponse> search(String query, Double lat, Double lng, Integer radius) {
@@ -137,12 +140,19 @@ public class PlaceSearchService {
                 .collect(Collectors.toSet());
 
         if (!externalIds.isEmpty()) {
-            List<PlaceSearchItemResponse> additionalRegistered = buildingRepository
+            List<PlaceSearchItemResponse> additionalRegisteredBuildings = buildingRepository
                     .findRegisteredPlacesByExternalApiIds(externalIds)
                     .stream()
                     .map(this::toRegisteredSearchItem)
                     .toList();
-            additionalRegistered.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
+            additionalRegisteredBuildings.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
+
+            List<PlaceSearchItemResponse> additionalRegisteredPois = poiRepository
+                    .findRegisteredPlacesByExternalApiIds(externalIds)
+                    .stream()
+                    .map(this::toRegisteredSearchItem)
+                    .toList();
+            additionalRegisteredPois.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
         }
 
         for (PlaceSearchItemResponse external : externalPlaces) {
@@ -188,6 +198,19 @@ public class PlaceSearchService {
                 building.getLng(),
                 true,
                 building.getExternalApiId(),
+                null
+        );
+    }
+
+    private PlaceSearchItemResponse toRegisteredSearchItem(RegisteredPoiSearchProjection poi) {
+        return new PlaceSearchItemResponse(
+                poi.getName(),
+                poi.getAddress(),
+                null,
+                null,
+                null,
+                true,
+                poi.getExternalApiId(),
                 null
         );
     }

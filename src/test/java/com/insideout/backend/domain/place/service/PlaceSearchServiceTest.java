@@ -6,6 +6,8 @@ import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
+import com.insideout.backend.domain.map.repository.PoiRepository;
+import com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection;
 import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
 import com.insideout.backend.global.apiPayload.exception.ProjectException;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +41,9 @@ class PlaceSearchServiceTest {
     @Mock
     private BuildingRepository buildingRepository;
 
+    @Mock
+    private PoiRepository poiRepository;
+
     @InjectMocks
     private PlaceSearchService placeSearchService;
 
@@ -47,6 +52,7 @@ class PlaceSearchServiceTest {
         lenient().when(buildingRepository.searchRegisteredPlaces(anyString())).thenReturn(List.of());
         lenient().when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
         lenient().when(buildingRepository.findNearestRegisteredPlace(anyDouble(), anyDouble(), anyInt())).thenReturn(Optional.empty());
+        lenient().when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
     }
 
     @Test
@@ -150,6 +156,29 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void search_marksRegisteredPoiAsRegistered() {
+        when(buildingRepository.searchRegisteredPlaces("구찌"))
+                .thenReturn(List.of());
+        when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
+                .thenReturn(List.of());
+        when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
+                .thenReturn(List.of(
+                        poiProjection("구찌", "서울 중구 퇴계로 77", "22320326")
+                ));
+        when(kakaoPlaceSearchClient.searchByKeyword("구찌"))
+                .thenReturn(List.of(
+                        new PlaceSearchItemResponse("외부 구찌", "서울 중구 퇴계로 77", null, 37.5601, 126.9808, false, "22320326", null)
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSearchService.search("구찌", null, null, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("구찌");
+        assertThat(result.get(0).address()).isEqualTo("서울 중구 퇴계로 77");
+        assertThat(result.get(0).isRegistered()).isTrue();
+    }
+
+    @Test
     void search_withPartialCoordinates_throwsInvalidCoordinate() {
         assertThatThrownBy(() -> placeSearchService.search("스타벅스", 37.5, null, null))
                 .isInstanceOf(PlaceException.class)
@@ -247,6 +276,25 @@ class PlaceSearchServiceTest {
             @Override
             public Double getLng() {
                 return lng;
+            }
+
+            @Override
+            public String getExternalApiId() {
+                return externalApiId;
+            }
+        };
+    }
+
+    private RegisteredPoiSearchProjection poiProjection(String name, String address, String externalApiId) {
+        return new RegisteredPoiSearchProjection() {
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public String getAddress() {
+                return address;
             }
 
             @Override

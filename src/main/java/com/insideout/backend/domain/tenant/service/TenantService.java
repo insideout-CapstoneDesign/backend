@@ -1,5 +1,9 @@
 package com.insideout.backend.domain.tenant.service;
 
+import com.insideout.backend.domain.building.entity.Building;
+import com.insideout.backend.domain.building.repository.BuildingRepository;
+import com.insideout.backend.domain.map.enums.MapType;
+import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.tenant.dto.response.TenantSummaryResDTO;
 import com.insideout.backend.domain.tenant.dto.request.TenantCreateReqDTO;
 import com.insideout.backend.domain.tenant.entity.Tenant;
@@ -17,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -27,6 +32,8 @@ public class TenantService {
     private final TenantMembershipRepository tenantMembershipRepository;
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
+    private final BuildingRepository buildingRepository;
+    private final MapVersionRepository mapVersionRepository;
 
     /**
      * 유저가 소속된 모든 테넌트 목록을 반환합니다.
@@ -35,7 +42,27 @@ public class TenantService {
         List<TenantMembership> memberships = tenantMembershipRepository.findAllByUser_Id(userId);
 
         return memberships.stream()
-                .map(m -> TenantSummaryResDTO.from(m.getTenant(), m.getRole(), m.getJoinedAt()))
+                .map(membership -> {
+                    List<Building> buildings = buildingRepository.findByTenant_IdOrderByCreatedAtDesc(membership.getTenant().getId());
+                    Set<UUID> publishedBuildingIds = buildings.isEmpty()
+                            ? Set.of()
+                            : mapVersionRepository.findBuildingIdsByMapTypeAndStatus(
+                                    buildings.stream().map(Building::getId).toList(),
+                                    MapType.BUILDING,
+                                    "published"
+                            );
+
+                    boolean approvedByPublishedMap =
+                            "approved".equals(membership.getTenant().getStatus()) || !publishedBuildingIds.isEmpty();
+
+                    return TenantSummaryResDTO.from(
+                            membership.getTenant(),
+                            membership.getRole(),
+                            membership.getJoinedAt(),
+                            approvedByPublishedMap,
+                            buildings.size()
+                    );
+                })
                 .toList();
     }
 

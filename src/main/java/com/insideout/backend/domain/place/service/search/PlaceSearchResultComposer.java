@@ -160,7 +160,9 @@ final class PlaceSearchResultComposer {
     private static List<PlaceSearchItemResponse> sortWithoutCoordinates(List<PlaceSearchItemResponse> items, String query) {
         return items.stream()
                 .sorted(Comparator
-                        .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.keywordScore(item, query)).reversed()
+                        .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.canonicalKeywordScore(item, query)).reversed()
+                        .thenComparing(Comparator.comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.displayKeywordScore(item, query)).reversed())
+                        .thenComparing(item -> StringUtils.hasText(item.parentBuildingName()))
                         .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
                         .thenComparing(item -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(item))))
                 .toList();
@@ -178,7 +180,9 @@ final class PlaceSearchResultComposer {
                 .map(item -> toScoredPlace(item, lat, lng))
                 .filter(scored -> radius == null || (scored.distanceMeter() != null && scored.distanceMeter() <= radius))
                 .sorted(Comparator
-                        .comparingInt((ScoredPlace scored) -> PlaceSearchSupport.keywordScore(scored.item(), query)).reversed()
+                        .comparingInt((ScoredPlace scored) -> PlaceSearchSupport.canonicalKeywordScore(scored.item(), query)).reversed()
+                        .thenComparing(Comparator.comparingInt((ScoredPlace scored) -> PlaceSearchSupport.displayKeywordScore(scored.item(), query)).reversed())
+                        .thenComparing(scored -> StringUtils.hasText(scored.item().parentBuildingName()))
                         .thenComparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
                         .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
                         .thenComparing(scored -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(scored.item()))))
@@ -212,10 +216,22 @@ final class PlaceSearchResultComposer {
             return existing.isRegistered() ? 1 : -1;
         }
 
-        int existingScore = PlaceSearchSupport.keywordScore(existing, query);
-        int candidateScore = PlaceSearchSupport.keywordScore(candidate, query);
+        int existingScore = PlaceSearchSupport.canonicalKeywordScore(existing, query);
+        int candidateScore = PlaceSearchSupport.canonicalKeywordScore(candidate, query);
         if (existingScore != candidateScore) {
             return Integer.compare(existingScore, candidateScore);
+        }
+
+        int existingDisplayScore = PlaceSearchSupport.displayKeywordScore(existing, query);
+        int candidateDisplayScore = PlaceSearchSupport.displayKeywordScore(candidate, query);
+        if (existingDisplayScore != candidateDisplayScore) {
+            return Integer.compare(existingDisplayScore, candidateDisplayScore);
+        }
+
+        boolean existingIsPoi = StringUtils.hasText(existing.parentBuildingName());
+        boolean candidateIsPoi = StringUtils.hasText(candidate.parentBuildingName());
+        if (existingIsPoi != candidateIsPoi) {
+            return existingIsPoi ? -1 : 1;
         }
 
         if (lat != null && lng != null

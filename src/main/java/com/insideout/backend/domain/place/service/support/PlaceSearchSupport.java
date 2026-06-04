@@ -67,14 +67,18 @@ public final class PlaceSearchSupport {
         return item.name();
     }
 
-    public static int keywordScore(PlaceSearchItemResponse item, String query) {
+    public static int canonicalKeywordScore(PlaceSearchItemResponse item, String query) {
         if (item == null) {
             return 0;
         }
-        return Math.max(
-                keywordScore(item.name(), query),
-                keywordScore(searchableText(item), query)
-        );
+        return keywordScore(item.name(), query);
+    }
+
+    public static int displayKeywordScore(PlaceSearchItemResponse item, String query) {
+        if (item == null) {
+            return 0;
+        }
+        return keywordScore(searchableText(item), query);
     }
 
     public static double round(double value, int precision) {
@@ -102,7 +106,7 @@ public final class PlaceSearchSupport {
         return "name:" + normalizeText(item.name()) + "|" + normalizeText(item.address());
     }
 
-    private static int keywordScore(String name, String query) {
+    public static int keywordScore(String name, String query) {
         String target = normalizeText(name);
         String keyword = normalizeText(query);
         if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {

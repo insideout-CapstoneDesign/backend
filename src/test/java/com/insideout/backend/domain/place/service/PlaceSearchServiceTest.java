@@ -176,7 +176,7 @@ class PlaceSearchServiceTest {
                 .thenReturn(List.of());
         when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
                 .thenReturn(List.of(
-                        poiProjection("구찌", "서울 중구 퇴계로 77", "22320326")
+                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326")
                 ));
         when(kakaoPlaceSearchClient.searchByKeyword("구찌"))
                 .thenReturn(List.of(
@@ -189,6 +189,29 @@ class PlaceSearchServiceTest {
         assertThat(result.get(0).name()).isEqualTo("구찌");
         assertThat(result.get(0).address()).isEqualTo("서울 중구 퇴계로 77");
         assertThat(result.get(0).isRegistered()).isTrue();
+        assertThat(result.get(0).parentBuildingName()).isEqualTo("신세계백화점 본점 디 에스테이트");
+        assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
+    }
+
+    @Test
+    void search_exactPoiQuery_prefersBuildingQualifiedLabel() {
+        when(buildingRepository.searchRegisteredPlaces("신세계백화점 본점 디 에스테이트 구찌"))
+                .thenReturn(List.of());
+        when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
+                .thenReturn(List.of(
+                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326")
+                ));
+        when(kakaoPlaceSearchClient.searchByKeyword("신세계백화점 본점 디 에스테이트 구찌"))
+                .thenReturn(List.of(
+                        new PlaceSearchItemResponse("구찌", "서울 중구 퇴계로 77", null, 37.5601, 126.9808, false, "22320326", null),
+                        new PlaceSearchItemResponse("구찌", "서울 중구 퇴계로 63", null, 37.5609, 126.9812, false, "99999999", null)
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSearchService.search("신세계백화점 본점 디 에스테이트 구찌", null, null, null, null);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).name()).isEqualTo("구찌");
+        assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
     }
 
     @Test
@@ -298,7 +321,7 @@ class PlaceSearchServiceTest {
         };
     }
 
-    private RegisteredPoiSearchProjection poiProjection(String name, String address, String externalApiId) {
+    private RegisteredPoiSearchProjection poiProjection(String name, String address, String buildingName, String externalApiId) {
         return new RegisteredPoiSearchProjection() {
             @Override
             public String getName() {
@@ -308,6 +331,11 @@ class PlaceSearchServiceTest {
             @Override
             public String getAddress() {
                 return address;
+            }
+
+            @Override
+            public String getBuildingName() {
+                return buildingName;
             }
 
             @Override

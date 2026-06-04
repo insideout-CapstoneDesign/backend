@@ -109,6 +109,29 @@ class PlaceDetailServiceTest {
         assertThat(result.get().isRegistered()).isTrue();
     }
 
+    @Test
+    void getDetail_withoutFloorplan_returnsFloorsAndPoisAsIndoorMapTrue() {
+        Building mockBuilding = building();
+        MapVersion mockMapVersion = mapVersion();
+        Floor mockFloor = floor(mockBuilding);
+        Poi mockPoi = poi(mockFloor, mockMapVersion, "구찌", "22320326");
+        BuildingDirectory mockDirectory = directory(mockMapVersion);
+
+        when(buildingRepository.findFirstByExternalApiId("18217490")).thenReturn(Optional.of(mockBuilding));
+        when(buildingDirectoryRepository.findByIdAndIsPublicTrue(BUILDING_ID)).thenReturn(Optional.of(mockDirectory));
+        when(floorRepository.findAllByBuilding_IdOrderByLevelDesc(BUILDING_ID)).thenReturn(List.of(mockFloor));
+        when(floorplanRepository.findAllByFloorIdInAndIsCurrentTrue(anyList())).thenReturn(List.of());
+        when(poiRepository.findAllByMapVersionIdWithFloor(MAP_VERSION_ID)).thenReturn(List.of(mockPoi));
+
+        Optional<PlaceDetailResponse> result = placeDetailService.getDetail(null, "18217490");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().hasIndoorMap()).isTrue();
+        assertThat(result.get().floors()).hasSize(1);
+        assertThat(result.get().floors().get(0).pois()).extracting(PlaceDetailResponse.PoiResponse::name)
+                .containsExactly("구찌");
+    }
+
     private Building building() {
         Building building = mock(Building.class);
         lenient().when(building.getId()).thenReturn(BUILDING_ID);

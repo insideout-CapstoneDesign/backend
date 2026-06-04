@@ -1,7 +1,7 @@
 package com.insideout.backend.domain.place.service.suggest;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
-import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
@@ -30,6 +30,7 @@ public class PlaceSuggestService {
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
     private final PlaceSearchIndexingService placeSearchIndexingService;
     private final BuildingRepository buildingRepository;
+    private final PoiRepository poiRepository;
 
     public List<PlaceSearchItemResponse> suggest(String query, Double lat, Double lng, Integer size) {
         String normalizedQuery = validateAndNormalizeQuery(query);
@@ -63,8 +64,8 @@ public class PlaceSuggestService {
             return List.of();
         }
 
-        Map<String, BuildingSearchProjection> registeredByExternalApiId =
-                PlaceSuggestResultMapper.resolveRegisteredMap(mergedSuggested, buildingRepository);
+        Map<String, PlaceSearchItemResponse> registeredByExternalApiId =
+                PlaceSuggestResultMapper.resolveRegisteredMap(mergedSuggested, buildingRepository, poiRepository);
 
         return mergedSuggested.stream()
                 .map(item -> PlaceSuggestResultMapper.toResponse(item, registeredByExternalApiId, lat, lng))

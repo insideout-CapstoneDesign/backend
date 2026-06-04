@@ -3,6 +3,7 @@ package com.insideout.backend.domain.place.service.search;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
 import com.insideout.backend.domain.map.repository.PoiRepository;
+import com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.service.support.PlaceSearchSupport;
 import org.springframework.util.StringUtils;
@@ -59,6 +60,23 @@ final class PlaceSearchResultComposer {
                 building.getLng(),
                 true,
                 building.getExternalApiId(),
+                null,
+                null,
+                building.getName()
+        );
+    }
+
+    static PlaceSearchItemResponse toRegisteredPoiSearchItem(RegisteredPoiSearchProjection poi) {
+        return new PlaceSearchItemResponse(
+                poi.getName(),
+                poi.getAddress(),
+                null,
+                null,
+                null,
+                true,
+                poi.getExternalApiId(),
+                null,
+                poi.getBuildingName(),
                 null
         );
     }
@@ -99,16 +117,7 @@ final class PlaceSearchResultComposer {
             List<PlaceSearchItemResponse> additionalRegisteredPois = poiRepository
                     .findRegisteredPlacesByExternalApiIds(externalIds)
                     .stream()
-                    .map(item -> new PlaceSearchItemResponse(
-                            item.getName(),
-                            item.getAddress(),
-                            null,
-                            null,
-                            null,
-                            true,
-                            item.getExternalApiId(),
-                            null
-                    ))
+                    .map(PlaceSearchResultComposer::toRegisteredPoiSearchItem)
                     .toList();
             additionalRegisteredPois.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
         }
@@ -142,16 +151,18 @@ final class PlaceSearchResultComposer {
                 registered.lng() != null ? registered.lng() : external.lng(),
                 true,
                 registered.externalApiId(),
-                external.distanceMeters()
+                external.distanceMeters(),
+                registered.parentBuildingName(),
+                registered.displayName()
         );
     }
 
     private static List<PlaceSearchItemResponse> sortWithoutCoordinates(List<PlaceSearchItemResponse> items, String query) {
         return items.stream()
                 .sorted(Comparator
-                        .comparingInt((PlaceSearchItemResponse item) -> keywordScore(item.name(), query)).reversed()
+                        .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.keywordScore(item, query)).reversed()
                         .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
-                        .thenComparing(item -> PlaceSearchSupport.normalizeText(item.name())))
+                        .thenComparing(item -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(item))))
                 .toList();
     }
 
@@ -167,10 +178,10 @@ final class PlaceSearchResultComposer {
                 .map(item -> toScoredPlace(item, lat, lng))
                 .filter(scored -> radius == null || (scored.distanceMeter() != null && scored.distanceMeter() <= radius))
                 .sorted(Comparator
-                        .comparingInt((ScoredPlace scored) -> keywordScore(scored.item().name(), query)).reversed()
+                        .comparingInt((ScoredPlace scored) -> PlaceSearchSupport.keywordScore(scored.item(), query)).reversed()
                         .thenComparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
                         .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
-                        .thenComparing(scored -> PlaceSearchSupport.normalizeText(scored.item().name())))
+                        .thenComparing(scored -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(scored.item()))))
                 .limit(size)
                 .map(ScoredPlace::toResponse)
                 .toList();
@@ -201,8 +212,8 @@ final class PlaceSearchResultComposer {
             return existing.isRegistered() ? 1 : -1;
         }
 
-        int existingScore = keywordScore(existing.name(), query);
-        int candidateScore = keywordScore(candidate.name(), query);
+        int existingScore = PlaceSearchSupport.keywordScore(existing, query);
+        int candidateScore = PlaceSearchSupport.keywordScore(candidate, query);
         if (existingScore != candidateScore) {
             return Integer.compare(existingScore, candidateScore);
         }
@@ -224,24 +235,6 @@ final class PlaceSearchResultComposer {
         return 0;
     }
 
-    private static int keywordScore(String name, String query) {
-        String target = PlaceSearchSupport.normalizeText(name);
-        String keyword = PlaceSearchSupport.normalizeText(query);
-        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
-            return 0;
-        }
-        if (target.equals(keyword)) {
-            return 3;
-        }
-        if (target.startsWith(keyword)) {
-            return 2;
-        }
-        if (target.contains(keyword)) {
-            return 1;
-        }
-        return 0;
-    }
-
     private static ScoredPlace toScoredPlace(PlaceSearchItemResponse item, double lat, double lng) {
         if (item.lat() == null || item.lng() == null) {
             return new ScoredPlace(item, null);
@@ -259,7 +252,9 @@ final class PlaceSearchResultComposer {
                     item.lng(),
                     item.isRegistered(),
                     item.externalApiId(),
-                    distanceMeter
+                    distanceMeter,
+                    item.parentBuildingName(),
+                    item.displayName()
             );
         }
     }

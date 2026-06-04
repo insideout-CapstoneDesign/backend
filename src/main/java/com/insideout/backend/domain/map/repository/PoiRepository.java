@@ -54,6 +54,7 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
             SELECT
                 p.name AS name,
                 b.address AS address,
+                b.name AS buildingName,
                 p.external_api_id AS externalApiId
             FROM poi p
                 JOIN floor f ON f.id = p.floor_id

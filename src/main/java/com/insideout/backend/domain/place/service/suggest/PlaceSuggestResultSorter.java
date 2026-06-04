@@ -13,7 +13,7 @@ final class PlaceSuggestResultSorter {
 
     static Comparator<PlaceSearchItemResponse> comparator(String query, Double lat, Double lng) {
         Comparator<PlaceSearchItemResponse> comparator = Comparator
-                .comparingInt((PlaceSearchItemResponse item) -> keywordScore(item.name(), query)).reversed();
+                .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.keywordScore(item, query)).reversed();
 
         if (lat != null && lng != null) {
             comparator = comparator.thenComparing(
@@ -24,25 +24,6 @@ final class PlaceSuggestResultSorter {
 
         return comparator
                 .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
-                .thenComparing(item -> PlaceSearchSupport.normalizeText(item.name()));
-    }
-
-    private static int keywordScore(String name, String query) {
-        String target = PlaceSearchSupport.normalizeText(name);
-        String keyword = PlaceSearchSupport.normalizeText(query);
-        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
-            return 0;
-        }
-        if (target.equals(keyword)) {
-            return 3;
-        }
-        if (target.startsWith(keyword)) {
-            return 2;
-        }
-        if (target.contains(keyword)) {
-            return 1;
-        }
-        return 0;
+                .thenComparing(item -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(item)));
     }
 }
-

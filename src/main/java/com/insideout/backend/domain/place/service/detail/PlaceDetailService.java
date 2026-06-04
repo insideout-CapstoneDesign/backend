@@ -19,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,25 +73,23 @@ public class PlaceDetailService {
                         .map(Floor::getId)
                         .collect(Collectors.toSet());
 
-                if (!currentFloorIds.isEmpty()) {
-                    Map<UUID, List<Poi>> poisByFloorId = poiRepository.findAllByMapVersionIdWithFloor(publishedMapVersion.getId()).stream()
-                            .collect(Collectors.groupingBy(
-                                    poi -> poi.getFloor().getId(),
-                                    LinkedHashMap::new,
-                                    Collectors.toList()
-                            ));
+                Map<UUID, List<Poi>> poisByFloorId = poiRepository.findAllByMapVersionIdWithFloor(publishedMapVersion.getId()).stream()
+                        .collect(Collectors.groupingBy(
+                                poi -> poi.getFloor().getId(),
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        ));
 
-                    floors = allFloors.stream()
-                            .filter(floor -> currentFloorIds.contains(floor.getId()))
-                            .map(floor -> new PlaceDetailResponse.FloorResponse(
-                                    floor.getId(),
-                                    floor.getLevel(),
-                                    floor.getName(),
-                                    toPoiResponses(poisByFloorId.getOrDefault(floor.getId(), List.of()))
-                            ))
-                            .toList();
-                    hasIndoorMap = !floors.isEmpty();
-                }
+                floors = allFloors.stream()
+                        .map(floor -> new PlaceDetailResponse.FloorResponse(
+                                floor.getId(),
+                                floor.getLevel(),
+                                floor.getName(),
+                                toPoiResponses(poisByFloorId.getOrDefault(floor.getId(), List.of()))
+                        ))
+                        .toList();
+                hasIndoorMap = floors.stream().anyMatch(floor -> !floor.pois().isEmpty())
+                        || !currentFloorIds.isEmpty();
             }
         }
 
@@ -175,17 +172,17 @@ public class PlaceDetailService {
         String selectedAddress = buildingDirectory != null ? buildingDirectory.getAddress() : building.getAddress();
         String selectedExternalApiId = selectedPoi != null
                 ? selectedPoi.getExternalApiId()
-                : buildingDirectory != null ? building.getExternalApiId() : building.getExternalApiId();
-        boolean registered = buildingDirectory != null && buildingDirectory.isPublic();
+                : building.getExternalApiId();
+        boolean isRegistered = buildingDirectory != null && buildingDirectory.isPublic();
 
-            return new ResolvedPlace(
+        return new ResolvedPlace(
                 selectedPoi != null ? selectedPoi.getId() : building.getId(),
                 selectedExternalApiId,
                 selectedName,
                 selectedAddress,
                 building,
                 selectedPoi,
-                registered
+                isRegistered
         );
     }
 

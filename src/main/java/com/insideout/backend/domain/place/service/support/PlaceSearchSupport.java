@@ -41,6 +41,42 @@ public final class PlaceSearchSupport {
         return value.replaceAll("\\s+", "").toLowerCase();
     }
 
+    public static String searchableText(PlaceSearchItemResponse item) {
+        if (item == null) {
+            return "";
+        }
+
+        if (StringUtils.hasText(item.parentBuildingName()) && StringUtils.hasText(item.name())) {
+            return item.parentBuildingName().trim() + item.name().trim();
+        }
+
+        if (StringUtils.hasText(item.displayName())) {
+            return item.displayName();
+        }
+
+        return item.name();
+    }
+
+    public static String displayLabel(PlaceSearchItemResponse item) {
+        if (item == null) {
+            return "";
+        }
+        if (StringUtils.hasText(item.displayName())) {
+            return item.displayName();
+        }
+        return item.name();
+    }
+
+    public static int keywordScore(PlaceSearchItemResponse item, String query) {
+        if (item == null) {
+            return 0;
+        }
+        return Math.max(
+                keywordScore(item.name(), query),
+                keywordScore(searchableText(item), query)
+        );
+    }
+
     public static double round(double value, int precision) {
         double scale = Math.pow(10, precision);
         return Math.round(value * scale) / scale;
@@ -64,5 +100,23 @@ public final class PlaceSearchSupport {
             return "geo:" + normalizeText(item.name()) + ":" + round(item.lat(), 4) + ":" + round(item.lng(), 4);
         }
         return "name:" + normalizeText(item.name()) + "|" + normalizeText(item.address());
+    }
+
+    private static int keywordScore(String name, String query) {
+        String target = normalizeText(name);
+        String keyword = normalizeText(query);
+        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
+            return 0;
+        }
+        if (target.equals(keyword)) {
+            return 3;
+        }
+        if (target.startsWith(keyword)) {
+            return 2;
+        }
+        if (target.contains(keyword)) {
+            return 1;
+        }
+        return 0;
     }
 }

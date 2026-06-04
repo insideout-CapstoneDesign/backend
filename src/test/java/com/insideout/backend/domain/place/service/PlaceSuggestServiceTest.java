@@ -2,6 +2,7 @@ package com.insideout.backend.domain.place.service;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
@@ -44,6 +45,9 @@ class PlaceSuggestServiceTest {
     private BuildingRepository buildingRepository;
 
     @Mock
+    private PoiRepository poiRepository;
+
+    @Mock
     private KakaoPlaceSearchClient kakaoPlaceSearchClient;
 
     @Mock
@@ -57,6 +61,7 @@ class PlaceSuggestServiceTest {
         lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString())).thenReturn(List.of());
         lenient().when(kakaoPlaceSearchClient.searchByKeyword(anyString(), anyDouble(), anyDouble(), any())).thenReturn(List.of());
         lenient().when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
+        lenient().when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
     }
 
     @Test
@@ -189,6 +194,42 @@ class PlaceSuggestServiceTest {
     }
 
     @Test
+    void suggest_exactMatchPoiWithBuildingNamePrioritizesDisplayLabel() {
+        when(placeSuggestElasticsearchClient.suggest("신세계백화점 본점 디 에스테이트 구찌", 10, null, null))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "구찌",
+                                "서울 중구 퇴계로 77",
+                                "서울 중구 퇴계로 77",
+                                "22320326",
+                                37.5601,
+                                126.9808
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "구찌",
+                                "서울 중구 소공로 63",
+                                "서울 중구 소공로 63",
+                                "7969138",
+                                37.5609,
+                                126.9810
+                        )
+                ));
+        when(buildingRepository.findRegisteredPlacesByExternalApiIds(Set.of("22320326", "7969138")))
+                .thenReturn(List.of());
+        when(poiRepository.findRegisteredPlacesByExternalApiIds(Set.of("22320326", "7969138")))
+                .thenReturn(List.of(
+                        registeredPoiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326")
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계백화점 본점 디 에스테이트 구찌", null, null, 10);
+
+        assertThat(result).isNotEmpty();
+        assertThat(result.get(0).name()).isEqualTo("구찌");
+        assertThat(result.get(0).parentBuildingName()).isEqualTo("신세계백화점 본점 디 에스테이트");
+        assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
+    }
+
+    @Test
     void suggest_withCoordinate_evenWhenElasticsearchHasEnoughResults_fetchesNearbyFallback() {
         when(placeSuggestElasticsearchClient.suggest("스타벅스", 10, 37.5609, 126.9810))
                 .thenReturn(List.of(
@@ -297,6 +338,35 @@ class PlaceSuggestServiceTest {
             @Override
             public Double getLng() {
                 return lng;
+            }
+
+            @Override
+            public String getExternalApiId() {
+                return externalApiId;
+            }
+        };
+    }
+
+    private com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection registeredPoiProjection(
+            String name,
+            String address,
+            String buildingName,
+            String externalApiId
+    ) {
+        return new com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection() {
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public String getAddress() {
+                return address;
+            }
+
+            @Override
+            public String getBuildingName() {
+                return buildingName;
             }
 
             @Override

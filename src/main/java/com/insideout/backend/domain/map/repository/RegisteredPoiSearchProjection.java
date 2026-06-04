@@ -5,5 +5,7 @@ public interface RegisteredPoiSearchProjection {
 
     String getAddress();
 
+    String getBuildingName();
+
     String getExternalApiId();
 }

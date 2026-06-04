@@ -11,6 +11,8 @@ import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.CampusRepository;
 import com.insideout.backend.domain.building.entity.Floor;
 import com.insideout.backend.domain.building.repository.FloorRepository;
+import com.insideout.backend.domain.map.enums.MapType;
+import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.tenant.entity.Tenant;
 import com.insideout.backend.domain.tenant.repository.TenantRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
@@ -40,6 +42,7 @@ public class BuildingService {
     private final FloorplanRepository floorplanRepository;
     private final AiDetectionRepository aiDetectionRepository;
     private final S3StorageService s3StorageService;
+    private final MapVersionRepository mapVersionRepository;
 
     /**
      * 특정 테넌트에 속한 건물 목록을 최신순으로 조회합니다.
@@ -69,6 +72,14 @@ public class BuildingService {
         List<UUID> buildingIds = buildings.stream()
                 .map(Building::getId)
                 .toList();
+        Map<UUID, Boolean> publishedByBuildingId = mapVersionRepository
+                .findBuildingIdsByMapTypeAndStatus(buildingIds, MapType.BUILDING, "published")
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        java.util.function.Function.identity(),
+                        ignored -> true,
+                        (existing, replacement) -> existing
+                ));
 
         List<Floor> allFloors = floorRepository.findAllByBuilding_IdInOrderByLevelDesc(buildingIds);
         Map<UUID, List<Floor>> floorsByBuildingId = allFloors.stream()
@@ -112,7 +123,8 @@ public class BuildingService {
                         floorsByBuildingId.getOrDefault(building.getId(), List.of()),
                         floorplanByFloorId,
                         presignedUrlByFloorplanId,
-                        analysisCompletedByFloorplanId
+                        analysisCompletedByFloorplanId,
+                        Boolean.TRUE.equals(publishedByBuildingId.get(building.getId()))
                 ))
                 .toList();
     }
@@ -170,5 +182,32 @@ public class BuildingService {
         }
 
         return BuildingSummaryDTO.from(savedBuilding, savedFloors);
+    }
+
+    /**
+     * 건물에 층을 추가합니다.
+     */
+    @Transactional
+    public BuildingSummaryDTO addFloor(UUID tenantId, UUID buildingId, com.insideout.backend.domain.building.dto.request.FloorRequestDTO req) {
+        Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+
+        // 해당 건물에 동일한 level 또는 name이 있는지 확인
+        boolean exists = floorRepository.findAllByBuilding_IdInOrderByLevelDesc(List.of(buildingId)).stream()
+                .anyMatch(f -> f.getLevel() == req.level() || f.getName().equalsIgnoreCase(req.name()));
+        if (exists) {
+            throw new BuildingException(BuildingErrorCode.DUPLICATE_FLOOR);
+        }
+
+        Floor floor = Floor.builder()
+                .tenantId(tenantId)
+                .building(building)
+                .level(req.level())
+                .name(req.name())
+                .build();
+
+        floorRepository.save(floor);
+
+        return getBuilding(tenantId, buildingId);
     }
 }

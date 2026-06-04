@@ -85,4 +85,8 @@ public class FloorplanCalibration {
         this.rotationDeg = rotationDeg;
         this.rmseM = rmseM;
     }
+
+    public void updateAffine(List<Double> affine) {
+        this.affine = affine;
+    }
 }

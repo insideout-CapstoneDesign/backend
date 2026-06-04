@@ -103,6 +103,11 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.NOT_FOUND,
         "BUILDING404_6",
         "필수 POI 카테고리를 찾을 수 없습니다."
+    ),
+    DUPLICATE_FLOOR(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_13",
+        "이미 존재하는 층 레벨 또는 이름입니다."
     );
 
     private final HttpStatus status;

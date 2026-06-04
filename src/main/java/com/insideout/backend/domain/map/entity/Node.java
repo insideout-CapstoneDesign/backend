@@ -127,4 +127,11 @@ public class Node {
         this.source = source != null ? source : "manual";
         this.aiDetectionId = aiDetectionId;
     }
+
+    public void updateKindCode(String kindCode) {
+        if (kindCode == null || kindCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("kindCode cannot be null or empty");
+        }
+        this.kindCode = kindCode;
+    }
 }

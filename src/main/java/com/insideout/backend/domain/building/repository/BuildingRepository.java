@@ -22,6 +22,8 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
 
     List<Building> findByTenant_IdOrderByCreatedAtDesc(UUID tenantId);
 
+    List<Building> findByTenant_IdIn(Collection<UUID> tenantIds);
+
     @Query(value = """
             SELECT
                 b.id AS id,

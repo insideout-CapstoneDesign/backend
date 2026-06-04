@@ -12,4 +12,10 @@ import java.util.UUID;
 public interface VerticalConnectorNodeRepository extends JpaRepository<VerticalConnectorNode, VerticalConnectorNodeId> {
 
     List<VerticalConnectorNode> findByConnectorMapVersionId(UUID mapVersionId);
+
+    List<VerticalConnectorNode> findByNodeIdIn(List<UUID> nodeIds);
+
+    void deleteByConnectorIdAndFloorId(UUID connectorId, UUID floorId);
+
+    void deleteByConnectorId(UUID connectorId);
 }

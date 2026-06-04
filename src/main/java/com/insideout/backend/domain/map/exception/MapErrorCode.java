@@ -58,6 +58,21 @@ public enum MapErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "MAP400_10",
         "장애물의 floor가 해당 building에 속하지 않습니다."
+    ),
+    PUBLISH_REQUIRES_ENTRANCE_CALIBRATION(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_11",
+        "출입구 캘리브레이션이 완료되지 않아 최종 배포할 수 없습니다."
+    ),
+    PUBLISH_REQUIRES_POI_EXTERNAL_MAPPING(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_12",
+        "외부 장소 매핑 검토가 끝나지 않은 POI가 있어 최종 배포할 수 없습니다."
+    ),
+    MAP_VERSION_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "MAP404_1",
+        "해당 건물의 맵 버전을 찾을 수 없습니다."
     );
 
     private final HttpStatus status;

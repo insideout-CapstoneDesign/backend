@@ -127,4 +127,8 @@ public class Node {
         this.source = source != null ? source : "manual";
         this.aiDetectionId = aiDetectionId;
     }
+
+    public void updateKindCode(String kindCode) {
+        this.kindCode = kindCode;
+    }
 }

@@ -12,6 +12,7 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.Polygon;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,6 +28,10 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Poi {
+
+    private static final String EXTERNAL_MAPPING_STATUS_ATTR = "externalMappingStatus";
+    private static final String EXTERNAL_MAPPING_NAME_ATTR = "externalMappingPlaceName";
+    private static final String EXTERNAL_MAPPING_ADDRESS_ATTR = "externalMappingAddress";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -155,5 +160,86 @@ public class Poi {
         this.externalApiId = externalApiId;
         this.source = source != null ? source : "manual";
         this.aiDetectionId = aiDetectionId;
+    }
+
+    public void updateAnchorNodeId(UUID anchorNodeId) {
+        this.anchorNodeId = anchorNodeId;
+    }
+
+    public void updateExternalMapping(String externalApiId, Point geomWgs84) {
+        updateExternalMapping(externalApiId, geomWgs84, null, null);
+    }
+
+    public void updateExternalMapping(String externalApiId, Point geomWgs84, String placeName, String address) {
+        this.externalApiId = externalApiId;
+        this.geomWgs84 = geomWgs84;
+        updateExternalMappingMetadata(placeName, address);
+        updateExternalMappingStatus(externalApiId != null ? "confirmed" : "pending");
+    }
+
+    public void markExternalMappingExcluded() {
+        this.externalApiId = null;
+        this.geomWgs84 = null;
+        clearExternalMappingMetadata();
+        updateExternalMappingStatus("excluded");
+    }
+
+    public String getExternalMappingStatus() {
+        if (externalApiId != null && !externalApiId.isBlank()) {
+            return "confirmed";
+        }
+
+        Object rawStatus = attrs != null ? attrs.get(EXTERNAL_MAPPING_STATUS_ATTR) : null;
+        if (rawStatus instanceof String status && !status.isBlank()) {
+            return status;
+        }
+        return "pending";
+    }
+
+    public String getExternalMappingPlaceName() {
+        return getStringAttr(EXTERNAL_MAPPING_NAME_ATTR);
+    }
+
+    public String getExternalMappingAddress() {
+        return getStringAttr(EXTERNAL_MAPPING_ADDRESS_ATTR);
+    }
+
+    private String getStringAttr(String key) {
+        Object rawValue = attrs != null ? attrs.get(key) : null;
+        if (rawValue instanceof String value && !value.isBlank()) {
+            return value;
+        }
+        return null;
+    }
+
+    private void clearExternalMappingMetadata() {
+        updateExternalMappingMetadata(null, null);
+    }
+
+    private void updateExternalMappingMetadata(String placeName, String address) {
+        Map<String, Object> nextAttrs = new LinkedHashMap<>(attrs != null ? attrs : Map.of());
+        if (placeName == null || placeName.isBlank()) {
+            nextAttrs.remove(EXTERNAL_MAPPING_NAME_ATTR);
+        } else {
+            nextAttrs.put(EXTERNAL_MAPPING_NAME_ATTR, placeName);
+        }
+
+        if (address == null || address.isBlank()) {
+            nextAttrs.remove(EXTERNAL_MAPPING_ADDRESS_ATTR);
+        } else {
+            nextAttrs.put(EXTERNAL_MAPPING_ADDRESS_ATTR, address);
+        }
+
+        this.attrs = nextAttrs;
+    }
+
+    private void updateExternalMappingStatus(String status) {
+        Map<String, Object> nextAttrs = new LinkedHashMap<>(attrs != null ? attrs : Map.of());
+        if (status == null || status.isBlank() || "pending".equals(status)) {
+            nextAttrs.remove(EXTERNAL_MAPPING_STATUS_ATTR);
+        } else {
+            nextAttrs.put(EXTERNAL_MAPPING_STATUS_ATTR, status);
+        }
+        this.attrs = nextAttrs;
     }
 }

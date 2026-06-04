@@ -12,6 +12,10 @@ import java.util.UUID;
 public record MapEditorInitResponseDTO(
         UUID buildingId,
         String buildingName,
+        String buildingAddress,
+        String buildingExternalApiId,
+        Double buildingLatitude,
+        Double buildingLongitude,
         UUID floorId,
         String floorName,
         UUID floorplanId,
@@ -47,6 +51,10 @@ public record MapEditorInitResponseDTO(
         return new MapEditorInitResponseDTO(
                 building.getId(),
                 building.getName(),
+                building.getAddress(),
+                building.getExternalApiId(),
+                resolveBuildingLatitude(building),
+                resolveBuildingLongitude(building),
                 floor.getId(),
                 floor.getName(),
                 floorplan != null ? floorplan.getId() : null,
@@ -64,5 +72,53 @@ public record MapEditorInitResponseDTO(
                 zones,
                 floorplanObjects
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Double resolveBuildingLatitude(Building building) {
+        Object location = building.getMeta() != null ? building.getMeta().get("location") : null;
+        if (location instanceof java.util.Map<?, ?> map) {
+            Object latitude = map.get("latitude");
+            if (latitude instanceof Number number) {
+                return number.doubleValue();
+            }
+            if (latitude instanceof String value) {
+                try {
+                    return Double.parseDouble(value);
+                } catch (NumberFormatException ignored) {
+                    // noop
+                }
+            }
+        }
+
+        if (building.getFootprint() != null) {
+            org.locationtech.jts.geom.Point centroid = building.getFootprint().getCentroid();
+            return centroid != null ? centroid.getY() : null;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Double resolveBuildingLongitude(Building building) {
+        Object location = building.getMeta() != null ? building.getMeta().get("location") : null;
+        if (location instanceof java.util.Map<?, ?> map) {
+            Object longitude = map.get("longitude");
+            if (longitude instanceof Number number) {
+                return number.doubleValue();
+            }
+            if (longitude instanceof String value) {
+                try {
+                    return Double.parseDouble(value);
+                } catch (NumberFormatException ignored) {
+                    // noop
+                }
+            }
+        }
+
+        if (building.getFootprint() != null) {
+            org.locationtech.jts.geom.Point centroid = building.getFootprint().getCentroid();
+            return centroid != null ? centroid.getX() : null;
+        }
+        return null;
     }
 }

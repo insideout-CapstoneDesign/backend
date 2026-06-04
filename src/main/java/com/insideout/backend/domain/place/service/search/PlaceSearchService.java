@@ -2,6 +2,7 @@ package com.insideout.backend.domain.place.service.search;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
@@ -28,6 +29,7 @@ public class PlaceSearchService {
     private static final int MAX_SEARCH_SIZE = 100;
 
     private final BuildingRepository buildingRepository;
+    private final PoiRepository poiRepository;
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
     private final PlaceSearchIndexingService placeSearchIndexingService;
@@ -75,7 +77,8 @@ public class PlaceSearchService {
                 lng,
                 resolvedSearchRadius,
                 resolvedSize,
-                buildingRepository
+                buildingRepository,
+                poiRepository
         );
     }
 

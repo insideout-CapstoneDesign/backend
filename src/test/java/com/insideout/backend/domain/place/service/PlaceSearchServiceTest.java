@@ -6,6 +6,10 @@ import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
+import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
+import com.insideout.backend.domain.place.service.kakao.KakaoPlaceSearchClient;
+import com.insideout.backend.domain.place.service.search.PlaceSearchIndexingService;
+import com.insideout.backend.domain.place.service.search.PlaceSearchService;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection;
 import com.insideout.backend.global.apiPayload.code.GeneralErrorCode;
@@ -26,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -44,6 +49,12 @@ class PlaceSearchServiceTest {
     @Mock
     private PoiRepository poiRepository;
 
+    @Mock
+    private PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
+
+    @Mock
+    private PlaceSearchIndexingService placeSearchIndexingService;
+
     @InjectMocks
     private PlaceSearchService placeSearchService;
 
@@ -53,11 +64,13 @@ class PlaceSearchServiceTest {
         lenient().when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
         lenient().when(buildingRepository.findNearestRegisteredPlace(anyDouble(), anyDouble(), anyInt())).thenReturn(Optional.empty());
         lenient().when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
+        lenient().when(placeSuggestElasticsearchClient.search(anyString(), anyInt(), any(), any(), any()))
+                .thenReturn(List.of());
     }
 
     @Test
     void search_blankQuery_throwsBadRequest() {
-        assertThatThrownBy(() -> placeSearchService.search("   ", null, null, null))
+        assertThatThrownBy(() -> placeSearchService.search("   ", null, null, null, null))
                 .isInstanceOf(ProjectException.class)
                 .extracting(ex -> ((ProjectException) ex).getErrorCode())
                 .isEqualTo(GeneralErrorCode.BAD_REQUEST);
@@ -68,7 +81,7 @@ class PlaceSearchServiceTest {
         when(kakaoPlaceSearchClient.searchByKeyword("스타벅스"))
                 .thenReturn(List.of());
 
-        placeSearchService.search("스타벅스", null, null, null);
+        placeSearchService.search("스타벅스", null, null, null, null);
 
         verify(kakaoPlaceSearchClient).searchByKeyword("스타벅스");
         verify(kakaoPlaceSearchClient, never()).searchByKeyword("스타벅스", 37.5, 127.0, 5_000);
@@ -76,7 +89,7 @@ class PlaceSearchServiceTest {
 
     @Test
     void search_withoutCoordinatesButRadius_throwsInvalidCoordinate() {
-        assertThatThrownBy(() -> placeSearchService.search("스타벅스", null, null, 3000))
+        assertThatThrownBy(() -> placeSearchService.search("스타벅스", null, null, 3000, null))
                 .isInstanceOf(PlaceException.class)
                 .extracting(ex -> ((PlaceException) ex).getErrorCode())
                 .isEqualTo(PlaceErrorCode.INVALID_COORDINATE);
@@ -87,7 +100,7 @@ class PlaceSearchServiceTest {
         when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, null))
                 .thenReturn(List.of());
 
-        placeSearchService.search("스타벅스", 37.5, 127.0, null);
+        placeSearchService.search("스타벅스", 37.5, 127.0, null, null);
 
         verify(kakaoPlaceSearchClient).searchByKeyword("스타벅스", 37.5, 127.0, null);
     }
@@ -97,7 +110,7 @@ class PlaceSearchServiceTest {
         when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, 1500))
                 .thenReturn(List.of());
 
-        placeSearchService.search("스타벅스", 37.5, 127.0, 1500);
+        placeSearchService.search("스타벅스", 37.5, 127.0, 1500, null);
 
         verify(kakaoPlaceSearchClient).searchByKeyword("스타벅스", 37.5, 127.0, 1500);
     }
@@ -127,7 +140,7 @@ class PlaceSearchServiceTest {
         when(kakaoPlaceSearchClient.searchByKeyword("스타벅스", 37.5, 127.0, 3000))
                 .thenReturn(List.of(far, near));
 
-        List<PlaceSearchItemResponse> result = placeSearchService.search("스타벅스", 37.5, 127.0, 3000);
+        List<PlaceSearchItemResponse> result = placeSearchService.search("스타벅스", 37.5, 127.0, 3000, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo("근처 매장");
@@ -148,7 +161,7 @@ class PlaceSearchServiceTest {
                         new PlaceSearchItemResponse("외부 건물명", "서울 중구 소공로 63", null, 37.5609, 126.9810, false, "7969138", null)
                 ));
 
-        List<PlaceSearchItemResponse> result = placeSearchService.search("신세계", null, null, null);
+        List<PlaceSearchItemResponse> result = placeSearchService.search("신세계", null, null, null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo("관리자 등록 건물명");
@@ -170,7 +183,7 @@ class PlaceSearchServiceTest {
                         new PlaceSearchItemResponse("외부 구찌", "서울 중구 퇴계로 77", null, 37.5601, 126.9808, false, "22320326", null)
                 ));
 
-        List<PlaceSearchItemResponse> result = placeSearchService.search("구찌", null, null, null);
+        List<PlaceSearchItemResponse> result = placeSearchService.search("구찌", null, null, null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo("구찌");
@@ -180,7 +193,7 @@ class PlaceSearchServiceTest {
 
     @Test
     void search_withPartialCoordinates_throwsInvalidCoordinate() {
-        assertThatThrownBy(() -> placeSearchService.search("스타벅스", 37.5, null, null))
+        assertThatThrownBy(() -> placeSearchService.search("스타벅스", 37.5, null, null, null))
                 .isInstanceOf(PlaceException.class)
                 .extracting(ex -> ((PlaceException) ex).getErrorCode())
                 .isEqualTo(PlaceErrorCode.INVALID_COORDINATE);
@@ -188,7 +201,7 @@ class PlaceSearchServiceTest {
 
     @Test
     void search_withInvalidRadius_throwsInvalidRadius() {
-        assertThatThrownBy(() -> placeSearchService.search("스타벅스", 37.5, 127.0, 0))
+        assertThatThrownBy(() -> placeSearchService.search("스타벅스", 37.5, 127.0, 0, null))
                 .isInstanceOf(PlaceException.class)
                 .extracting(ex -> ((PlaceException) ex).getErrorCode())
                 .isEqualTo(PlaceErrorCode.INVALID_RADIUS);

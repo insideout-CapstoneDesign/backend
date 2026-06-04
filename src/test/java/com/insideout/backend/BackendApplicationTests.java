@@ -12,9 +12,11 @@ import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.building.repository.FloorplanCalibrationRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
 import com.insideout.backend.domain.map.repository.EdgeRepository;
+import com.insideout.backend.domain.map.repository.FloorplanObjectRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.ObstacleRepository;
+import com.insideout.backend.domain.map.repository.PoiCategoryRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorRepository;
@@ -75,6 +77,12 @@ class BackendApplicationTests {
 
     @MockitoBean
     private MapAssetStorage mapAssetStorage;
+
+    @MockitoBean
+    private FloorplanObjectRepository floorplanObjectRepository;
+
+    @MockitoBean
+    private PoiCategoryRepository poiCategoryRepository;
 
     @MockitoBean
     private TenantRepository tenantRepository;

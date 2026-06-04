@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -43,24 +44,71 @@ public class PlaceSuggestElasticsearchClient {
     }
 
     public void upsertDocuments(List<SuggestDocument> documents) {
+        try {
+            upsertDocumentsStrict(documents);
+        } catch (PlaceException ignored) {
+            // Best-effort background indexing: ignore failures.
+        }
+    }
+
+    public int upsertDocumentsStrict(List<SuggestDocument> documents) {
         String body = PlaceEsBulkUpsertBodyBuilder.build(documents, searchIndex, objectMapper);
         if (!StringUtils.hasText(body)) {
-            return;
+            return 0;
         }
 
         String primaryUri = resolvePrimaryUri(elasticsearchUris);
         RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
 
         try {
-            restClient.post()
+            String response = restClient.post()
                     .uri("/_bulk")
                     .contentType(MediaType.parseMediaType("application/x-ndjson"))
                     .body(body)
                     .retrieve()
-                    .toBodilessEntity();
-        } catch (RestClientException ignored) {
-            // Best-effort background indexing: ignore failures.
+                    .body(String.class);
+            return parseBulkSuccessCount(response);
+        } catch (RestClientException e) {
+            throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
+        } catch (Exception e) {
+            throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
         }
+    }
+
+    private int parseBulkSuccessCount(String response) throws Exception {
+        if (!StringUtils.hasText(response)) {
+            throw new IllegalStateException("Empty bulk response");
+        }
+
+        Map<?, ?> parsed = objectMapper.readValue(response, Map.class);
+        Object errors = parsed.get("errors");
+        if (Boolean.TRUE.equals(errors)) {
+            throw new IllegalStateException("Bulk indexing returned errors");
+        }
+
+        Object items = parsed.get("items");
+        if (!(items instanceof List<?> itemList)) {
+            throw new IllegalStateException("Bulk indexing response does not contain items");
+        }
+
+        int successCount = 0;
+        for (Object item : itemList) {
+            if (!(item instanceof Map<?, ?> action)) {
+                continue;
+            }
+            Object payload = action.values().stream().findFirst().orElse(null);
+            if (!(payload instanceof Map<?, ?> result)) {
+                continue;
+            }
+            Object status = result.get("status");
+            if (status instanceof Number statusNumber && statusNumber.intValue() >= 200 && statusNumber.intValue() < 300) {
+                successCount++;
+                continue;
+            }
+            throw new IllegalStateException("Bulk indexing item failed");
+        }
+
+        return successCount;
     }
 
     private List<SuggestDocument> doSearch(String query, int size, Double lat, Double lng, Integer radius) {

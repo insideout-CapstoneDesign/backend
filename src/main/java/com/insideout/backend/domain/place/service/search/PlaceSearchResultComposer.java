@@ -2,6 +2,7 @@ package com.insideout.backend.domain.place.service.search;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.service.support.PlaceSearchSupport;
 import org.springframework.util.StringUtils;
@@ -27,7 +28,8 @@ final class PlaceSearchResultComposer {
             Double lng,
             Integer radius,
             int size,
-            BuildingRepository buildingRepository
+            BuildingRepository buildingRepository,
+            PoiRepository poiRepository
     ) {
         List<PlaceSearchItemResponse> merged = mergeRegisteredAndExternal(
                 registeredPlaces,
@@ -35,7 +37,8 @@ final class PlaceSearchResultComposer {
                 query,
                 lat,
                 lng,
-                buildingRepository
+                buildingRepository,
+                poiRepository
         );
 
         if (lat != null && lng != null) {
@@ -66,7 +69,8 @@ final class PlaceSearchResultComposer {
             String query,
             Double lat,
             Double lng,
-            BuildingRepository buildingRepository
+            BuildingRepository buildingRepository,
+            PoiRepository poiRepository
     ) {
         Map<String, PlaceSearchItemResponse> registeredByExternalApiId = registeredPlaces.stream()
                 .filter(item -> StringUtils.hasText(item.externalApiId()))
@@ -91,6 +95,22 @@ final class PlaceSearchResultComposer {
                     .map(PlaceSearchResultComposer::toRegisteredSearchItem)
                     .toList();
             additionalRegistered.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
+
+            List<PlaceSearchItemResponse> additionalRegisteredPois = poiRepository
+                    .findRegisteredPlacesByExternalApiIds(externalIds)
+                    .stream()
+                    .map(item -> new PlaceSearchItemResponse(
+                            item.getName(),
+                            item.getAddress(),
+                            null,
+                            null,
+                            null,
+                            true,
+                            item.getExternalApiId(),
+                            null
+                    ))
+                    .toList();
+            additionalRegisteredPois.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
         }
 
         for (PlaceSearchItemResponse external : externalPlaces) {

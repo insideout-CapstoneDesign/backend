@@ -16,6 +16,40 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
 
     Optional<Poi> findByPublicId(Long publicId);
 
+    Optional<Poi> findFirstByExternalApiId(String externalApiId);
+
+    List<Poi> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
+
+    @Query("""
+            select p
+            from Poi p
+                join fetch p.floor f
+                join fetch f.building b
+                join fetch p.mapVersion mv
+            where p.id = :id
+            """)
+    Optional<Poi> findByIdWithFloorAndMapVersion(@Param("id") UUID id);
+
+    @Query("""
+            select p
+            from Poi p
+                join fetch p.floor f
+                join fetch f.building b
+                join fetch p.mapVersion mv
+            where p.externalApiId = :externalApiId
+            """)
+    Optional<Poi> findFirstByExternalApiIdWithFloorAndMapVersion(@Param("externalApiId") String externalApiId);
+
+    @Query("""
+            select p
+            from Poi p
+                join fetch p.floor f
+                join fetch f.building b
+            where p.mapVersion.id = :mapVersionId
+            order by f.level desc, p.name asc, p.id asc
+            """)
+    List<Poi> findAllByMapVersionIdWithFloor(@Param("mapVersionId") UUID mapVersionId);
+
     @Query(value = """
             SELECT
                 p.name AS name,

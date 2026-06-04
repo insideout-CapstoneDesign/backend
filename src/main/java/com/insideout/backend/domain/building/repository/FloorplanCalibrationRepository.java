@@ -8,5 +8,5 @@ import java.util.UUID;
 
 @Repository
 public interface FloorplanCalibrationRepository extends JpaRepository<FloorplanCalibration, UUID> {
-    java.util.Optional<FloorplanCalibration> findByFloorplanId(UUID floorplanId);
+    java.util.Optional<FloorplanCalibration> findTopByFloorplanIdOrderByCreatedAtDesc(UUID floorplanId);
 }

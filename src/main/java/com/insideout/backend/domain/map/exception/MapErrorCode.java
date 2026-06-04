@@ -73,6 +73,11 @@ public enum MapErrorCode implements BaseErrorCode {
         HttpStatus.NOT_FOUND,
         "MAP404_1",
         "해당 건물의 맵 버전을 찾을 수 없습니다."
+    ),
+    MAP_VERSION_NOT_EDITABLE(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_13",
+        "수정 가능한 초안 상태의 맵 버전만 변경할 수 있습니다."
     );
 
     private final HttpStatus status;

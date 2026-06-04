@@ -111,7 +111,14 @@ public class TenantService {
                 .orElseThrow(() -> new TenantException(TenantErrorCode.TENANT_NOT_FOUND));
 
         tenant.updateStatus("approved");
-        return TenantSummaryResDTO.from(tenant, membership.getRole(), membership.getJoinedAt());
+        int buildingCount = buildingRepository.findByTenant_IdOrderByCreatedAtDesc(tenantId).size();
+        return TenantSummaryResDTO.from(
+                tenant,
+                membership.getRole(),
+                membership.getJoinedAt(),
+                true,
+                buildingCount
+        );
     }
 
 }

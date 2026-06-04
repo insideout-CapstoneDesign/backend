@@ -170,6 +170,11 @@ public class BuildingService {
         // 건물 등록 시 함께 전달된 층 정보는 도면 업로드 여부와 관계없이 기본 구조로 먼저 저장합니다.
         List<Floor> savedFloors = List.of();
         if (req.floors() != null && !req.floors().isEmpty()) {
+            List<LevelNamePair> newFloors = req.floors().stream()
+                    .map(f -> new LevelNamePair(f.level(), f.name()))
+                    .toList();
+            validateNoDuplicateFloors(savedBuilding.getId(), newFloors);
+
             List<Floor> floorsToSave = req.floors().stream()
                     .map(f -> Floor.builder()
                             .tenantId(tenantId)
@@ -192,12 +197,7 @@ public class BuildingService {
         Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
 
-        // 해당 건물에 동일한 level 또는 name이 있는지 확인
-        boolean exists = floorRepository.findAllByBuilding_IdInOrderByLevelDesc(List.of(buildingId)).stream()
-                .anyMatch(f -> f.getLevel() == req.level() || f.getName().equalsIgnoreCase(req.name()));
-        if (exists) {
-            throw new BuildingException(BuildingErrorCode.DUPLICATE_FLOOR);
-        }
+        validateNoDuplicateFloors(buildingId, List.of(new LevelNamePair(req.level(), req.name())));
 
         Floor floor = Floor.builder()
                 .tenantId(tenantId)
@@ -210,4 +210,35 @@ public class BuildingService {
 
         return getBuilding(tenantId, buildingId);
     }
+
+    private void validateNoDuplicateFloors(UUID buildingId, List<LevelNamePair> newFloors) {
+        if (newFloors == null || newFloors.isEmpty()) {
+            return;
+        }
+
+        // 1. 요청으로 들어온 새로운 층 목록 자체에 중복이 있는지 검사
+        long uniqueLevelCount = newFloors.stream().map(LevelNamePair::level).distinct().count();
+        if (uniqueLevelCount < newFloors.size()) {
+            throw new BuildingException(BuildingErrorCode.DUPLICATE_FLOOR);
+        }
+
+        long uniqueNameCount = newFloors.stream().map(f -> f.name().trim().toLowerCase()).distinct().count();
+        if (uniqueNameCount < newFloors.size()) {
+            throw new BuildingException(BuildingErrorCode.DUPLICATE_FLOOR);
+        }
+
+        // 2. 기존 DB에 저장되어 있는 층들과 중복이 있는지 검사
+        if (buildingId != null) {
+            List<Floor> existingFloors = floorRepository.findAllByBuilding_IdInOrderByLevelDesc(List.of(buildingId));
+            for (LevelNamePair newFloor : newFloors) {
+                boolean conflict = existingFloors.stream()
+                        .anyMatch(f -> f.getLevel() == newFloor.level() || f.getName().trim().equalsIgnoreCase(newFloor.name().trim()));
+                if (conflict) {
+                    throw new BuildingException(BuildingErrorCode.DUPLICATE_FLOOR);
+                }
+            }
+        }
+    }
+
+    private record LevelNamePair(int level, String name) {}
 }

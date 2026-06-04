@@ -171,10 +171,11 @@ public class Poi {
     }
 
     public void updateExternalMapping(String externalApiId, Point geomWgs84, String placeName, String address) {
-        this.externalApiId = externalApiId;
+        String normalizedExternalApiId = (externalApiId == null || externalApiId.isBlank()) ? null: externalApiId;
+        this.externalApiId = normalizedExternalApiId;
         this.geomWgs84 = geomWgs84;
         updateExternalMappingMetadata(placeName, address);
-        updateExternalMappingStatus(externalApiId != null ? "confirmed" : "pending");
+        updateExternalMappingStatus(normalizedExternalApiId != null ? "confirmed" : "pending");
     }
 
     public void markExternalMappingExcluded() {

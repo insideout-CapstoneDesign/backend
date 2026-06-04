@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -16,7 +17,19 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "building_entrance_mapping")
+@Table(
+        name = "building_entrance_mapping",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_building_entrance_mapping_gate",
+                        columnNames = {"tenant_id", "campus_id", "campus_gate_id"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_building_entrance_mapping_node",
+                        columnNames = {"tenant_id", "building_id", "entrance_node_id"}
+                )
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class BuildingEntranceMapping {

@@ -37,7 +37,9 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
 
     List<Node> findByMapVersion_Building_IdAndKindCodeOrderByCreatedAtAsc(UUID buildingId, String kindCode);
 
-    long countByMapVersion_Building_IdAndKindCode(UUID buildingId, String kindCode);
+    List<Node> findByMapVersionIdAndKindCodeOrderByCreatedAtAsc(UUID mapVersionId, String kindCode);
+
+    long countByMapVersion_Building_IdAndKindCodeAndMapVersion_Status(UUID buildingId, String kindCode, String status);
 
     @Query(value = """
             SELECT n.*

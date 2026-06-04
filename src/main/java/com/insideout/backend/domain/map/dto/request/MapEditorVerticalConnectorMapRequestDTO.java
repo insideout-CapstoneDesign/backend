@@ -1,8 +1,10 @@
 package com.insideout.backend.domain.map.dto.request;
 
+import jakarta.validation.constraints.NotNull;
+
 import java.util.UUID;
 
 public record MapEditorVerticalConnectorMapRequestDTO(
-        UUID floorId,
-        UUID nodeId
+        @NotNull UUID floorId,
+        @NotNull UUID nodeId
 ) {}

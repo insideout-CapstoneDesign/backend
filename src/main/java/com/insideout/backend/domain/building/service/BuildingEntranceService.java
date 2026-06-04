@@ -111,8 +111,21 @@ public class BuildingEntranceService {
     public List<BuildingEntranceResponseDTO> getEntrances(UUID tenantId, UUID buildingId) {
         Building building = getBuilding(tenantId, buildingId);
 
-        List<Node> entranceNodes = nodeRepository.findByMapVersion_Building_IdAndKindCodeOrderByCreatedAtAsc(
-                buildingId,
+        UUID currentMapVersionId = mapVersionRepository
+                .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(buildingId, MapType.BUILDING, "draft")
+                .map(MapVersion::getId)
+                .orElseGet(() -> mapVersionRepository
+                        .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(buildingId, MapType.BUILDING, "published")
+                        .map(MapVersion::getId)
+                        .orElse(null)
+                );
+
+        if (currentMapVersionId == null) {
+            return List.of();
+        }
+
+        List<Node> entranceNodes = nodeRepository.findByMapVersionIdAndKindCodeOrderByCreatedAtAsc(
+                currentMapVersionId,
                 ENTRANCE_KIND
         );
         if (entranceNodes.isEmpty()) {
@@ -173,13 +186,25 @@ public class BuildingEntranceService {
             throw new BuildingException(BuildingErrorCode.BUILDING_ENTRANCE_NOT_FOUND);
         }
 
+        boolean isDraft = entranceNode.getMapVersion() != null
+                && "draft".equals(entranceNode.getMapVersion().getStatus());
+        if (!isDraft) {
+            throw new BuildingException(BuildingErrorCode.BUILDING_ENTRANCE_NOT_EDITABLE);
+        }
+
         Optional<BuildingEntranceMapping> existingByGate = buildingEntranceMappingRepository
                 .findByTenantIdAndCampusIdAndCampusGateId(tenantId, campus.getId(), request.campusGateId());
         existingByGate.ifPresent(buildingEntranceMappingRepository::delete);
 
         Optional<BuildingEntranceMapping> existingByNode = buildingEntranceMappingRepository
                 .findByTenantIdAndBuildingIdAndEntranceNodeId(tenantId, buildingId, request.entranceNodeId());
-        existingByNode.ifPresent(buildingEntranceMappingRepository::delete);
+        existingByNode.ifPresent(mapping -> {
+            if (existingByGate.isEmpty() || !existingByGate.get().getId().equals(mapping.getId())) {
+                buildingEntranceMappingRepository.delete(mapping);
+            }
+        });
+        
+        buildingEntranceMappingRepository.flush();
 
         Poi entrancePoi = poiRepository.findByAnchorNodeIdIn(List.of(entranceNode.getId()))
                 .stream()
@@ -237,8 +262,8 @@ public class BuildingEntranceService {
                 });
     }
 
-    private void syncEntranceCount(Building building) {
-        long count = nodeRepository.countByMapVersion_Building_IdAndKindCode(building.getId(), ENTRANCE_KIND);
+    public void syncEntranceCount(Building building) {
+        long count = nodeRepository.countByMapVersion_Building_IdAndKindCodeAndMapVersion_Status(building.getId(), ENTRANCE_KIND, "published");
         building.updateEntranceCount((int) count);
     }
 

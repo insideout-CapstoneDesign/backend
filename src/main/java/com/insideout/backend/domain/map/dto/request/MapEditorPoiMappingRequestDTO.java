@@ -9,5 +9,5 @@ public record MapEditorPoiMappingRequestDTO(
         Double longitude,
         String placeName,
         String address,
-        Boolean excluded
+        boolean excluded
 ) {}

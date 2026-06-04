@@ -51,6 +51,8 @@ import com.insideout.backend.domain.map.entity.PoiCategory;
 import com.insideout.backend.domain.map.entity.Zone;
 import com.insideout.backend.domain.map.entity.ZoneKind;
 import com.insideout.backend.domain.map.enums.MapType;
+import com.insideout.backend.domain.map.exception.MapErrorCode;
+import com.insideout.backend.domain.map.exception.MapException;
 import com.insideout.backend.domain.map.repository.EdgeRepository;
 import com.insideout.backend.domain.map.repository.FloorplanObjectRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
@@ -477,9 +479,10 @@ public class MapEditorService {
                     .toList());
         }
 
+        Map<UUID, Poi> clonedPoisBySourceId = new LinkedHashMap<>();
         List<Poi> sourcePois = poiRepository.findByMapVersionId(publishedMapVersion.getId());
         if (!sourcePois.isEmpty()) {
-            poiRepository.saveAll(sourcePois.stream()
+            List<Poi> savedPois = poiRepository.saveAll(sourcePois.stream()
                     .map(poi -> Poi.builder()
                             .tenantId(draftMapVersion.getTenantId())
                             .mapVersion(draftMapVersion)
@@ -498,6 +501,10 @@ public class MapEditorService {
                             .aiDetectionId(poi.getAiDetectionId())
                             .build())
                     .toList());
+
+            for (int index = 0; index < sourcePois.size(); index++) {
+                clonedPoisBySourceId.put(sourcePois.get(index).getId(), savedPois.get(index));
+            }
         }
 
         List<Edge> sourceEdges = edgeRepository.findByMapVersionId(publishedMapVersion.getId());
@@ -554,6 +561,23 @@ public class MapEditorService {
                             .build())
                     .filter(connectorNode -> connectorNode.getConnector() != null && connectorNode.getNode() != null)
                     .toList());
+        }
+
+        List<BuildingEntranceMapping> mappings = buildingEntranceMappingRepository
+                .findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(building.getTenant().getId(), building.getId());
+        if (!mappings.isEmpty()) {
+            for (BuildingEntranceMapping mapping : mappings) {
+                UUID newEntranceNodeId = mapping.getEntranceNodeId();
+                if (clonedNodesBySourceId.containsKey(newEntranceNodeId)) {
+                    newEntranceNodeId = clonedNodesBySourceId.get(newEntranceNodeId).getId();
+                }
+                UUID newEntrancePoiId = mapping.getEntrancePoiId();
+                if (newEntrancePoiId != null && clonedPoisBySourceId.containsKey(newEntrancePoiId)) {
+                    newEntrancePoiId = clonedPoisBySourceId.get(newEntrancePoiId).getId();
+                }
+                mapping.updateEntrance(newEntranceNodeId, newEntrancePoiId);
+            }
+            buildingEntranceMappingRepository.saveAll(mappings);
         }
     }
 
@@ -888,8 +912,9 @@ public class MapEditorService {
 
         Map<String, Long> categoryIdsByCode = loadPoiCategoryIdsFromCodes(
                 pois.stream()
-                        .map(MapEditorDraftPoiSaveDTO::code)
+                        .map(poi -> normalizePoiCategoryCodeForDraft(poi.code(), poi.attrs()))
                         .filter(Objects::nonNull)
+                        .distinct()
                         .toList()
         );
 
@@ -1863,8 +1888,12 @@ public class MapEditorService {
         Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
 
-        DraftMapVersionResult draftResult = getOrCreateBuildingDraftMapVersion(building, userId);
-        MapVersion draftMapVersion = draftResult.mapVersion();
+        Optional<MapVersion> draftMapVersionOpt = mapVersionRepository
+                .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(building.getId(), MapType.BUILDING, "draft");
+        if (draftMapVersionOpt.isEmpty()) {
+            return List.of();
+        }
+        MapVersion draftMapVersion = draftMapVersionOpt.get();
 
         List<VerticalConnector> connectors = verticalConnectorRepository.findByMapVersionId(draftMapVersion.getId());
         List<VerticalConnectorNode> connectorNodes = verticalConnectorNodeRepository.findByConnectorMapVersionId(draftMapVersion.getId());
@@ -1929,6 +1958,11 @@ public class MapEditorService {
             throw new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND);
         }
 
+        MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
+        if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
+            throw new MapException(MapErrorCode.MAP_VERSION_NOT_EDITABLE);
+        }
+
         verticalConnectorNodeRepository.deleteByConnectorId(connectorId);
         verticalConnectorRepository.delete(connector);
     }
@@ -1948,11 +1982,37 @@ public class MapEditorService {
             throw new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND);
         }
 
+        MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
+        if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
+            throw new MapException(MapErrorCode.MAP_VERSION_NOT_EDITABLE);
+        }
+
         Node node = nodeRepository.findById(request.nodeId())
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
 
         Floor floor = floorRepository.findById(request.floorId())
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.FLOOR_NOT_FOUND));
+
+        if (!tenantId.equals(node.getTenantId())) {
+            throw new MapException(MapErrorCode.VERTICAL_CONNECTOR_TENANT_MISMATCH);
+        }
+
+        if (node.getFloor() == null || !request.floorId().equals(node.getFloor().getId())) {
+            throw new MapException(MapErrorCode.VERTICAL_CONNECTOR_FLOOR_MISMATCH);
+        }
+
+        if (node.getMapVersion() == null || node.getMapVersion().getBuilding() == null
+                || !buildingId.equals(node.getMapVersion().getBuilding().getId())) {
+            throw new MapException(MapErrorCode.BUILDING_MISMATCH);
+        }
+
+        if (!node.getMapVersion().getId().equals(draftMapVersion.getId())) {
+            throw new MapException(MapErrorCode.MAP_VERSION_NOT_EDITABLE);
+        }
+
+        if (floor.getBuilding() == null || !buildingId.equals(floor.getBuilding().getId())) {
+            throw new BuildingException(BuildingErrorCode.BUILDING_FLOOR_MISMATCH);
+        }
 
         // 1. 해당 커넥터의 동일 층 기존 연결 삭제
         verticalConnectorNodeRepository.deleteByConnectorIdAndFloorId(connectorId, request.floorId());
@@ -1991,6 +2051,11 @@ public class MapEditorService {
             throw new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND);
         }
 
+        MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
+        if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
+            throw new MapException(MapErrorCode.MAP_VERSION_NOT_EDITABLE);
+        }
+
         verticalConnectorNodeRepository.deleteByConnectorIdAndFloorId(connectorId, floorId);
         verticalConnectorNodeRepository.flush();
 
@@ -1998,6 +2063,12 @@ public class MapEditorService {
                 .filter(c -> c.id().equals(connectorId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private MapVersion getDraftMapVersionOrThrow(UUID buildingId) {
+        return mapVersionRepository
+                .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(buildingId, MapType.BUILDING, "draft")
+                .orElseThrow(() -> new MapException(MapErrorCode.MAP_VERSION_NOT_FOUND));
     }
 
     @Transactional
@@ -2029,6 +2100,9 @@ public class MapEditorService {
         draftMapVersion.publish();
         mapVersionRepository.save(draftMapVersion);
         building.updateActivationStatus("active");
+        
+        long entranceCount = nodeRepository.countByMapVersion_Building_IdAndKindCodeAndMapVersion_Status(buildingId, "entrance", "published");
+        building.updateEntranceCount((int) entranceCount);
         if (building.getTenant() != null && !"approved".equals(building.getTenant().getStatus())) {
             building.getTenant().updateStatus("approved");
         }
@@ -2091,7 +2165,7 @@ public class MapEditorService {
                     for (Floor floor : floors) {
                         Floorplan floorplan = floorplanRepository.findByFloorIdAndIsCurrentTrue(floor.getId()).orElse(null);
                         if (floorplan != null) {
-                            FloorplanCalibration calibration = floorplanCalibrationRepository.findByFloorplanId(floorplan.getId())
+                            FloorplanCalibration calibration = floorplanCalibrationRepository.findTopByFloorplanIdOrderByCreatedAtDesc(floorplan.getId())
                                     .orElse(FloorplanCalibration.builder()
                                             .tenantId(tenantId)
                                             .floorplan(floorplan)
@@ -2315,6 +2389,8 @@ public class MapEditorService {
         Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
 
+        MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
+
         GeometryFactory wgsGeometryFactory = new GeometryFactory(new org.locationtech.jts.geom.PrecisionModel(), 4326);
 
         for (MapEditorPoiMappingRequestDTO mapping : request.mappings()) {
@@ -2323,13 +2399,14 @@ public class MapEditorService {
                             com.insideout.backend.domain.map.exception.MapErrorCode.MAP_VERSION_NOT_FOUND
                     ));
 
-            if (!poi.getMapVersion().getBuilding().getId().equals(buildingId)) {
+            if (!poi.getTenantId().equals(tenantId) || poi.getMapVersion() == null
+                    || !poi.getMapVersion().getId().equals(draftMapVersion.getId())) {
                 throw new com.insideout.backend.domain.map.exception.MapException(
                         com.insideout.backend.domain.map.exception.MapErrorCode.MAP_VERSION_NOT_FOUND
                 );
             }
 
-            if (Boolean.TRUE.equals(mapping.excluded())) {
+            if (mapping.excluded()) {
                 poi.markExternalMappingExcluded();
             } else if (!StringUtils.hasText(mapping.externalApiId())) {
                 poi.updateExternalMapping(null, null, null, null);

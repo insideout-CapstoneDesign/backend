@@ -82,6 +82,7 @@ public record NavigationResponseDto(
             Integer durationSeconds,
             Integer distanceMeters,
             Integer stationCount,
+            List<TransitStopDto> stops,
             String startName,
             String endName,
             MapType mapType,
@@ -104,9 +105,17 @@ public record NavigationResponseDto(
                 String endName,
                 List<StepDto> steps
         ) {
-            this(mode, routeName, transitType, durationSeconds, distanceMeters, stationCount,
+            this(mode, routeName, transitType, durationSeconds, distanceMeters, stationCount, List.of(),
                     startName, endName, null, null, null, null, null, null, List.of(), steps);
         }
+    }
+
+    public record TransitStopDto(
+            String name,
+            String stationId,
+            Double x,
+            Double y
+    ) {
     }
 
     public record FloorSegmentDto(

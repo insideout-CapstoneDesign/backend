@@ -24,6 +24,7 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteFa
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteMode;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteOption;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.TransitStopDto;
 import com.insideout.backend.domain.navigation.exception.NavigationErrorCode;
 import com.insideout.backend.domain.navigation.exception.NavigationException;
 import com.insideout.backend.global.apiPayload.code.BaseErrorCode;
@@ -309,7 +310,7 @@ public class NavigationService {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("appKey", tmapApiKey);
+        headers.set("appKey", normalizeApiKey(tmapApiKey));
 
         try {
             JsonNode response = restTemplate.postForObject(url, new HttpEntity<>(body, headers), JsonNode.class);
@@ -329,6 +330,21 @@ public class NavigationService {
             log.warn("TMAP API request failed. url={}", url, e);
             throw new NavigationException(NavigationErrorCode.TMAP_CONNECTION_FAILED, e);
         }
+    }
+
+    private String normalizeApiKey(String apiKey) {
+        String normalized = apiKey == null ? "" : apiKey.trim();
+        if (normalized.length() >= 2) {
+            char first = normalized.charAt(0);
+            char last = normalized.charAt(normalized.length() - 1);
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                normalized = normalized.substring(1, normalized.length() - 1).trim();
+            }
+        }
+        if (normalized.isBlank()) {
+            throw new IllegalStateException("tmap.api.key must not be blank");
+        }
+        return normalized;
     }
 
     private List<RouteDto> parseTransitRoutes(JsonNode response, RouteTarget target) {
@@ -376,15 +392,24 @@ public class NavigationService {
 
         for (JsonNode legNode : legsNode) {
             LegMode mode = parseTransitLegMode(getNullableText(legNode.path("mode")));
+            List<TransitStopDto> stops = parseTransitStops(legNode);
             legs.add(new LegDto(
                     mode,
                     resolveTransitRouteName(legNode),
                     getNullableText(legNode.path("type")),
                     getNullableInt(legNode.path("sectionTime")),
                     getNullableInt(legNode.path("distance")),
-                    countTransitStations(legNode),
+                    firstNonNull(countTransitStations(legNode), stops.isEmpty() ? null : stops.size()),
+                    stops,
                     getNullableText(legNode.path("start").path("name")),
                     getNullableText(legNode.path("end").path("name")),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    List.of(),
+                    List.of(),
                     parseTransitSteps(legNode)
             ));
         }
@@ -737,6 +762,7 @@ public class NavigationService {
                 null,
                 null,
                 null,
+                List.of(),
                 startName,
                 endName,
                 mapType,
@@ -849,6 +875,7 @@ public class NavigationService {
                 null,
                 null,
                 null,
+                List.of(),
                 target.campusEntranceName(),
                 target.entranceName(),
                 MapType.CAMPUS,
@@ -874,6 +901,7 @@ public class NavigationService {
                 null,
                 null,
                 null,
+                List.of(),
                 target.entranceName(),
                 endName,
                 MapType.BUILDING,
@@ -899,6 +927,7 @@ public class NavigationService {
                 null,
                 null,
                 null,
+                List.of(),
                 startName,
                 target.entranceName(),
                 MapType.BUILDING,
@@ -920,6 +949,7 @@ public class NavigationService {
                 null,
                 null,
                 null,
+                List.of(),
                 target.entranceName(),
                 target.campusEntranceName(),
                 MapType.CAMPUS,
@@ -1175,14 +1205,87 @@ public class NavigationService {
     }
 
     private Integer countTransitStations(JsonNode legNode) {
-        JsonNode stationList = legNode.path("passStopList").path("stationList");
-        if (!stationList.isArray()) {
-            stationList = legNode.path("passStopList").path("stations");
-        }
+        JsonNode stationList = transitStationListNode(legNode);
         if (stationList.isArray()) {
             return stationList.size();
         }
         return null;
+    }
+
+    private List<TransitStopDto> parseTransitStops(JsonNode legNode) {
+        JsonNode stationList = transitStationListNode(legNode);
+        if (!stationList.isArray()) {
+            return List.of();
+        }
+
+        String startName = getNullableText(legNode.path("start").path("name"));
+        String endName = getNullableText(legNode.path("end").path("name"));
+        List<TransitStopDto> stops = new ArrayList<>();
+        Set<String> seenStopKeys = new HashSet<>();
+
+        for (JsonNode stationNode : stationList) {
+            String name = firstText(
+                    stationNode,
+                    "stationName",
+                    "stationNm",
+                    "stopName",
+                    "stopNm",
+                    "name",
+                    "title"
+            );
+            String stationId = firstText(stationNode, "stationID", "stationId", "stopId", "stopID", "id");
+            String normalizedName = normalizeTransitStopName(name);
+            String stopKey = transitStopDedupeKey(stationId, normalizedName);
+            if (normalizedName == null
+                    || normalizedName.equals(normalizeTransitStopName(startName))
+                    || normalizedName.equals(normalizeTransitStopName(endName))
+                    || !seenStopKeys.add(stopKey)) {
+                continue;
+            }
+
+            stops.add(new TransitStopDto(
+                    name,
+                    stationId,
+                    firstNonNull(
+                            getNullableDouble(stationNode.path("lon")),
+                            firstNonNull(getNullableDouble(stationNode.path("x")), getNullableDouble(stationNode.path("stationX")))
+                    ),
+                    firstNonNull(
+                            getNullableDouble(stationNode.path("lat")),
+                            firstNonNull(getNullableDouble(stationNode.path("y")), getNullableDouble(stationNode.path("stationY")))
+                    )
+            ));
+        }
+
+        return stops;
+    }
+
+    private String transitStopDedupeKey(String stationId, String normalizedName) {
+        if (stationId != null && !stationId.isBlank()) {
+            return "id:" + stationId.strip();
+        }
+        return "name:" + normalizedName;
+    }
+
+    private JsonNode transitStationListNode(JsonNode legNode) {
+        JsonNode stationList = legNode.path("passStopList").path("stationList");
+        if (!stationList.isArray()) {
+            stationList = legNode.path("passStopList").path("stations");
+        }
+        if (!stationList.isArray()) {
+            stationList = legNode.path("stationList");
+        }
+        if (!stationList.isArray()) {
+            stationList = legNode.path("stations");
+        }
+        return stationList;
+    }
+
+    private String normalizeTransitStopName(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.replaceAll("\\s+", "");
     }
 
     private LegMode parseTransitLegMode(String mode) {

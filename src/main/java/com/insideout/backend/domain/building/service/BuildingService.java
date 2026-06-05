@@ -39,6 +39,7 @@ public class BuildingService {
     private final FloorRepository floorRepository;
     private final FloorplanRepository floorplanRepository;
     private final AiDetectionRepository aiDetectionRepository;
+    private final BuildingDirectorySyncService buildingDirectorySyncService;
     private final S3StorageService s3StorageService;
 
     /**
@@ -168,6 +169,8 @@ public class BuildingService {
                     .toList();
             savedFloors = floorRepository.saveAll(floorsToSave);
         }
+
+        buildingDirectorySyncService.sync(savedBuilding);
 
         return BuildingSummaryDTO.from(savedBuilding, savedFloors);
     }

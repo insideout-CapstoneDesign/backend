@@ -1221,7 +1221,7 @@ public class NavigationService {
         String startName = getNullableText(legNode.path("start").path("name"));
         String endName = getNullableText(legNode.path("end").path("name"));
         List<TransitStopDto> stops = new ArrayList<>();
-        Set<String> seenNames = new HashSet<>();
+        Set<String> seenStopKeys = new HashSet<>();
 
         for (JsonNode stationNode : stationList) {
             String name = firstText(
@@ -1233,17 +1233,19 @@ public class NavigationService {
                     "name",
                     "title"
             );
+            String stationId = firstText(stationNode, "stationID", "stationId", "stopId", "stopID", "id");
             String normalizedName = normalizeTransitStopName(name);
+            String stopKey = transitStopDedupeKey(stationId, normalizedName);
             if (normalizedName == null
                     || normalizedName.equals(normalizeTransitStopName(startName))
                     || normalizedName.equals(normalizeTransitStopName(endName))
-                    || !seenNames.add(normalizedName)) {
+                    || !seenStopKeys.add(stopKey)) {
                 continue;
             }
 
             stops.add(new TransitStopDto(
                     name,
-                    firstText(stationNode, "stationID", "stationId", "stopId", "stopID", "id"),
+                    stationId,
                     firstNonNull(
                             getNullableDouble(stationNode.path("lon")),
                             firstNonNull(getNullableDouble(stationNode.path("x")), getNullableDouble(stationNode.path("stationX")))
@@ -1256,6 +1258,13 @@ public class NavigationService {
         }
 
         return stops;
+    }
+
+    private String transitStopDedupeKey(String stationId, String normalizedName) {
+        if (stationId != null && !stationId.isBlank()) {
+            return "id:" + stationId.strip();
+        }
+        return "name:" + normalizedName;
     }
 
     private JsonNode transitStationListNode(JsonNode legNode) {

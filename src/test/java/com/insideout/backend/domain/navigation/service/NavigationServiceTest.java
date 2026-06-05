@@ -242,13 +242,16 @@ class NavigationServiceTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(busLeg.stationCount()).isEqualTo(4);
+        assertThat(busLeg.stationCount()).isEqualTo(6);
         assertThat(busLeg.stops())
                 .extracting(NavigationResponseDto.TransitStopDto::name)
-                .containsExactly("중간정류장1", "중간정류장2");
+                .containsExactly("중간정류장1", "중간정류장2", "중복정류장", "중복정류장");
         assertThat(busLeg.stops().get(0).stationId()).isEqualTo("S-1");
         assertThat(busLeg.stops().get(0).x()).isEqualTo(126.95);
         assertThat(busLeg.stops().get(0).y()).isEqualTo(37.45);
+        assertThat(busLeg.stops())
+                .extracting(NavigationResponseDto.TransitStopDto::stationId)
+                .containsExactly("S-1", "S-2", "S-3", "S-4");
     }
 
     @Test
@@ -554,6 +557,8 @@ class NavigationServiceTest {
                                   {"stationName": "승차정류장", "stationID": "START", "lon": "126.90", "lat": "37.40"},
                                   {"stationName": "중간정류장1", "stationID": "S-1", "lon": "126.95", "lat": "37.45"},
                                   {"stationName": "중간정류장2", "stationID": "S-2", "lon": 127.0, "lat": 37.48},
+                                  {"stationName": "중복정류장", "stationID": "S-3", "lon": 127.03, "lat": 37.49},
+                                  {"stationName": "중복정류장", "stationID": "S-4", "lon": 127.05, "lat": 37.495},
                                   {"stationName": "하차정류장", "stationID": "END", "lon": "127.10", "lat": "37.50"}
                                 ]
                               }

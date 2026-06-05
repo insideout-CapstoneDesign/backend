@@ -189,7 +189,7 @@ class PlaceSearchServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).name()).isEqualTo("신세계백화점 본점 디 에스테이트");
-        assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트");
+        assertThat(result.get(0).displayName()).isNull();
         assertThat(result.get(1).name()).isEqualTo("구찌");
         assertThat(result.get(1).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
     }

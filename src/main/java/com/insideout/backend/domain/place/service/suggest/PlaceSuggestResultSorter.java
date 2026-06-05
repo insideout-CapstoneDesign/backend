@@ -14,6 +14,7 @@ final class PlaceSuggestResultSorter {
     static Comparator<PlaceSearchItemResponse> comparator(String query, Double lat, Double lng) {
         Comparator<PlaceSearchItemResponse> comparator = Comparator
                 .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.canonicalKeywordScore(item, query)).reversed()
+                .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
                 .thenComparing(Comparator.comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.displayKeywordScore(item, query)).reversed())
                 .thenComparing(item -> StringUtils.hasText(item.parentBuildingName()));
 
@@ -25,7 +26,6 @@ final class PlaceSuggestResultSorter {
         }
 
         return comparator
-                .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
                 .thenComparing(item -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(item)));
     }
 }

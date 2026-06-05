@@ -18,6 +18,10 @@ public record PlaceSearchItemResponse(
     public PlaceSearchItemResponse {
         if (!StringUtils.hasText(displayName)) {
             displayName = buildDisplayName(parentBuildingName, name);
+        } else if (!StringUtils.hasText(parentBuildingName)
+                && StringUtils.hasText(name)
+                && displayName.trim().equals(name.trim())) {
+            displayName = null;
         }
     }
 
@@ -35,16 +39,14 @@ public record PlaceSearchItemResponse(
     }
 
     private static String buildDisplayName(String parentBuildingName, String name) {
-        if (!StringUtils.hasText(name)) {
+        if (!StringUtils.hasText(name) || !StringUtils.hasText(parentBuildingName)) {
             return null;
         }
-        if (StringUtils.hasText(parentBuildingName)) {
-            String trimmedParent = parentBuildingName.trim();
-            String trimmedName = name.trim();
-            if (!trimmedParent.equals(trimmedName)) {
-                return trimmedParent + " · " + trimmedName;
-            }
+        String trimmedParent = parentBuildingName.trim();
+        String trimmedName = name.trim();
+        if (!trimmedParent.equals(trimmedName)) {
+            return trimmedParent + " · " + trimmedName;
         }
-        return name;
+        return null;
     }
 }

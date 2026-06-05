@@ -44,7 +44,7 @@ final class PlaceSuggestResultMapper {
                         item.getExternalApiId(),
                         null,
                         null,
-                        item.getName()
+                        null
                 ))
                 .forEach(item -> registered.putIfAbsent(item.externalApiId(), item));
         poiRepository.findRegisteredPlacesByExternalApiIds(externalApiIds).stream()

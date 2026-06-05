@@ -62,7 +62,7 @@ final class PlaceSearchResultComposer {
                 building.getExternalApiId(),
                 null,
                 null,
-                building.getName()
+                null
         );
     }
 
@@ -161,9 +161,9 @@ final class PlaceSearchResultComposer {
         return items.stream()
                 .sorted(Comparator
                         .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.canonicalKeywordScore(item, query)).reversed()
+                        .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
                         .thenComparing(Comparator.comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.displayKeywordScore(item, query)).reversed())
                         .thenComparing(item -> StringUtils.hasText(item.parentBuildingName()))
-                        .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
                         .thenComparing(item -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(item))))
                 .toList();
     }
@@ -181,10 +181,10 @@ final class PlaceSearchResultComposer {
                 .filter(scored -> radius == null || (scored.distanceMeter() != null && scored.distanceMeter() <= radius))
                 .sorted(Comparator
                         .comparingInt((ScoredPlace scored) -> PlaceSearchSupport.canonicalKeywordScore(scored.item(), query)).reversed()
+                        .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
                         .thenComparing(Comparator.comparingInt((ScoredPlace scored) -> PlaceSearchSupport.displayKeywordScore(scored.item(), query)).reversed())
                         .thenComparing(scored -> StringUtils.hasText(scored.item().parentBuildingName()))
                         .thenComparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
-                        .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
                         .thenComparing(scored -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(scored.item()))))
                 .limit(size)
                 .map(ScoredPlace::toResponse)

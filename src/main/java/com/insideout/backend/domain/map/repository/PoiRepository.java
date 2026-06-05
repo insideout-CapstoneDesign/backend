@@ -52,6 +52,8 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
 
     @Query(value = """
             SELECT
+                b.id AS buildingId,
+                p.id AS poiId,
                 p.name AS name,
                 b.address AS address,
                 b.name AS buildingName,

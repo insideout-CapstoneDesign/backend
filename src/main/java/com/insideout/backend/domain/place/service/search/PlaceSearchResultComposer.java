@@ -62,6 +62,8 @@ final class PlaceSearchResultComposer {
                 building.getExternalApiId(),
                 null,
                 null,
+                null,
+                building.getId(),
                 null
         );
     }
@@ -77,7 +79,9 @@ final class PlaceSearchResultComposer {
                 poi.getExternalApiId(),
                 null,
                 poi.getBuildingName(),
-                null
+                null,
+                poi.getBuildingId(),
+                poi.getPoiId()
         );
     }
 
@@ -153,7 +157,9 @@ final class PlaceSearchResultComposer {
                 registered.externalApiId(),
                 external.distanceMeters(),
                 registered.parentBuildingName(),
-                registered.displayName()
+                registered.displayName(),
+                registered.placeId(),
+                registered.poiId()
         );
     }
 
@@ -270,7 +276,9 @@ final class PlaceSearchResultComposer {
                     item.externalApiId(),
                     distanceMeter,
                     item.parentBuildingName(),
-                    item.displayName()
+                    item.displayName(),
+                    item.placeId(),
+                    item.poiId()
             );
         }
     }

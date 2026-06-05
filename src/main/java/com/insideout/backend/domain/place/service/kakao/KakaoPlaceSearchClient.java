@@ -170,6 +170,8 @@ public class KakaoPlaceSearchClient {
                     resolvedLat,
                     resolvedLng,
                     false,
+                    null,
+                    null,
                     null
             ));
         } catch (RestClientException e) {

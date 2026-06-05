@@ -44,6 +44,8 @@ final class PlaceSuggestResultMapper {
                         item.getExternalApiId(),
                         null,
                         null,
+                        null,
+                        item.getId(),
                         null
                 ))
                 .forEach(item -> registered.putIfAbsent(item.externalApiId(), item));
@@ -58,7 +60,9 @@ final class PlaceSuggestResultMapper {
                         item.getExternalApiId(),
                         null,
                         item.getBuildingName(),
-                        null
+                        null,
+                        item.getBuildingId(),
+                        item.getPoiId()
                 ))
                 .forEach(item -> registered.putIfAbsent(item.externalApiId(), item));
         return registered.entrySet().stream()
@@ -102,7 +106,9 @@ final class PlaceSuggestResultMapper {
                 suggested.externalApiId(),
                 distanceMeters,
                 matched != null ? matched.parentBuildingName() : null,
-                matched != null ? matched.displayName() : null
+                matched != null ? matched.displayName() : null,
+                matched != null ? matched.placeId() : null,
+                matched != null ? matched.poiId() : null
         );
     }
 }

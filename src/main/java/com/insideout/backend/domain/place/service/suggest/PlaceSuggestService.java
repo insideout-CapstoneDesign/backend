@@ -36,8 +36,18 @@ public class PlaceSuggestService {
         PlaceSearchSupport.validateCoordinate(lat, lng, true);
         int resolvedSize = normalizeSize(size);
 
-        List<PlaceSuggestElasticsearchClient.SuggestDocument> fromElasticsearch = placeSuggestElasticsearchClient
-                .suggest(normalizedQuery, resolvedSize, lat, lng);
+        List<PlaceSuggestElasticsearchClient.SuggestDocument> fromElasticsearch;
+        try {
+            fromElasticsearch = placeSuggestElasticsearchClient
+                    .suggest(normalizedQuery, resolvedSize, lat, lng);
+        } catch (PlaceException ex) {
+            if (ex.getErrorCode() != PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE) {
+                throw ex;
+            }
+            log.warn("Elasticsearch unavailable for suggest query='{}' lat={} lng={} size={}. Falling back to Kakao.",
+                    normalizedQuery, lat, lng, resolvedSize, ex);
+            fromElasticsearch = List.of();
+        }
 
         List<PlaceSuggestElasticsearchClient.SuggestDocument> mergedSuggested = fromElasticsearch;
         int fallbackSize = PlaceSuggestFallbackPolicy.resolveFallbackSize(resolvedSize, fromElasticsearch.size(), lat, lng);

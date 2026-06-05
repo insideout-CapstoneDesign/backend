@@ -3,6 +3,8 @@ package com.insideout.backend.domain.navigation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,9 +27,11 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteFa
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteMode;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.RouteOption;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.StepDto;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpEntity;
@@ -56,6 +60,38 @@ class NavigationServiceTest {
     void setUp() {
         navigationService = new NavigationService(mapQueryFacade, restTemplate);
         ReflectionTestUtils.setField(navigationService, "tmapApiKey", "test-tmap-key");
+    }
+
+    @Test
+    @DisplayName(".env에서 따옴표로 감싼 TMAP 키를 읽어도 appKey 헤더에는 따옴표 없이 전달한다")
+    void tmapApiKeyStripsWrappingQuotesBeforeSendingHeader() throws Exception {
+        ReflectionTestUtils.setField(navigationService, "tmapApiKey", "\"test-tmap-key\"");
+        when(restTemplate.postForObject(
+                eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        )).thenReturn(walkRouteResponse());
+
+        navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                null,
+                false,
+                List.of(RouteType.WALK)
+        ));
+
+        ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, times(2)).postForObject(
+                eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
+                entityCaptor.capture(),
+                eq(JsonNode.class)
+        );
+        assertThat(entityCaptor.getAllValues())
+                .allSatisfy(entity -> assertThat(entity.getHeaders().getFirst("appKey")).isEqualTo("test-tmap-key"));
     }
 
     @Test
@@ -179,6 +215,40 @@ class NavigationServiceTest {
         assertThat(response.failures())
                 .extracting(RouteFailureDto::routeOption)
                 .containsOnly(RouteOption.TRANSIT_CANDIDATE);
+    }
+
+    @Test
+    void transitLegIncludesIntermediateStops() throws Exception {
+        when(restTemplate.postForObject(
+                eq("https://apis.openapi.sk.com/transit/routes"),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        )).thenReturn(transitRouteResponseWithPassStops());
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                null,
+                false,
+                List.of(RouteType.TRANSIT)
+        ));
+
+        LegDto busLeg = response.routes().get(0).legs().stream()
+                .filter(leg -> leg.mode() == LegMode.BUS)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(busLeg.stationCount()).isEqualTo(4);
+        assertThat(busLeg.stops())
+                .extracting(NavigationResponseDto.TransitStopDto::name)
+                .containsExactly("중간정류장1", "중간정류장2");
+        assertThat(busLeg.stops().get(0).stationId()).isEqualTo("S-1");
+        assertThat(busLeg.stops().get(0).x()).isEqualTo(126.95);
+        assertThat(busLeg.stops().get(0).y()).isEqualTo(37.45);
     }
 
     @Test
@@ -451,6 +521,42 @@ class NavigationServiceTest {
                               "distance": 600,
                               "start": {"name": "출발지", "lon": 126.9, "lat": 37.4},
                               "end": {"name": "정류장", "lon": 127.0, "lat": 37.45}
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+                """);
+    }
+
+    private JsonNode transitRouteResponseWithPassStops() throws Exception {
+        return OBJECT_MAPPER.readTree("""
+                {
+                  "metaData": {
+                    "plan": {
+                      "itineraries": [
+                        {
+                          "totalTime": 1200,
+                          "totalDistance": 5000,
+                          "legs": [
+                            {
+                              "mode": "BUS",
+                              "route": "간선 101",
+                              "type": "bus",
+                              "sectionTime": 900,
+                              "distance": 4400,
+                              "start": {"name": "승차정류장"},
+                              "end": {"name": "하차정류장"},
+                              "passStopList": {
+                                "stationList": [
+                                  {"stationName": "승차정류장", "stationID": "START", "lon": "126.90", "lat": "37.40"},
+                                  {"stationName": "중간정류장1", "stationID": "S-1", "lon": "126.95", "lat": "37.45"},
+                                  {"stationName": "중간정류장2", "stationID": "S-2", "lon": 127.0, "lat": 37.48},
+                                  {"stationName": "하차정류장", "stationID": "END", "lon": "127.10", "lat": "37.50"}
+                                ]
+                              }
                             }
                           ]
                         }

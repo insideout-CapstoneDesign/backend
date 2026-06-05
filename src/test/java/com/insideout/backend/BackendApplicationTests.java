@@ -5,6 +5,7 @@ import com.insideout.backend.domain.ai.repository.AiJobRepository;
 import com.insideout.backend.domain.ai.repository.CampusAiDetectionRepository;
 import com.insideout.backend.domain.ai.repository.CampusAiJobRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.repository.BuildingEntranceMappingRepository;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.CampusMapRepository;
 import com.insideout.backend.domain.building.repository.CampusRepository;
@@ -12,9 +13,11 @@ import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.building.repository.FloorplanCalibrationRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
 import com.insideout.backend.domain.map.repository.EdgeRepository;
+import com.insideout.backend.domain.map.repository.FloorplanObjectRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.ObstacleRepository;
+import com.insideout.backend.domain.map.repository.PoiCategoryRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorRepository;
@@ -23,6 +26,8 @@ import com.insideout.backend.domain.map.storage.MapAssetStorage;
 import com.insideout.backend.domain.tenant.repository.TenantMembershipRepository;
 import com.insideout.backend.domain.tenant.repository.TenantRepository;
 import com.insideout.backend.domain.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
@@ -51,6 +56,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     private BuildingRepository buildingRepository;
+
+    @MockitoBean
+    private BuildingEntranceMappingRepository buildingEntranceMappingRepository;
 
     @MockitoBean
     private PoiRepository poiRepository;
@@ -104,6 +112,12 @@ class BackendApplicationTests {
     private FloorplanCalibrationRepository floorplanCalibrationRepository;
 
     @MockitoBean
+    private FloorplanObjectRepository floorplanObjectRepository;
+
+    @MockitoBean
+    private PoiCategoryRepository poiCategoryRepository;
+
+    @MockitoBean
     private VerticalConnectorRepository verticalConnectorRepository;
 
     @MockitoBean
@@ -111,6 +125,12 @@ class BackendApplicationTests {
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
+
+    @MockitoBean
+    private EntityManager entityManager;
+
+    @MockitoBean
+    private EntityManagerFactory entityManagerFactory;
 
     @Test
     void contextLoads() {

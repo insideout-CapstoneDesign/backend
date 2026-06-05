@@ -8,9 +8,11 @@ import com.insideout.backend.domain.building.repository.BuildingDirectoryReposit
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
+import com.insideout.backend.domain.map.entity.PoiCategory;
 import com.insideout.backend.domain.map.entity.MapVersion;
 import com.insideout.backend.domain.map.entity.Poi;
 import com.insideout.backend.domain.map.enums.MapType;
+import com.insideout.backend.domain.map.repository.PoiCategoryRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceDetailResponse;
@@ -23,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -36,6 +40,7 @@ public class PlaceDetailService {
     private final BuildingDirectoryRepository buildingDirectoryRepository;
     private final FloorRepository floorRepository;
     private final FloorplanRepository floorplanRepository;
+    private final PoiCategoryRepository poiCategoryRepository;
     private final MapVersionRepository mapVersionRepository;
     private final PoiRepository poiRepository;
 
@@ -73,7 +78,8 @@ public class PlaceDetailService {
                         .map(Floor::getId)
                         .collect(Collectors.toSet());
 
-                Map<UUID, List<Poi>> poisByFloorId = poiRepository.findAllByMapVersionIdWithFloor(publishedMapVersion.getId()).stream()
+                List<Poi> publishedPois = poiRepository.findAllByMapVersionIdWithFloor(publishedMapVersion.getId());
+                Map<UUID, List<Poi>> poisByFloorId = filterDisplayablePois(publishedPois).stream()
                         .collect(Collectors.groupingBy(
                                 poi -> poi.getFloor().getId(),
                                 LinkedHashMap::new,
@@ -95,6 +101,7 @@ public class PlaceDetailService {
 
         return Optional.of(new PlaceDetailResponse(
                 resolvedPlace.placeId(),
+                resolvedPlace.poiId(),
                 resolvedPlace.externalApiId(),
                 resolvedPlace.name(),
                 resolvedPlace.address(),
@@ -166,17 +173,16 @@ public class PlaceDetailService {
 
     private ResolvedPlace toResolvedPlace(Building building, Poi selectedPoi) {
         BuildingDirectory buildingDirectory = buildingDirectoryRepository.findByIdAndIsPublicTrue(building.getId()).orElse(null);
-        String selectedName = selectedPoi != null
-                ? selectedPoi.getName()
-                : buildingDirectory != null ? buildingDirectory.getName() : building.getName();
+        String selectedName = buildingDirectory != null ? buildingDirectory.getName() : building.getName();
         String selectedAddress = buildingDirectory != null ? buildingDirectory.getAddress() : building.getAddress();
-        String selectedExternalApiId = selectedPoi != null
-                ? selectedPoi.getExternalApiId()
-                : building.getExternalApiId();
+        String selectedExternalApiId = building.getExternalApiId() != null
+                ? building.getExternalApiId()
+                : selectedPoi != null ? selectedPoi.getExternalApiId() : null;
         boolean isRegistered = buildingDirectory != null && buildingDirectory.isPublic();
 
         return new ResolvedPlace(
-                selectedPoi != null ? selectedPoi.getId() : building.getId(),
+                building.getId(),
+                selectedPoi != null ? selectedPoi.getId() : null,
                 selectedExternalApiId,
                 selectedName,
                 selectedAddress,
@@ -213,8 +219,70 @@ public class PlaceDetailService {
                 .toList();
     }
 
+    private List<Poi> filterDisplayablePois(List<Poi> pois) {
+        if (pois == null || pois.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> categoryIds = pois.stream()
+                .map(Poi::getCategoryId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (categoryIds.isEmpty()) {
+            return pois.stream()
+                    .filter(this::looksLikeStorePoi)
+                    .toList();
+        }
+
+        Set<Long> facilityCategoryIds = poiCategoryRepository.findAllById(categoryIds).stream()
+                .filter(category -> category.getCode() != null && category.getCode().startsWith("facility."))
+                .map(PoiCategory::getId)
+                .collect(Collectors.toSet());
+        Set<Long> storeCategoryIds = poiCategoryRepository.findAllById(categoryIds).stream()
+                .filter(category -> category.getCode() != null && category.getCode().startsWith("store."))
+                .map(PoiCategory::getId)
+                .collect(Collectors.toSet());
+
+        return pois.stream()
+                .filter(poi -> {
+                    Long categoryId = poi.getCategoryId();
+                    if (categoryId == null) {
+                        return looksLikeStorePoi(poi);
+                    }
+                    if (facilityCategoryIds.contains(categoryId)) {
+                        return false;
+                    }
+                    if (storeCategoryIds.contains(categoryId)) {
+                        return true;
+                    }
+                    return looksLikeStorePoi(poi);
+                })
+                .toList();
+    }
+
+    private boolean looksLikeStorePoi(Poi poi) {
+        if (poi == null || poi.getName() == null) {
+            return false;
+        }
+
+        String normalized = poi.getName().toLowerCase(Locale.ROOT).replace(" ", "");
+        return !normalized.contains("elevator")
+                && !normalized.contains("escalator")
+                && !normalized.contains("restroom")
+                && !normalized.contains("화장실")
+                && !normalized.contains("엘리베이터")
+                && !normalized.contains("에스컬레이터")
+                && !normalized.contains("계단")
+                && !normalized.contains("aed")
+                && !normalized.contains("안내데스크")
+                && !normalized.contains("화장실")
+                && !normalized.contains("ladiesroom")
+                && !normalized.contains("men'sroom");
+    }
+
     private record ResolvedPlace(
             UUID placeId,
+            UUID poiId,
             String externalApiId,
             String name,
             String address,

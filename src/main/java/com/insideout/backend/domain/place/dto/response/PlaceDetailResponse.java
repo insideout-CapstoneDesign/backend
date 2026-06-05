@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record PlaceDetailResponse(
         UUID placeId,
+        UUID poiId,
         String externalApiId,
         String name,
         String address,

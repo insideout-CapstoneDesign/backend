@@ -1,8 +1,10 @@
 package com.insideout.backend.domain.navigation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,6 +94,32 @@ class NavigationServiceTest {
         );
         assertThat(entityCaptor.getAllValues())
                 .allSatisfy(entity -> assertThat(entity.getHeaders().getFirst("appKey")).isEqualTo("test-tmap-key"));
+    }
+
+    @Test
+    @DisplayName("TMAP 키가 비어 있으면 외부 호출 전에 설정 오류를 드러낸다")
+    void blankTmapApiKeyFailsBeforeSendingRequest() {
+        ReflectionTestUtils.setField(navigationService, "tmapApiKey", "  \"\"  ");
+
+        assertThatThrownBy(() -> navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                null,
+                false,
+                List.of(RouteType.WALK)
+        )))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("tmap.api.key must not be blank");
+
+        verify(restTemplate, never()).postForObject(
+                any(String.class),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        );
     }
 
     @Test

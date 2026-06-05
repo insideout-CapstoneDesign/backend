@@ -333,16 +333,16 @@ public class NavigationService {
     }
 
     private String normalizeApiKey(String apiKey) {
-        if (apiKey == null) {
-            return "";
-        }
-        String normalized = apiKey.trim();
+        String normalized = apiKey == null ? "" : apiKey.trim();
         if (normalized.length() >= 2) {
             char first = normalized.charAt(0);
             char last = normalized.charAt(normalized.length() - 1);
             if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-                return normalized.substring(1, normalized.length() - 1).trim();
+                normalized = normalized.substring(1, normalized.length() - 1).trim();
             }
+        }
+        if (normalized.isBlank()) {
+            throw new IllegalStateException("tmap.api.key must not be blank");
         }
         return normalized;
     }

@@ -1,7 +1,9 @@
 package com.insideout.backend.domain.place.service.search;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
+import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.building.entity.BuildingDirectory;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
@@ -29,6 +31,7 @@ public class PlaceSearchService {
     private static final int MAX_SEARCH_SIZE = 100;
 
     private final BuildingRepository buildingRepository;
+    private final BuildingDirectoryRepository buildingDirectoryRepository;
     private final PoiRepository poiRepository;
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
@@ -93,6 +96,16 @@ public class PlaceSearchService {
             return registeredPlace;
         }
 
+        Optional<PlaceNearestResponse> directoryMatchedPlace = buildingDirectoryRepository
+                .findNearestPublicBuilding(lng, lat, resolvedRadius)
+                .flatMap(directory -> buildingRepository.findById(directory.getId())
+                        .map(building -> toRegisteredNearestResponse(directory, building))
+                        .or(() -> Optional.of(toRegisteredNearestResponse(directory, null))));
+
+        if (directoryMatchedPlace.isPresent()) {
+            return directoryMatchedPlace;
+        }
+
         return kakaoPlaceSearchClient.findNearestByCoordinate(lat, lng, resolvedRadius);
     }
 
@@ -126,7 +139,27 @@ public class PlaceSearchService {
                 building.getLat(),
                 building.getLng(),
                 true,
-                building.getExternalApiId()
+                building.getExternalApiId(),
+                building.getId(),
+                null
+        );
+    }
+
+    private PlaceNearestResponse toRegisteredNearestResponse(BuildingDirectory directory, com.insideout.backend.domain.building.entity.Building building) {
+        String externalApiId = building != null ? building.getExternalApiId() : null;
+        Double lat = directory.getCentroid() != null ? directory.getCentroid().getY() : null;
+        Double lng = directory.getCentroid() != null ? directory.getCentroid().getX() : null;
+
+        return new PlaceNearestResponse(
+                directory.getName(),
+                directory.getAddress(),
+                null,
+                lat,
+                lng,
+                true,
+                externalApiId,
+                directory.getId(),
+                null
         );
     }
 }

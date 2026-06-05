@@ -1,6 +1,9 @@
 package com.insideout.backend.domain.place.service;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
+import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.entity.BuildingDirectory;
+import com.insideout.backend.domain.building.entity.Building;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
@@ -40,11 +43,17 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PlaceSearchServiceTest {
 
+    private static final UUID BUILDING_ID = UUID.fromString("2c4a5480-bbf7-4a5d-b3dd-8b7b1e270001");
+    private static final UUID POI_ID = UUID.fromString("956d4fc7-343a-4821-9794-ba6e7ca834dc");
+
     @Mock
     private KakaoPlaceSearchClient kakaoPlaceSearchClient;
 
     @Mock
     private BuildingRepository buildingRepository;
+
+    @Mock
+    private BuildingDirectoryRepository buildingDirectoryRepository;
 
     @Mock
     private PoiRepository poiRepository;
@@ -63,6 +72,7 @@ class PlaceSearchServiceTest {
         lenient().when(buildingRepository.searchRegisteredPlaces(anyString())).thenReturn(List.of());
         lenient().when(buildingRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
         lenient().when(buildingRepository.findNearestRegisteredPlace(anyDouble(), anyDouble(), anyInt())).thenReturn(Optional.empty());
+        lenient().when(buildingDirectoryRepository.findNearestPublicBuilding(anyDouble(), anyDouble(), anyInt())).thenReturn(Optional.empty());
         lenient().when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection())).thenReturn(List.of());
         lenient().when(placeSuggestElasticsearchClient.search(anyString(), anyInt(), any(), any(), any()))
                 .thenReturn(List.of());
@@ -178,7 +188,7 @@ class PlaceSearchServiceTest {
                 .thenReturn(List.of());
         when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
                 .thenReturn(List.of(
-                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326")
+                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326", BUILDING_ID, POI_ID)
                 ));
         when(kakaoPlaceSearchClient.searchByKeyword("신세계백화점 본점"))
                 .thenReturn(List.of(
@@ -190,8 +200,12 @@ class PlaceSearchServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).name()).isEqualTo("신세계백화점 본점 디 에스테이트");
         assertThat(result.get(0).displayName()).isNull();
+        assertThat(result.get(0).placeId()).isNotNull();
+        assertThat(result.get(0).poiId()).isNull();
         assertThat(result.get(1).name()).isEqualTo("구찌");
         assertThat(result.get(1).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
+        assertThat(result.get(1).placeId()).isEqualTo(BUILDING_ID);
+        assertThat(result.get(1).poiId()).isEqualTo(POI_ID);
     }
 
     @Test
@@ -202,7 +216,7 @@ class PlaceSearchServiceTest {
                 .thenReturn(List.of());
         when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
                 .thenReturn(List.of(
-                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326")
+                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326", BUILDING_ID, POI_ID)
                 ));
         when(kakaoPlaceSearchClient.searchByKeyword("구찌"))
                 .thenReturn(List.of(
@@ -215,6 +229,8 @@ class PlaceSearchServiceTest {
         assertThat(result.get(0).name()).isEqualTo("구찌");
         assertThat(result.get(0).address()).isEqualTo("서울 중구 퇴계로 77");
         assertThat(result.get(0).isRegistered()).isTrue();
+        assertThat(result.get(0).placeId()).isEqualTo(BUILDING_ID);
+        assertThat(result.get(0).poiId()).isEqualTo(POI_ID);
         assertThat(result.get(0).parentBuildingName()).isEqualTo("신세계백화점 본점 디 에스테이트");
         assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
     }
@@ -225,7 +241,7 @@ class PlaceSearchServiceTest {
                 .thenReturn(List.of());
         when(poiRepository.findRegisteredPlacesByExternalApiIds(anyCollection()))
                 .thenReturn(List.of(
-                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326")
+                        poiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326", BUILDING_ID, POI_ID)
                 ));
         when(kakaoPlaceSearchClient.searchByKeyword("신세계백화점 본점 디 에스테이트 구찌"))
                 .thenReturn(List.of(
@@ -238,6 +254,8 @@ class PlaceSearchServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).name()).isEqualTo("구찌");
         assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
+        assertThat(result.get(0).placeId()).isEqualTo(BUILDING_ID);
+        assertThat(result.get(0).poiId()).isEqualTo(POI_ID);
     }
 
     @Test
@@ -306,6 +324,26 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void findNearest_fallsBackToBuildingDirectoryBeforeKakao() {
+        BuildingDirectory directory = buildingDirectory();
+        when(buildingRepository.findNearestRegisteredPlace(37.5, 127.0, 30))
+                .thenReturn(Optional.empty());
+        when(buildingDirectoryRepository.findNearestPublicBuilding(127.0, 37.5, 30))
+                .thenReturn(Optional.of(directory));
+        when(buildingRepository.findById(BUILDING_ID))
+                .thenReturn(Optional.of(buildingWithExternalId("18217490")));
+
+        Optional<PlaceNearestResponse> result = placeSearchService.findNearest(37.5, 127.0, 30);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().name()).isEqualTo("신세계백화점 본점 디 에스테이트");
+        assertThat(result.get().isRegistered()).isTrue();
+        assertThat(result.get().placeId()).isEqualTo(BUILDING_ID);
+        assertThat(result.get().externalApiId()).isEqualTo("18217490");
+        verify(kakaoPlaceSearchClient, never()).findNearestByCoordinate(37.5, 127.0, 30);
+    }
+
+    @Test
     void findNearest_invalidRadius_throwsPlaceException() {
         assertThatThrownBy(() -> placeSearchService.findNearest(37.5, 127.0, 0))
                 .isInstanceOf(PlaceException.class)
@@ -347,8 +385,25 @@ class PlaceSearchServiceTest {
         };
     }
 
-    private RegisteredPoiSearchProjection poiProjection(String name, String address, String buildingName, String externalApiId) {
+    private RegisteredPoiSearchProjection poiProjection(
+            String name,
+            String address,
+            String buildingName,
+            String externalApiId,
+            UUID buildingId,
+            UUID poiId
+    ) {
         return new RegisteredPoiSearchProjection() {
+            @Override
+            public UUID getBuildingId() {
+                return buildingId;
+            }
+
+            @Override
+            public UUID getPoiId() {
+                return poiId;
+            }
+
             @Override
             public String getName() {
                 return name;
@@ -369,5 +424,24 @@ class PlaceSearchServiceTest {
                 return externalApiId;
             }
         };
+    }
+
+    private BuildingDirectory buildingDirectory() {
+        return BuildingDirectory.builder()
+                .id(BUILDING_ID)
+                .name("신세계백화점 본점 디 에스테이트")
+                .address("서울 중구 퇴계로 77")
+                .isPublic(true)
+                .build();
+    }
+
+    private Building buildingWithExternalId(String externalApiId) {
+        return Building.builder()
+                .name("신세계백화점 본점 디 에스테이트")
+                .address("서울 중구 퇴계로 77")
+                .entranceCount(0)
+                .meta(java.util.Map.of())
+                .externalApiId(externalApiId)
+                .build();
     }
 }

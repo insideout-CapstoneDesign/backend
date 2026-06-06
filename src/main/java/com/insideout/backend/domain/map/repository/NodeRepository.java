@@ -2,6 +2,7 @@ package com.insideout.backend.domain.map.repository;
 
 import com.insideout.backend.domain.map.entity.Node;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -36,7 +37,9 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
 
     List<Node> findByMapVersion_Building_IdAndKindCodeOrderByCreatedAtAsc(UUID buildingId, String kindCode);
 
-    long countByMapVersion_Building_IdAndKindCode(UUID buildingId, String kindCode);
+    List<Node> findByMapVersionIdAndKindCodeOrderByCreatedAtAsc(UUID mapVersionId, String kindCode);
+
+    long countByMapVersion_Building_IdAndKindCodeAndMapVersion_Status(UUID buildingId, String kindCode, String status);
 
     @Query(value = """
             SELECT n.*
@@ -59,4 +62,11 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
     );
 
     List<Node> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
+
+    @Modifying
+    @Query("delete from Node n where n.mapVersion.id = :mapVersionId and n.floor.id = :floorId")
+    void deleteByMapVersionIdAndFloorId(
+            @Param("mapVersionId") UUID mapVersionId,
+            @Param("floorId") UUID floorId
+    );
 }

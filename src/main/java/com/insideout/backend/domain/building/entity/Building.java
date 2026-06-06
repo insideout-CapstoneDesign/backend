@@ -14,6 +14,7 @@ import com.insideout.backend.domain.building.exception.BuildingErrorCode;
 import com.insideout.backend.domain.building.exception.BuildingException;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -137,6 +138,16 @@ public class Building {
             throw new BuildingException(BuildingErrorCode.NEGATIVE_ENTRANCE_COUNT);
         }
         this.entranceCount = entranceCount;
+    }
+
+    public void updateActivationStatus(String activationStatus) {
+        Map<String, Object> nextMeta = new LinkedHashMap<>(this.meta != null ? this.meta : Map.of());
+        if (activationStatus == null || activationStatus.isBlank()) {
+            nextMeta.remove("activationStatus");
+        } else {
+            nextMeta.put("activationStatus", activationStatus);
+        }
+        this.meta = nextMeta;
     }
 
     private boolean hasDifferentTenant(Tenant tenant, Campus campus) {

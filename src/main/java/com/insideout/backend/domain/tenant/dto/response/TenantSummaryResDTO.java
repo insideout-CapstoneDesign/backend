@@ -13,15 +13,21 @@ public record TenantSummaryResDTO(
         String slug,
         String displayName,
         String status,
+        int buildingCount,
         String role,
         OffsetDateTime joinedAt
 ) {
     public static TenantSummaryResDTO from(Tenant tenant, String role, OffsetDateTime joinedAt) {
+        return from(tenant, role, joinedAt, false, 0);
+    }
+
+    public static TenantSummaryResDTO from(Tenant tenant, String role, OffsetDateTime joinedAt, boolean approvedByPublishedMap, int buildingCount) {
         return new TenantSummaryResDTO(
                 tenant.getId(),
                 tenant.getSlug(),
                 tenant.getDisplayName(),
-                tenant.getStatus(),
+                approvedByPublishedMap ? "approved" : tenant.getStatus(),
+                buildingCount,
                 role,
                 joinedAt
         );

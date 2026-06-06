@@ -134,4 +134,13 @@ public class MapVersion {
     private MapType inferMapType(Campus campus) {
         return campus != null ? MapType.CAMPUS : MapType.BUILDING;
     }
+
+    public void publish() {
+        this.status = "published";
+        this.publishedAt = OffsetDateTime.now();
+    }
+
+    public void archive() {
+        this.status = "archived";
+    }
 }

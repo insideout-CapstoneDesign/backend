@@ -2,6 +2,7 @@ package com.insideout.backend.domain.map.repository;
 
 import com.insideout.backend.domain.map.entity.Edge;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -22,6 +23,17 @@ public interface EdgeRepository extends JpaRepository<Edge, UUID> {
               and e.toNode.floor.id = :floorId
             """)
     List<Edge> findByMapVersionIdAndFloorId(
+            @Param("mapVersionId") UUID mapVersionId,
+            @Param("floorId") UUID floorId
+    );
+
+    @Modifying
+    @Query("""
+            delete from Edge e
+            where e.mapVersion.id = :mapVersionId
+              and (e.fromNode.floor.id = :floorId or e.toNode.floor.id = :floorId)
+            """)
+    void deleteByMapVersionIdAndFloorId(
             @Param("mapVersionId") UUID mapVersionId,
             @Param("floorId") UUID floorId
     );

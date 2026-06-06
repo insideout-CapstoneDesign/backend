@@ -11,6 +11,8 @@ spring:
 
   config:
     import:
+      - optional:file:.env[.properties]
+      - optional:file:backend/.env[.properties]
       - optional:classpath:db.properties
       - optional:classpath:security.yml
 

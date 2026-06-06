@@ -5,6 +5,7 @@ import com.insideout.backend.domain.ai.repository.AiJobRepository;
 import com.insideout.backend.domain.ai.repository.CampusAiDetectionRepository;
 import com.insideout.backend.domain.ai.repository.CampusAiJobRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.repository.BuildingEntranceMappingRepository;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.CampusMapRepository;
 import com.insideout.backend.domain.building.repository.CampusRepository;
@@ -25,6 +26,8 @@ import com.insideout.backend.domain.map.storage.MapAssetStorage;
 import com.insideout.backend.domain.tenant.repository.TenantMembershipRepository;
 import com.insideout.backend.domain.tenant.repository.TenantRepository;
 import com.insideout.backend.domain.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
@@ -55,6 +58,9 @@ class BackendApplicationTests {
     private BuildingRepository buildingRepository;
 
     @MockitoBean
+    private BuildingEntranceMappingRepository buildingEntranceMappingRepository;
+
+    @MockitoBean
     private PoiRepository poiRepository;
 
     @MockitoBean
@@ -77,12 +83,6 @@ class BackendApplicationTests {
 
     @MockitoBean
     private MapAssetStorage mapAssetStorage;
-
-    @MockitoBean
-    private FloorplanObjectRepository floorplanObjectRepository;
-
-    @MockitoBean
-    private PoiCategoryRepository poiCategoryRepository;
 
     @MockitoBean
     private TenantRepository tenantRepository;
@@ -119,6 +119,12 @@ class BackendApplicationTests {
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
+
+    @MockitoBean
+    private EntityManager entityManager;
+
+    @MockitoBean
+    private EntityManagerFactory entityManagerFactory;
 
     @Test
     void contextLoads() {

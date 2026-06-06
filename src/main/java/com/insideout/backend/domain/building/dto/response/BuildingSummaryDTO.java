@@ -51,22 +51,33 @@ public record BuildingSummaryDTO(
     }
 
     public static BuildingSummaryDTO from(Building building) {
-        return from(building, List.of(), java.util.Map.of(), java.util.Map.of());
+        return from(building, List.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), false);
     }
 
     public static BuildingSummaryDTO from(Building building, List<Floor> floors) {
-        return from(building, floors, java.util.Map.of(), java.util.Map.of());
+        return from(building, floors, java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), false);
     }
 
     public static BuildingSummaryDTO from(Building building, List<Floor> floors, java.util.Map<UUID, Floorplan> floorplanByFloorId) {
-        return from(building, floors, floorplanByFloorId, java.util.Map.of(), java.util.Map.of());
+        return from(building, floors, floorplanByFloorId, java.util.Map.of(), java.util.Map.of(), false);
     }
 
     public static BuildingSummaryDTO from(Building building, List<Floor> floors, java.util.Map<UUID, Floorplan> floorplanByFloorId, java.util.Map<UUID, String> presignedUrlByFloorplanId) {
-        return from(building, floors, floorplanByFloorId, presignedUrlByFloorplanId, java.util.Map.of());
+        return from(building, floors, floorplanByFloorId, presignedUrlByFloorplanId, java.util.Map.of(), false);
     }
 
     public static BuildingSummaryDTO from(Building building, List<Floor> floors, java.util.Map<UUID, Floorplan> floorplanByFloorId, java.util.Map<UUID, String> presignedUrlByFloorplanId, java.util.Map<UUID, Boolean> analysisCompletedByFloorplanId) {
+        return from(building, floors, floorplanByFloorId, presignedUrlByFloorplanId, analysisCompletedByFloorplanId, false);
+    }
+
+    public static BuildingSummaryDTO from(
+            Building building,
+            List<Floor> floors,
+            java.util.Map<UUID, Floorplan> floorplanByFloorId,
+            java.util.Map<UUID, String> presignedUrlByFloorplanId,
+            java.util.Map<UUID, Boolean> analysisCompletedByFloorplanId,
+            boolean published
+    ) {
         return new BuildingSummaryDTO(
                 building.getId(),
                 building.getTenant().getId(),
@@ -76,7 +87,7 @@ public record BuildingSummaryDTO(
                 building.getCampus() != null ? building.getCampus().getName() : null,
                 building.getEntranceCount(),
                 extractRequiresFloorplan(building),
-                extractActivationStatus(building),
+                extractActivationStatus(building, published),
                 building.getCreatedAt(),
                 floors != null ? floors.stream()
                         .map(floor -> {
@@ -100,7 +111,10 @@ public record BuildingSummaryDTO(
         return false;
     }
 
-    private static String extractActivationStatus(Building building) {
+    private static String extractActivationStatus(Building building, boolean published) {
+        if (published) {
+            return "active";
+        }
         Object value = building.getMeta() != null ? building.getMeta().get("activationStatus") : null;
         if (value instanceof String stringValue && !stringValue.isBlank()) {
             return stringValue;

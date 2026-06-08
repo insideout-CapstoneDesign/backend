@@ -18,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class BuildingDirectorySyncService {
     private final BuildingRepository buildingRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
     private final MapVersionRepository mapVersionRepository;
+    private final TransactionTemplate transactionTemplate;
 
     @Transactional
     public BuildingDirectory sync(Building building) {
@@ -97,16 +99,24 @@ public class BuildingDirectorySyncService {
         int pageNumber = 0;
         int syncedCount = 0;
 
-        Page<Building> page;
+        PageSyncResult pageResult;
         do {
-            page = buildingRepository.findAll(PageRequest.of(
-                    pageNumber,
-                    normalizedBatchSize,
-                    Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
-            ));
-            syncedCount += syncAll(page.getContent()).size();
+            int currentPage = pageNumber;
+            pageResult = transactionTemplate.execute(status -> {
+                Page<Building> page = buildingRepository.findAll(PageRequest.of(
+                        currentPage,
+                        normalizedBatchSize,
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
+                ));
+                int currentSyncedCount = syncAll(page.getContent()).size();
+                return new PageSyncResult(page.hasNext(), currentSyncedCount);
+            });
+            if (pageResult == null) {
+                break;
+            }
+            syncedCount += pageResult.syncedCount();
             pageNumber++;
-        } while (page.hasNext());
+        } while (pageResult.hasNext());
 
         return syncedCount;
     }
@@ -170,5 +180,11 @@ public class BuildingDirectorySyncService {
             }
         }
         return null;
+    }
+
+    private record PageSyncResult(
+            boolean hasNext,
+            int syncedCount
+    ) {
     }
 }

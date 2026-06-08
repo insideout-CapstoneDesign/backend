@@ -10,6 +10,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "building.directory.bootstrap.enabled", havingValue = "true", matchIfMissing = true)
@@ -30,34 +34,53 @@ public class BuildingDirectoryBootstrapRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Boolean acquired = jdbcTemplate.queryForObject(
-                "SELECT pg_try_advisory_lock(?)",
-                Boolean.class,
-                lockId
-        );
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.info("[BuildingDirectoryBootstrap] Skip sync. Lock not acquired. lockId={}", lockId);
-            return;
-        }
-
-        try {
-            int syncedCount = buildingDirectorySyncService.syncAllExisting(batchSize);
-            log.info(
-                    "[BuildingDirectoryBootstrap] building_directory sync completed. synced={}, batchSize={}",
-                    syncedCount,
-                    batchSize
-            );
-        } catch (Exception e) {
-            log.error("[BuildingDirectoryBootstrap] building_directory sync failed. batchSize={}", batchSize, e);
-        } finally {
+        jdbcTemplate.execute((Connection connection) -> {
             try {
-                jdbcTemplate.queryForObject(
-                        "SELECT pg_advisory_unlock(?)",
-                        Boolean.class,
-                        lockId
+                if (!acquireAdvisoryLock(connection)) {
+                    log.info("[BuildingDirectoryBootstrap] Skip sync. Lock not acquired. lockId={}", lockId);
+                    return null;
+                }
+            } catch (Exception e) {
+                log.error("[BuildingDirectoryBootstrap] Failed to acquire advisory lock. lockId={}", lockId, e);
+                return null;
+            }
+
+            try {
+                int syncedCount = buildingDirectorySyncService.syncAllExisting(batchSize);
+                log.info(
+                        "[BuildingDirectoryBootstrap] building_directory sync completed. synced={}, batchSize={}",
+                        syncedCount,
+                        batchSize
                 );
             } catch (Exception e) {
-                log.warn("[BuildingDirectoryBootstrap] Failed to release advisory lock. lockId={}", lockId, e);
+                log.error("[BuildingDirectoryBootstrap] building_directory sync failed. batchSize={}", batchSize, e);
+            } finally {
+                try {
+                    if (!releaseAdvisoryLock(connection)) {
+                        log.warn("[BuildingDirectoryBootstrap] Advisory lock was not released. lockId={}", lockId);
+                    }
+                } catch (Exception e) {
+                    log.warn("[BuildingDirectoryBootstrap] Failed to release advisory lock. lockId={}", lockId, e);
+                }
+            }
+            return null;
+        });
+    }
+
+    private boolean acquireAdvisoryLock(Connection connection) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT pg_try_advisory_lock(?)")) {
+            statement.setLong(1, lockId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getBoolean(1);
+            }
+        }
+    }
+
+    private boolean releaseAdvisoryLock(Connection connection) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT pg_advisory_unlock(?)")) {
+            statement.setLong(1, lockId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getBoolean(1);
             }
         }
     }

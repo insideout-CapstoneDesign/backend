@@ -20,7 +20,7 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
 
     Optional<Building> findByIdAndTenant_Id(UUID id, UUID tenantId);
 
-    Optional<Building> findFirstByExternalApiId(String externalApiId);
+    Optional<Building> findFirstByExternalApiIdOrderByCreatedAtDescIdDesc(String externalApiId);
 
     List<Building> findByTenant_IdOrderByCreatedAtDesc(UUID tenantId);
 

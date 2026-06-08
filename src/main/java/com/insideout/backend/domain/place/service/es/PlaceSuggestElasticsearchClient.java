@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class PlaceSuggestElasticsearchClient {
 
@@ -46,8 +48,9 @@ public class PlaceSuggestElasticsearchClient {
     public void upsertDocuments(List<SuggestDocument> documents) {
         try {
             upsertDocumentsStrict(documents);
-        } catch (PlaceException ignored) {
+        } catch (RuntimeException e) {
             // Best-effort background indexing: ignore failures.
+            log.warn("[PlaceSuggestElasticsearchClient] Failed to upsert suggest documents.", e);
         }
     }
 

@@ -165,7 +165,7 @@ public class PlaceDetailService {
             return Optional.empty();
         }
 
-        return buildingRepository.findFirstByExternalApiId(externalApiId)
+        return buildingRepository.findFirstByExternalApiIdOrderByCreatedAtDescIdDesc(externalApiId)
                 .map(building -> toResolvedPlace(building, null))
                 .or(() -> poiRepository.findFirstByExternalApiIdWithFloorAndMapVersion(externalApiId)
                         .map(poi -> toResolvedPlace(poi.getFloor().getBuilding(), poi)));
@@ -275,7 +275,6 @@ public class PlaceDetailService {
                 && !normalized.contains("계단")
                 && !normalized.contains("aed")
                 && !normalized.contains("안내데스크")
-                && !normalized.contains("화장실")
                 && !normalized.contains("ladiesroom")
                 && !normalized.contains("men'sroom");
     }

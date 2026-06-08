@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -67,7 +68,7 @@ public class PlaceSearchController {
             @RequestParam(value = "placeId", required = false) String placeId,
             @RequestParam(value = "externalApiId", required = false) String externalApiId
     ) {
-        if (placeId == null && (externalApiId == null || externalApiId.isBlank())) {
+        if (!StringUtils.hasText(placeId) && !StringUtils.hasText(externalApiId)) {
             throw new ProjectException(GeneralErrorCode.BAD_REQUEST);
         }
 

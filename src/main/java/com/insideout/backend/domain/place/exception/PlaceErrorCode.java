@@ -11,8 +11,8 @@ public enum PlaceErrorCode implements BaseErrorCode {
 
     SEARCH_INVALID_QUERY(
             HttpStatus.BAD_REQUEST,
-            "PLACE400_0",
-            "검색어가 올바르지 않습니다."
+            "PLACE400_3",
+            "검색어는 최소 2자 이상이어야 합니다."
     ),
 
     INVALID_COORDINATE(

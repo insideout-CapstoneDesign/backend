@@ -80,7 +80,7 @@ class PlaceDetailServiceTest {
     @Test
     void getDetail_byExternalApiId_returnsBuildingDetailWithFloorsAndPois() {
         Building mockBuilding = building();
-        when(buildingRepository.findFirstByExternalApiId("18217490")).thenReturn(Optional.of(mockBuilding));
+        when(buildingRepository.findFirstByExternalApiIdOrderByCreatedAtDescIdDesc("18217490")).thenReturn(Optional.of(mockBuilding));
 
         Optional<PlaceDetailResponse> result = placeDetailService.getDetail(null, "18217490");
 
@@ -123,7 +123,7 @@ class PlaceDetailServiceTest {
         Poi mockPoi = poi(mockFloor, mockMapVersion, "구찌", "22320326");
         BuildingDirectory mockDirectory = directory(mockMapVersion);
 
-        when(buildingRepository.findFirstByExternalApiId("18217490")).thenReturn(Optional.of(mockBuilding));
+        when(buildingRepository.findFirstByExternalApiIdOrderByCreatedAtDescIdDesc("18217490")).thenReturn(Optional.of(mockBuilding));
         when(buildingDirectoryRepository.findByIdAndIsPublicTrue(BUILDING_ID)).thenReturn(Optional.of(mockDirectory));
         when(floorRepository.findAllByBuilding_IdOrderByLevelDesc(BUILDING_ID)).thenReturn(List.of(mockFloor));
         when(floorplanRepository.findAllByFloorIdInAndIsCurrentTrue(anyList())).thenReturn(List.of());
@@ -153,7 +153,7 @@ class PlaceDetailServiceTest {
         PoiCategory restroomCategory = poiCategory(300L, "facility.restroom");
         PoiCategory storeCategory = poiCategory(100L, "store.retail");
 
-        when(buildingRepository.findFirstByExternalApiId("18217490")).thenReturn(Optional.of(mockBuilding));
+        when(buildingRepository.findFirstByExternalApiIdOrderByCreatedAtDescIdDesc("18217490")).thenReturn(Optional.of(mockBuilding));
         when(buildingDirectoryRepository.findByIdAndIsPublicTrue(BUILDING_ID)).thenReturn(Optional.of(mockDirectory));
         when(floorRepository.findAllByBuilding_IdOrderByLevelDesc(BUILDING_ID)).thenReturn(List.of(mockFloor));
         when(floorplanRepository.findAllByFloorIdInAndIsCurrentTrue(anyList())).thenReturn(List.of(mockFloorplan));

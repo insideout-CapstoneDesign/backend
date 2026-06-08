@@ -13,6 +13,9 @@ import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class BuildingDirectorySyncService {
 
+    private static final int DEFAULT_BATCH_SIZE = 500;
     private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
 
     private final BuildingRepository buildingRepository;
@@ -45,7 +49,9 @@ public class BuildingDirectorySyncService {
                 .orElse(null);
 
         Polygon footprint = building.getFootprint();
-        BuildingDirectory existingDirectory = buildingDirectoryRepository.findById(building.getId()).orElse(null);
+        BuildingDirectory existingDirectory = buildingDirectoryRepository
+                .findByIdAndTenant_Id(building.getId(), building.getTenant().getId())
+                .orElse(null);
         Point centroid = footprint != null
                 ? footprint.getCentroid()
                 : existingDirectory != null && existingDirectory.getCentroid() != null
@@ -86,9 +92,23 @@ public class BuildingDirectorySyncService {
                 .toList();
     }
 
-    @Transactional
-    public List<BuildingDirectory> syncAllExisting() {
-        return syncAll(buildingRepository.findAll());
+    public int syncAllExisting(int batchSize) {
+        int normalizedBatchSize = batchSize < 1 ? DEFAULT_BATCH_SIZE : batchSize;
+        int pageNumber = 0;
+        int syncedCount = 0;
+
+        Page<Building> page;
+        do {
+            page = buildingRepository.findAll(PageRequest.of(
+                    pageNumber,
+                    normalizedBatchSize,
+                    Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
+            ));
+            syncedCount += syncAll(page.getContent()).size();
+            pageNumber++;
+        } while (page.hasNext());
+
+        return syncedCount;
     }
 
     private String resolveCategory(Building building) {

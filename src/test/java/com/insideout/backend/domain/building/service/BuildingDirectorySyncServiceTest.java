@@ -101,7 +101,7 @@ class BuildingDirectorySyncServiceTest {
     void sync_withoutFootprint_usesMetaLocationAsFallbackGeometry() {
         Building building = building();
         when(building.getFootprint()).thenReturn(null);
-        when(buildingDirectoryRepository.findById(BUILDING_ID)).thenReturn(Optional.empty());
+        when(buildingDirectoryRepository.findByIdAndTenant_Id(BUILDING_ID, TENANT_ID)).thenReturn(Optional.empty());
 
         MapVersion publishedVersion = mapVersion();
         when(mapVersionRepository.findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(
@@ -141,7 +141,7 @@ class BuildingDirectorySyncServiceTest {
                 .isPublic(true)
                 .build();
 
-        when(buildingDirectoryRepository.findById(BUILDING_ID)).thenReturn(Optional.of(existingDirectory));
+        when(buildingDirectoryRepository.findByIdAndTenant_Id(BUILDING_ID, TENANT_ID)).thenReturn(Optional.of(existingDirectory));
         MapVersion publishedVersion = mapVersion();
         when(mapVersionRepository.findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(
                 BUILDING_ID,
@@ -163,7 +163,8 @@ class BuildingDirectorySyncServiceTest {
     @Test
     void syncAllExisting_backfillsEveryBuilding() {
         Building building = building();
-        when(buildingRepository.findAll()).thenReturn(List.of(building));
+        when(buildingRepository.findAll(org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(building)));
         when(mapVersionRepository.findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(
                 BUILDING_ID,
                 MapType.BUILDING,
@@ -171,10 +172,9 @@ class BuildingDirectorySyncServiceTest {
         )).thenReturn(Optional.empty());
         when(buildingDirectoryRepository.save(any(BuildingDirectory.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<BuildingDirectory> results = buildingDirectorySyncService.syncAllExisting();
+        int syncedCount = buildingDirectorySyncService.syncAllExisting(100);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getId()).isEqualTo(BUILDING_ID);
+        assertThat(syncedCount).isEqualTo(1);
     }
 
     private Building building() {

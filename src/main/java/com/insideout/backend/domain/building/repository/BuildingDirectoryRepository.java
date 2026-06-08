@@ -12,6 +12,8 @@ import java.util.UUID;
 @Repository
 public interface BuildingDirectoryRepository extends JpaRepository<BuildingDirectory, UUID> {
 
+    Optional<BuildingDirectory> findByIdAndTenant_Id(UUID id, UUID tenantId);
+
     Optional<BuildingDirectory> findByIdAndIsPublicTrue(UUID id);
 
     @Query(value = """

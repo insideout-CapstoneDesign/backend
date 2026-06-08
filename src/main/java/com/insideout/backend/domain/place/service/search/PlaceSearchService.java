@@ -1,7 +1,10 @@
 package com.insideout.backend.domain.place.service.search;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
+import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.building.entity.BuildingDirectory;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceNearestResponse;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
@@ -26,10 +29,10 @@ public class PlaceSearchService {
     private static final int MAX_RADIUS_METER = 20_000;
     private static final int DEFAULT_SEARCH_SIZE = 15;
     private static final int MAX_SEARCH_SIZE = 100;
-    private static final int REGISTERED_FETCH_MULTIPLIER = 3;
-    private static final int MAX_REGISTERED_FETCH_SIZE = 300;
 
     private final BuildingRepository buildingRepository;
+    private final BuildingDirectoryRepository buildingDirectoryRepository;
+    private final PoiRepository poiRepository;
     private final PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
     private final PlaceSearchIndexingService placeSearchIndexingService;
@@ -53,13 +56,7 @@ public class PlaceSearchService {
             throw new PlaceException(PlaceErrorCode.INVALID_COORDINATE);
         }
 
-        int registeredFetchSize = Math.min(
-                Math.max(resolvedSize * REGISTERED_FETCH_MULTIPLIER, resolvedSize),
-                MAX_REGISTERED_FETCH_SIZE
-        );
-
-        List<PlaceSearchItemResponse> registeredPlaces = buildingRepository
-                .searchRegisteredPlacesLimited(normalizedQuery, registeredFetchSize).stream()
+        List<PlaceSearchItemResponse> registeredPlaces = buildingRepository.searchRegisteredPlaces(normalizedQuery).stream()
                 .map(PlaceSearchResultComposer::toRegisteredSearchItem)
                 .toList();
 
@@ -83,13 +80,14 @@ public class PlaceSearchService {
                 lng,
                 resolvedSearchRadius,
                 resolvedSize,
-                buildingRepository
+                buildingRepository,
+                poiRepository
         );
     }
 
     public Optional<PlaceNearestResponse> findNearest(Double lat, Double lng, Integer radius) {
         PlaceSearchSupport.validateCoordinate(lat, lng, false);
-        int resolvedRadius = normalizeNearestRadius(radius);
+        int resolvedRadius = normalizeRadius(radius);
         Optional<PlaceNearestResponse> registeredPlace = buildingRepository
                 .findNearestRegisteredPlace(lat, lng, resolvedRadius)
                 .map(this::toRegisteredNearestResponse);
@@ -98,19 +96,17 @@ public class PlaceSearchService {
             return registeredPlace;
         }
 
+        Optional<PlaceNearestResponse> directoryMatchedPlace = buildingDirectoryRepository
+                .findNearestPublicBuilding(lng, lat, resolvedRadius)
+                .flatMap(directory -> buildingRepository.findById(directory.getId())
+                        .map(building -> toRegisteredNearestResponse(directory, building))
+                        .or(() -> Optional.of(toRegisteredNearestResponse(directory, null))));
+
+        if (directoryMatchedPlace.isPresent()) {
+            return directoryMatchedPlace;
+        }
+
         return kakaoPlaceSearchClient.findNearestByCoordinate(lat, lng, resolvedRadius);
-    }
-
-    private int normalizeNearestRadius(Integer radius) {
-        if (radius == null) {
-            return DEFAULT_RADIUS_METER;
-        }
-
-        if (radius < MIN_RADIUS_METER) {
-            throw new PlaceException(PlaceErrorCode.INVALID_RADIUS);
-        }
-
-        return Math.min(radius, DEFAULT_RADIUS_METER);
     }
 
     private int normalizeRadius(Integer radius) {
@@ -143,7 +139,27 @@ public class PlaceSearchService {
                 building.getLat(),
                 building.getLng(),
                 true,
-                building.getExternalApiId()
+                building.getExternalApiId(),
+                building.getId(),
+                null
+        );
+    }
+
+    private PlaceNearestResponse toRegisteredNearestResponse(BuildingDirectory directory, com.insideout.backend.domain.building.entity.Building building) {
+        String externalApiId = building != null ? building.getExternalApiId() : null;
+        Double lat = directory.getCentroid() != null ? directory.getCentroid().getY() : null;
+        Double lng = directory.getCentroid() != null ? directory.getCentroid().getX() : null;
+
+        return new PlaceNearestResponse(
+                directory.getName(),
+                directory.getAddress(),
+                null,
+                lat,
+                lng,
+                true,
+                externalApiId,
+                directory.getId(),
+                null
         );
     }
 }

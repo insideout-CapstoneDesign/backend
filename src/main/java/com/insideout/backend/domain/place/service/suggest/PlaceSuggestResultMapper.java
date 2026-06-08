@@ -1,7 +1,7 @@
 package com.insideout.backend.domain.place.service.suggest;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
-import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
 import com.insideout.backend.domain.place.service.support.PlaceSearchSupport;
@@ -17,9 +17,10 @@ final class PlaceSuggestResultMapper {
     private PlaceSuggestResultMapper() {
     }
 
-    static Map<String, BuildingSearchProjection> resolveRegisteredMap(
+    static Map<String, PlaceSearchItemResponse> resolveRegisteredMap(
             List<PlaceSuggestElasticsearchClient.SuggestDocument> suggested,
-            BuildingRepository buildingRepository
+            BuildingRepository buildingRepository,
+            PoiRepository poiRepository
     ) {
         Set<String> externalApiIds = suggested.stream()
                 .map(PlaceSuggestElasticsearchClient.SuggestDocument::externalApiId)
@@ -31,30 +32,63 @@ final class PlaceSuggestResultMapper {
             return Map.of();
         }
 
-        return buildingRepository.findRegisteredPlacesByExternalApiIds(externalApiIds).stream()
-                .filter(item -> StringUtils.hasText(item.getExternalApiId()))
+        Map<String, PlaceSearchItemResponse> registered = new java.util.LinkedHashMap<>();
+        buildingRepository.findRegisteredPlacesByExternalApiIds(externalApiIds).stream()
+                .map(item -> new PlaceSearchItemResponse(
+                        item.getName(),
+                        item.getAddress(),
+                        null,
+                        item.getLat(),
+                        item.getLng(),
+                        true,
+                        item.getExternalApiId(),
+                        null,
+                        null,
+                        null,
+                        item.getId(),
+                        null
+                ))
+                .forEach(item -> registered.putIfAbsent(item.externalApiId(), item));
+        poiRepository.findRegisteredPlacesByExternalApiIds(externalApiIds).stream()
+                .map(item -> new PlaceSearchItemResponse(
+                        item.getName(),
+                        item.getAddress(),
+                        null,
+                        null,
+                        null,
+                        true,
+                        item.getExternalApiId(),
+                        null,
+                        item.getBuildingName(),
+                        null,
+                        item.getBuildingId(),
+                        item.getPoiId()
+                ))
+                .forEach(item -> registered.putIfAbsent(item.externalApiId(), item));
+        return registered.entrySet().stream()
                 .collect(Collectors.toMap(
-                        item -> item.getExternalApiId().trim(),
-                        item -> item,
-                        (left, right) -> left
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (left, right) -> left,
+                        java.util.LinkedHashMap::new
                 ));
     }
 
     static PlaceSearchItemResponse toResponse(
             PlaceSuggestElasticsearchClient.SuggestDocument suggested,
-            Map<String, BuildingSearchProjection> registeredByExternalApiId,
+            Map<String, PlaceSearchItemResponse> registeredByExternalApiId,
             Double lat,
             Double lng
     ) {
-        BuildingSearchProjection matched = null;
+        PlaceSearchItemResponse matched = null;
         if (StringUtils.hasText(suggested.externalApiId())) {
             matched = registeredByExternalApiId.get(suggested.externalApiId().trim());
         }
 
-        String resolvedName = matched != null ? matched.getName() : suggested.name();
-        String resolvedAddress = matched != null ? matched.getAddress() : suggested.address();
-        Double resolvedLat = matched != null && matched.getLat() != null ? matched.getLat() : suggested.lat();
-        Double resolvedLng = matched != null && matched.getLng() != null ? matched.getLng() : suggested.lng();
+        String resolvedName = matched != null ? matched.name() : suggested.name();
+        String resolvedAddress = matched != null ? matched.address() : suggested.address();
+        Double resolvedLat = matched != null && matched.lat() != null ? matched.lat() : suggested.lat();
+        Double resolvedLng = matched != null && matched.lng() != null ? matched.lng() : suggested.lng();
         boolean isRegistered = matched != null;
         Double distanceMeters = null;
 
@@ -70,8 +104,11 @@ final class PlaceSuggestResultMapper {
                 resolvedLng,
                 isRegistered,
                 suggested.externalApiId(),
-                distanceMeters
+                distanceMeters,
+                matched != null ? matched.parentBuildingName() : null,
+                matched != null ? matched.displayName() : null,
+                matched != null ? matched.placeId() : null,
+                matched != null ? matched.poiId() : null
         );
     }
 }
-

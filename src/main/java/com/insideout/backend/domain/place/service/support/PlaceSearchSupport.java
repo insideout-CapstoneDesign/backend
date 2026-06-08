@@ -6,8 +6,6 @@ import com.insideout.backend.domain.place.exception.PlaceException;
 import com.insideout.backend.domain.place.service.es.PlaceSuggestElasticsearchClient;
 import org.springframework.util.StringUtils;
 
-import java.util.Locale;
-
 public final class PlaceSearchSupport {
 
     private PlaceSearchSupport() {
@@ -32,8 +30,7 @@ public final class PlaceSearchSupport {
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        double normalizedA = Math.max(0.0, Math.min(1.0, a));
-        double c = 2 * Math.atan2(Math.sqrt(normalizedA), Math.sqrt(1 - normalizedA));
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return earthRadius * c;
     }
 
@@ -41,7 +38,47 @@ public final class PlaceSearchSupport {
         if (!StringUtils.hasText(value)) {
             return "";
         }
-        return value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        return value.replaceAll("\\s+", "").toLowerCase();
+    }
+
+    public static String searchableText(PlaceSearchItemResponse item) {
+        if (item == null) {
+            return "";
+        }
+
+        if (StringUtils.hasText(item.parentBuildingName()) && StringUtils.hasText(item.name())) {
+            return item.parentBuildingName().trim() + item.name().trim();
+        }
+
+        if (StringUtils.hasText(item.displayName())) {
+            return item.displayName();
+        }
+
+        return item.name();
+    }
+
+    public static String displayLabel(PlaceSearchItemResponse item) {
+        if (item == null) {
+            return "";
+        }
+        if (StringUtils.hasText(item.displayName())) {
+            return item.displayName();
+        }
+        return item.name();
+    }
+
+    public static int canonicalKeywordScore(PlaceSearchItemResponse item, String query) {
+        if (item == null) {
+            return 0;
+        }
+        return keywordScore(item.name(), query);
+    }
+
+    public static int displayKeywordScore(PlaceSearchItemResponse item, String query) {
+        if (item == null) {
+            return 0;
+        }
+        return keywordScore(searchableText(item), query);
     }
 
     public static double round(double value, int precision) {
@@ -67,5 +104,23 @@ public final class PlaceSearchSupport {
             return "geo:" + normalizeText(item.name()) + ":" + round(item.lat(), 4) + ":" + round(item.lng(), 4);
         }
         return "name:" + normalizeText(item.name()) + "|" + normalizeText(item.address());
+    }
+
+    public static int keywordScore(String name, String query) {
+        String target = normalizeText(name);
+        String keyword = normalizeText(query);
+        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
+            return 0;
+        }
+        if (target.equals(keyword)) {
+            return 3;
+        }
+        if (target.startsWith(keyword)) {
+            return 2;
+        }
+        if (target.contains(keyword)) {
+            return 1;
+        }
+        return 0;
     }
 }

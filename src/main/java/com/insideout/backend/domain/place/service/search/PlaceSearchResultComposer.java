@@ -2,6 +2,8 @@ package com.insideout.backend.domain.place.service.search;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
+import com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.service.support.PlaceSearchSupport;
 import org.springframework.util.StringUtils;
@@ -27,7 +29,8 @@ final class PlaceSearchResultComposer {
             Double lng,
             Integer radius,
             int size,
-            BuildingRepository buildingRepository
+            BuildingRepository buildingRepository,
+            PoiRepository poiRepository
     ) {
         List<PlaceSearchItemResponse> merged = mergeRegisteredAndExternal(
                 registeredPlaces,
@@ -35,7 +38,8 @@ final class PlaceSearchResultComposer {
                 query,
                 lat,
                 lng,
-                buildingRepository
+                buildingRepository,
+                poiRepository
         );
 
         if (lat != null && lng != null) {
@@ -56,7 +60,28 @@ final class PlaceSearchResultComposer {
                 building.getLng(),
                 true,
                 building.getExternalApiId(),
+                null,
+                null,
+                null,
+                building.getId(),
                 null
+        );
+    }
+
+    static PlaceSearchItemResponse toRegisteredPoiSearchItem(RegisteredPoiSearchProjection poi) {
+        return new PlaceSearchItemResponse(
+                poi.getName(),
+                poi.getAddress(),
+                null,
+                null,
+                null,
+                true,
+                poi.getExternalApiId(),
+                null,
+                poi.getBuildingName(),
+                null,
+                poi.getBuildingId(),
+                poi.getPoiId()
         );
     }
 
@@ -66,7 +91,8 @@ final class PlaceSearchResultComposer {
             String query,
             Double lat,
             Double lng,
-            BuildingRepository buildingRepository
+            BuildingRepository buildingRepository,
+            PoiRepository poiRepository
     ) {
         Map<String, PlaceSearchItemResponse> registeredByExternalApiId = registeredPlaces.stream()
                 .filter(item -> StringUtils.hasText(item.externalApiId()))
@@ -91,6 +117,13 @@ final class PlaceSearchResultComposer {
                     .map(PlaceSearchResultComposer::toRegisteredSearchItem)
                     .toList();
             additionalRegistered.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
+
+            List<PlaceSearchItemResponse> additionalRegisteredPois = poiRepository
+                    .findRegisteredPlacesByExternalApiIds(externalIds)
+                    .stream()
+                    .map(PlaceSearchResultComposer::toRegisteredPoiSearchItem)
+                    .toList();
+            additionalRegisteredPois.forEach(item -> registeredByExternalApiId.putIfAbsent(item.externalApiId(), item));
         }
 
         for (PlaceSearchItemResponse external : externalPlaces) {
@@ -122,16 +155,22 @@ final class PlaceSearchResultComposer {
                 registered.lng() != null ? registered.lng() : external.lng(),
                 true,
                 registered.externalApiId(),
-                external.distanceMeters()
+                external.distanceMeters(),
+                registered.parentBuildingName(),
+                registered.displayName(),
+                registered.placeId(),
+                registered.poiId()
         );
     }
 
     private static List<PlaceSearchItemResponse> sortWithoutCoordinates(List<PlaceSearchItemResponse> items, String query) {
         return items.stream()
                 .sorted(Comparator
-                        .comparingInt((PlaceSearchItemResponse item) -> keywordScore(item.name(), query)).reversed()
+                        .comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.canonicalKeywordScore(item, query)).reversed()
                         .thenComparing(PlaceSearchItemResponse::isRegistered, Comparator.reverseOrder())
-                        .thenComparing(item -> PlaceSearchSupport.normalizeText(item.name())))
+                        .thenComparing(Comparator.comparingInt((PlaceSearchItemResponse item) -> PlaceSearchSupport.displayKeywordScore(item, query)).reversed())
+                        .thenComparing(item -> StringUtils.hasText(item.parentBuildingName()))
+                        .thenComparing(item -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(item))))
                 .toList();
     }
 
@@ -147,10 +186,12 @@ final class PlaceSearchResultComposer {
                 .map(item -> toScoredPlace(item, lat, lng))
                 .filter(scored -> radius == null || (scored.distanceMeter() != null && scored.distanceMeter() <= radius))
                 .sorted(Comparator
-                        .comparingInt((ScoredPlace scored) -> keywordScore(scored.item().name(), query)).reversed()
-                        .thenComparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
+                        .comparingInt((ScoredPlace scored) -> PlaceSearchSupport.canonicalKeywordScore(scored.item(), query)).reversed()
                         .thenComparing(scored -> scored.item().isRegistered(), Comparator.reverseOrder())
-                        .thenComparing(scored -> PlaceSearchSupport.normalizeText(scored.item().name())))
+                        .thenComparing(Comparator.comparingInt((ScoredPlace scored) -> PlaceSearchSupport.displayKeywordScore(scored.item(), query)).reversed())
+                        .thenComparing(scored -> StringUtils.hasText(scored.item().parentBuildingName()))
+                        .thenComparing(ScoredPlace::distanceMeter, Comparator.nullsLast(Double::compareTo))
+                        .thenComparing(scored -> PlaceSearchSupport.normalizeText(PlaceSearchSupport.displayLabel(scored.item()))))
                 .limit(size)
                 .map(ScoredPlace::toResponse)
                 .toList();
@@ -181,10 +222,22 @@ final class PlaceSearchResultComposer {
             return existing.isRegistered() ? 1 : -1;
         }
 
-        int existingScore = keywordScore(existing.name(), query);
-        int candidateScore = keywordScore(candidate.name(), query);
+        int existingScore = PlaceSearchSupport.canonicalKeywordScore(existing, query);
+        int candidateScore = PlaceSearchSupport.canonicalKeywordScore(candidate, query);
         if (existingScore != candidateScore) {
             return Integer.compare(existingScore, candidateScore);
+        }
+
+        int existingDisplayScore = PlaceSearchSupport.displayKeywordScore(existing, query);
+        int candidateDisplayScore = PlaceSearchSupport.displayKeywordScore(candidate, query);
+        if (existingDisplayScore != candidateDisplayScore) {
+            return Integer.compare(existingDisplayScore, candidateDisplayScore);
+        }
+
+        boolean existingIsPoi = StringUtils.hasText(existing.parentBuildingName());
+        boolean candidateIsPoi = StringUtils.hasText(candidate.parentBuildingName());
+        if (existingIsPoi != candidateIsPoi) {
+            return existingIsPoi ? -1 : 1;
         }
 
         if (lat != null && lng != null
@@ -201,24 +254,6 @@ final class PlaceSearchResultComposer {
             return existingHasCoordinate ? 1 : -1;
         }
 
-        return 0;
-    }
-
-    private static int keywordScore(String name, String query) {
-        String target = PlaceSearchSupport.normalizeText(name);
-        String keyword = PlaceSearchSupport.normalizeText(query);
-        if (!StringUtils.hasText(target) || !StringUtils.hasText(keyword)) {
-            return 0;
-        }
-        if (target.equals(keyword)) {
-            return 3;
-        }
-        if (target.startsWith(keyword)) {
-            return 2;
-        }
-        if (target.contains(keyword)) {
-            return 1;
-        }
         return 0;
     }
 
@@ -239,7 +274,11 @@ final class PlaceSearchResultComposer {
                     item.lng(),
                     item.isRegistered(),
                     item.externalApiId(),
-                    distanceMeter
+                    distanceMeter,
+                    item.parentBuildingName(),
+                    item.displayName(),
+                    item.placeId(),
+                    item.poiId()
             );
         }
     }

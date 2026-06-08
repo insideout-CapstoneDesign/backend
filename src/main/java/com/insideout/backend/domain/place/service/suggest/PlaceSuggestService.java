@@ -1,7 +1,7 @@
 package com.insideout.backend.domain.place.service.suggest;
 
 import com.insideout.backend.domain.building.repository.BuildingRepository;
-import com.insideout.backend.domain.building.repository.BuildingSearchProjection;
+import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.place.dto.response.PlaceSearchItemResponse;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
@@ -30,6 +30,7 @@ public class PlaceSuggestService {
     private final KakaoPlaceSearchClient kakaoPlaceSearchClient;
     private final PlaceSearchIndexingService placeSearchIndexingService;
     private final BuildingRepository buildingRepository;
+    private final PoiRepository poiRepository;
 
     public List<PlaceSearchItemResponse> suggest(String query, Double lat, Double lng, Integer size) {
         String normalizedQuery = validateAndNormalizeQuery(query);
@@ -53,7 +54,7 @@ public class PlaceSuggestService {
         int fallbackSize = PlaceSuggestFallbackPolicy.resolveFallbackSize(resolvedSize, fromElasticsearch.size(), lat, lng);
         if (fallbackSize > 0) {
             try {
-                List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng, fallbackSize);
+                List<PlaceSearchItemResponse> fromKakao = fetchKakaoFallback(normalizedQuery, lat, lng);
                 mergedSuggested = PlaceSuggestDocumentMerger.merge(fromElasticsearch, fromKakao, resolvedSize);
                 if (!fromKakao.isEmpty()) {
                     placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(fallbackSize).toList());
@@ -73,8 +74,8 @@ public class PlaceSuggestService {
             return List.of();
         }
 
-        Map<String, BuildingSearchProjection> registeredByExternalApiId =
-                PlaceSuggestResultMapper.resolveRegisteredMap(mergedSuggested, buildingRepository);
+        Map<String, PlaceSearchItemResponse> registeredByExternalApiId =
+                PlaceSuggestResultMapper.resolveRegisteredMap(mergedSuggested, buildingRepository, poiRepository);
 
         return mergedSuggested.stream()
                 .map(item -> PlaceSuggestResultMapper.toResponse(item, registeredByExternalApiId, lat, lng))
@@ -105,10 +106,11 @@ public class PlaceSuggestService {
         return Math.min(size, MAX_SIZE);
     }
 
-    private List<PlaceSearchItemResponse> fetchKakaoFallback(String query, Double lat, Double lng, int size) {
+    private List<PlaceSearchItemResponse> fetchKakaoFallback(String query, Double lat, Double lng) {
         if (lat != null && lng != null) {
-            return kakaoPlaceSearchClient.searchByKeyword(query, lat, lng, null, size);
+            return kakaoPlaceSearchClient.searchByKeyword(query, lat, lng, null);
         }
-        return kakaoPlaceSearchClient.searchByKeyword(query, null, null, null, size);
+        return kakaoPlaceSearchClient.searchByKeyword(query, null, null, null);
     }
+
 }

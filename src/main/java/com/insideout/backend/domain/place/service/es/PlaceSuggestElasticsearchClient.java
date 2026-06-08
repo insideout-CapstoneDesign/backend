@@ -1,10 +1,10 @@
 package com.insideout.backend.domain.place.service.es;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.insideout.backend.domain.place.exception.PlaceErrorCode;
 import com.insideout.backend.domain.place.exception.PlaceException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -13,8 +13,10 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class PlaceSuggestElasticsearchClient {
 
@@ -46,10 +48,9 @@ public class PlaceSuggestElasticsearchClient {
     public void upsertDocuments(List<SuggestDocument> documents) {
         try {
             upsertDocumentsStrict(documents);
-        } catch (RestClientException ignored) {
+        } catch (RuntimeException e) {
             // Best-effort background indexing: ignore failures.
-        } catch (Exception ignored) {
-            // Best-effort background indexing: ignore failures.
+            log.warn("[PlaceSuggestElasticsearchClient] Failed to upsert suggest documents.", e);
         }
     }
 
@@ -62,46 +63,55 @@ public class PlaceSuggestElasticsearchClient {
         String primaryUri = resolvePrimaryUri(elasticsearchUris);
         RestClient restClient = restClientBuilder.baseUrl(primaryUri).build();
 
-        String response = restClient.post()
-                .uri("/_bulk")
-                .contentType(MediaType.parseMediaType("application/x-ndjson"))
-                .body(body)
-                .retrieve()
-                .body(String.class);
-        return parseBulkSuccessCount(response);
+        try {
+            String response = restClient.post()
+                    .uri("/_bulk")
+                    .contentType(MediaType.parseMediaType("application/x-ndjson"))
+                    .body(body)
+                    .retrieve()
+                    .body(String.class);
+            return parseBulkSuccessCount(response);
+        } catch (RestClientException e) {
+            throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
+        } catch (Exception e) {
+            throw new PlaceException(PlaceErrorCode.SEARCH_SERVICE_UNAVAILABLE);
+        }
     }
 
-    private int parseBulkSuccessCount(String response) {
+    private int parseBulkSuccessCount(String response) throws Exception {
         if (!StringUtils.hasText(response)) {
-            throw new IllegalStateException("Elasticsearch bulk response is empty");
+            throw new IllegalStateException("Empty bulk response");
         }
-        try {
-            JsonNode root = objectMapper.readTree(response);
-            if (root.path("errors").asBoolean(false)) {
-                throw new IllegalStateException("Elasticsearch bulk response contains item-level errors");
-            }
 
-            JsonNode items = root.path("items");
-            if (!items.isArray()) {
-                throw new IllegalStateException("Elasticsearch bulk response has invalid items");
-            }
-
-            int successCount = 0;
-            for (JsonNode item : items) {
-                JsonNode update = item.path("update");
-                int status = update.path("status").asInt(-1);
-                if (status >= 200 && status < 300) {
-                    successCount++;
-                    continue;
-                }
-                throw new IllegalStateException("Elasticsearch bulk response contains non-success item status: " + status);
-            }
-            return successCount;
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse Elasticsearch bulk response", e);
+        Map<?, ?> parsed = objectMapper.readValue(response, Map.class);
+        Object errors = parsed.get("errors");
+        if (Boolean.TRUE.equals(errors)) {
+            throw new IllegalStateException("Bulk indexing returned errors");
         }
+
+        Object items = parsed.get("items");
+        if (!(items instanceof List<?> itemList)) {
+            throw new IllegalStateException("Bulk indexing response does not contain items");
+        }
+
+        int successCount = 0;
+        for (Object item : itemList) {
+            if (!(item instanceof Map<?, ?> action)) {
+                continue;
+            }
+            Object payload = action.values().stream().findFirst().orElse(null);
+            if (!(payload instanceof Map<?, ?> result)) {
+                continue;
+            }
+            Object status = result.get("status");
+            if (status instanceof Number statusNumber && statusNumber.intValue() >= 200 && statusNumber.intValue() < 300) {
+                successCount++;
+                continue;
+            }
+            throw new IllegalStateException("Bulk indexing item failed");
+        }
+
+        return successCount;
     }
 
     private List<SuggestDocument> doSearch(String query, int size, Double lat, Double lng, Integer radius) {

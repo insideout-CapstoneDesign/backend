@@ -9,6 +9,12 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum PlaceErrorCode implements BaseErrorCode {
 
+    SEARCH_INVALID_QUERY(
+            HttpStatus.BAD_REQUEST,
+            "PLACE400_3",
+            "검색어는 최소 2자 이상이어야 합니다."
+    ),
+
     INVALID_COORDINATE(
             HttpStatus.BAD_REQUEST,
             "PLACE400_1",
@@ -19,11 +25,6 @@ public enum PlaceErrorCode implements BaseErrorCode {
             "PLACE400_2",
             "반경(radius) 값이 올바르지 않습니다."
     ),
-    SEARCH_INVALID_QUERY(
-            HttpStatus.BAD_REQUEST,
-            "PLACE400_3",
-            "검색어는 2자 이상 입력해주세요."
-    ),
     KAKAO_LOCAL_API_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
             "PLACE503_1",
@@ -32,7 +33,7 @@ public enum PlaceErrorCode implements BaseErrorCode {
     SEARCH_SERVICE_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
             "PLACE503_2",
-            "검색 서비스를 사용할 수 없습니다."
+            "장소 검색 서비스와 통신할 수 없습니다."
     );
 
     private final HttpStatus status;

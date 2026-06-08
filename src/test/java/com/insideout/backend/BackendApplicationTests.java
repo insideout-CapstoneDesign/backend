@@ -112,12 +112,6 @@ class BackendApplicationTests {
     private FloorplanCalibrationRepository floorplanCalibrationRepository;
 
     @MockitoBean
-    private FloorplanObjectRepository floorplanObjectRepository;
-
-    @MockitoBean
-    private PoiCategoryRepository poiCategoryRepository;
-
-    @MockitoBean
     private VerticalConnectorRepository verticalConnectorRepository;
 
     @MockitoBean

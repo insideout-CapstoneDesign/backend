@@ -209,6 +209,43 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    void search_skipsKakaoFallback_whenElasticsearchAlreadyHasEnoughResults() {
+        when(placeSuggestElasticsearchClient.search("스타벅스", 2, null, null, null))
+                .thenReturn(List.of(
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "스타벅스 시청점",
+                                "서울 중구 세종대로",
+                                "서울 중구 세종대로",
+                                "es-1",
+                                37.5665,
+                                126.9780
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "스타벅스 을지로점",
+                                "서울 중구 을지로",
+                                "서울 중구 을지로",
+                                "es-2",
+                                37.5660,
+                                126.9900
+                        ),
+                        new PlaceSuggestElasticsearchClient.SuggestDocument(
+                                "스타벅스 명동점",
+                                "서울 중구 명동",
+                                "서울 중구 명동",
+                                "es-3",
+                                37.5636,
+                                126.9827
+                        )
+                ));
+
+        List<PlaceSearchItemResponse> result = placeSearchService.search("스타벅스", null, null, null, 2);
+
+        assertThat(result).isNotEmpty();
+        verify(kakaoPlaceSearchClient, never()).searchByKeyword("스타벅스");
+        verify(placeSearchIndexingService, never()).upsertFromSearchResultsAsync(any());
+    }
+
+    @Test
     void search_marksRegisteredPoiAsRegistered() {
         when(buildingRepository.searchRegisteredPlaces("구찌"))
                 .thenReturn(List.of());

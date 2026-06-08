@@ -48,11 +48,10 @@ final class PlaceSearchExternalPipeline {
             fromElasticsearch = List.of();
         }
 
-        List<PlaceSearchItemResponse> fromKakao = hasCoordinate
-                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius)
-                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
-
         if (fromElasticsearch.isEmpty()) {
+            List<PlaceSearchItemResponse> fromKakao = hasCoordinate
+                    ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius)
+                    : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
             placeSearchIndexingService.upsertFromSearchResultsAsync(fromKakao.stream().limit(resolvedSize * 2L).toList());
             return fromKakao;
         }
@@ -60,6 +59,10 @@ final class PlaceSearchExternalPipeline {
         if (fromElasticsearch.size() >= resolvedSize) {
             return fromElasticsearch;
         }
+
+        List<PlaceSearchItemResponse> fromKakao = hasCoordinate
+                ? kakaoPlaceSearchClient.searchByKeyword(normalizedQuery, lat, lng, resolvedSearchRadius)
+                : kakaoPlaceSearchClient.searchByKeyword(normalizedQuery);
 
         Map<String, PlaceSearchItemResponse> combined = new LinkedHashMap<>();
         for (PlaceSearchItemResponse item : fromElasticsearch) {

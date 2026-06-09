@@ -49,7 +49,7 @@ import java.util.stream.Collectors;
 public class MapQueryFacade {
 
     private static final double REGISTERED_BUILDING_SEARCH_RADIUS_METERS = 50.0;
-    private static final double INSTRUCTION_LANDMARK_RADIUS_PX = 90.0;
+    private static final double INSTRUCTION_LANDMARK_RADIUS_PX = 180.0;
 
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;

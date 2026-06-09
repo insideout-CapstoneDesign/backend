@@ -1299,7 +1299,7 @@ public class NavigationService {
 
     private String horizontalInstruction(List<RoutingNode> nodes, int linkIndex, RoutingNode next) {
         if (linkIndex == 0) {
-            return next.displayName() + " 앞까지 직진";
+            return straightInstruction(next);
         }
 
         RoutingNode previous = nodes.get(linkIndex - 1);
@@ -1311,12 +1311,37 @@ public class NavigationService {
         double angle = Math.toDegrees(Math.atan2(cross, dot));
 
         if (Math.abs(angle) < 35) {
-            return next.displayName() + " 앞까지 직진";
+            return straightInstruction(next);
         }
         if (angle > 0) {
-            return current.displayName() + " 앞에서 좌회전";
+            return turnInstruction(current, "좌회전");
         }
-        return current.displayName() + " 앞에서 우회전";
+        return turnInstruction(current, "우회전");
+    }
+
+    private String straightInstruction(RoutingNode next) {
+        String landmark = instructionLandmark(next);
+        return landmark == null ? "계속 직진" : landmark + " 앞까지 직진";
+    }
+
+    private String turnInstruction(RoutingNode current, String direction) {
+        String landmark = instructionLandmark(current);
+        return landmark == null ? direction : landmark + " 앞에서 " + direction;
+    }
+
+    private String instructionLandmark(RoutingNode node) {
+        String displayName = node.displayName();
+        if (displayName == null || displayName.isBlank()) {
+            return null;
+        }
+        String normalized = displayName.toLowerCase().replaceAll("\\s+", "");
+        if (normalized.equals("통로")
+                || normalized.equals("복도")
+                || normalized.equals("corridor")
+                || normalized.equals("이지점")) {
+            return null;
+        }
+        return displayName;
     }
 
     private String safeLower(String value) {

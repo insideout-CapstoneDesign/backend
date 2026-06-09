@@ -1313,10 +1313,12 @@ public class NavigationService {
         if (Math.abs(angle) < 35) {
             return straightInstruction(next);
         }
+        // Indoor floorplan coordinates are screen/SVG coordinates where y increases downward,
+        // so the visual turn direction is mirrored from the usual Cartesian cross product sign.
         if (angle > 0) {
-            return turnInstruction(current, "좌회전");
+            return turnInstruction(current, "우회전");
         }
-        return turnInstruction(current, "우회전");
+        return turnInstruction(current, "좌회전");
     }
 
     private String straightInstruction(RoutingNode next) {

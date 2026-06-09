@@ -422,15 +422,30 @@ public class NavigationService {
         List<CoordinateDto> path = new ArrayList<>();
         JsonNode stepsNode = legNode.path("steps");
 
-        if (!stepsNode.isArray()) {
-            return path;
+        if (stepsNode.isArray()) {
+            for (JsonNode stepNode : stepsNode) {
+                appendLinestringCoordinates(path, stepNode.path("linestring"));
+            }
         }
 
-        for (JsonNode stepNode : stepsNode) {
-            appendLinestringCoordinates(path, stepNode.path("linestring"));
+        if (path.size() < 2) {
+            path.clear();
+            appendTransitPointCoordinate(path, legNode.path("start"));
+            appendTransitStationCoordinates(path, transitStationListNode(legNode));
+            appendTransitPointCoordinate(path, legNode.path("end"));
         }
 
         return path;
+    }
+
+    private void appendTransitStationCoordinates(List<CoordinateDto> path, JsonNode stationList) {
+        if (!stationList.isArray()) {
+            return;
+        }
+
+        for (JsonNode stationNode : stationList) {
+            appendTransitPointCoordinate(path, stationNode);
+        }
     }
 
     private void appendLinestringCoordinates(List<CoordinateDto> path, JsonNode linestringNode) {
@@ -455,6 +470,35 @@ public class NavigationService {
                 // Skip malformed pairs from the external API and keep the rest of the path.
             }
         }
+    }
+
+    private void appendTransitPointCoordinate(List<CoordinateDto> path, JsonNode pointNode) {
+        Double x = firstNonNull(
+                getNullableDouble(pointNode.path("lon")),
+                firstNonNull(
+                        getNullableDouble(pointNode.path("x")),
+                        firstNonNull(
+                                getNullableDouble(pointNode.path("stationX")),
+                                getNullableDouble(pointNode.path("stopX"))
+                        )
+                )
+        );
+        Double y = firstNonNull(
+                getNullableDouble(pointNode.path("lat")),
+                firstNonNull(
+                        getNullableDouble(pointNode.path("y")),
+                        firstNonNull(
+                                getNullableDouble(pointNode.path("stationY")),
+                                getNullableDouble(pointNode.path("stopY"))
+                        )
+                )
+        );
+
+        if (x == null || y == null) {
+            return;
+        }
+
+        appendCoordinate(path, x, y);
     }
 
     private List<StepDto> parseTransitSteps(JsonNode legNode) {

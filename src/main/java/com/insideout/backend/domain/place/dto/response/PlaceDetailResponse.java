@@ -5,7 +5,7 @@ import java.util.UUID;
 
 public record PlaceDetailResponse(
         UUID placeId,
-        UUID poiId,
+        Long poiId,
         String externalApiId,
         String name,
         String address,
@@ -22,7 +22,7 @@ public record PlaceDetailResponse(
     }
 
     public record PoiResponse(
-            UUID id,
+            Long id,
             String name,
             String floor,
             String externalApiId

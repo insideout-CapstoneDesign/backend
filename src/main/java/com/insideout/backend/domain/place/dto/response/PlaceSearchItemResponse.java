@@ -16,7 +16,7 @@ public record PlaceSearchItemResponse(
         String parentBuildingName,
         String displayName,
         UUID placeId,
-        UUID poiId
+        Long poiId
 ) {
 
     public PlaceSearchItemResponse {

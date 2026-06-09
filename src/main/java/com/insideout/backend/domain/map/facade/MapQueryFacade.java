@@ -28,8 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -46,6 +49,7 @@ import java.util.stream.Collectors;
 public class MapQueryFacade {
 
     private static final double REGISTERED_BUILDING_SEARCH_RADIUS_METERS = 50.0;
+    private static final double INSTRUCTION_LANDMARK_RADIUS_PX = 90.0;
 
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
@@ -81,7 +85,6 @@ public class MapQueryFacade {
         }
 
         return poiRepository.findByPublicId(destinationPoiId)
-                .filter(poi -> poi.getAnchorNodeId() != null)
                 .flatMap(this::toIndoorPoiDestination);
     }
 
@@ -126,8 +129,13 @@ public class MapQueryFacade {
     }
 
     private RoutingGraph toRoutingGraph(MapType mapType, UUID ownerId, MapVersion mapVersion) {
+        List<Poi> instructionLandmarks = mapType == MapType.BUILDING
+                ? poiRepository.findByMapVersionId(mapVersion.getId()).stream()
+                        .filter(this::isInstructionLandmark)
+                        .toList()
+                : List.of();
         List<RoutingNode> nodes = nodeRepository.findByMapVersionId(mapVersion.getId()).stream()
-                .map(this::toRoutingNode)
+                .map(node -> toRoutingNode(node, instructionLandmarks))
                 .toList();
         List<RoutingEdge> edges = edgeRepository.findByMapVersionId(mapVersion.getId()).stream()
                 .map(this::toRoutingEdge)
@@ -152,18 +160,64 @@ public class MapQueryFacade {
                 .build();
     }
 
-    private RoutingNode toRoutingNode(Node node) {
+    private RoutingNode toRoutingNode(Node node, List<Poi> instructionLandmarks) {
         Point point = node.getGeomPx();
         Floor floor = node.getFloor();
         return RoutingNode.builder()
                 .id(node.getId())
                 .kind(node.getKindCode())
                 .name(node.getNameKo())
+                .landmarkName(findNearestLandmarkName(node, instructionLandmarks))
                 .floorId(floor == null ? null : floor.getId())
                 .floorName(floor == null ? null : floor.getName())
                 .x(point.getX())
                 .y(point.getY())
                 .build();
+    }
+
+    private String findNearestLandmarkName(Node node, List<Poi> instructionLandmarks) {
+        Point point = node.getGeomPx();
+        Floor floor = node.getFloor();
+        if (point == null || floor == null || instructionLandmarks.isEmpty()) {
+            return null;
+        }
+
+        return instructionLandmarks.stream()
+                .filter(poi -> poi.getFloor() != null && Objects.equals(poi.getFloor().getId(), floor.getId()))
+                .filter(poi -> poi.getGeomPx() != null)
+                .min(Comparator.comparingDouble(poi -> landmarkDistance(node, poi)))
+                .filter(poi -> Objects.equals(poi.getAnchorNodeId(), node.getId())
+                        || point.distance(poi.getGeomPx()) <= INSTRUCTION_LANDMARK_RADIUS_PX)
+                .map(Poi::getName)
+                .orElse(null);
+    }
+
+    private double landmarkDistance(Node node, Poi poi) {
+        if (Objects.equals(poi.getAnchorNodeId(), node.getId())) {
+            return 0.0;
+        }
+        return node.getGeomPx().distance(poi.getGeomPx());
+    }
+
+    private boolean isInstructionLandmark(Poi poi) {
+        String name = poi.getName();
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+
+        String normalized = name.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+        return !(normalized.contains("화장실")
+                || normalized.contains("엘리베이터")
+                || normalized.contains("에스컬레이터")
+                || normalized.contains("계단")
+                || normalized.contains("restroom")
+                || normalized.contains("toilet")
+                || normalized.contains("elevator")
+                || normalized.contains("escalator")
+                || normalized.contains("stair")
+                || normalized.contains("gate")
+                || normalized.contains("openingsoon")
+                || normalized.contains("openningsoon"));
     }
 
     private RoutingEdge toRoutingEdge(Edge edge) {
@@ -268,11 +322,16 @@ public class MapQueryFacade {
         }
 
         Campus campus = building.getCampus();
+        UUID anchorNodeId = resolvePoiAnchorNodeId(poi).orElse(null);
+        if (anchorNodeId == null) {
+            return Optional.empty();
+        }
+
         return Optional.of(IndoorPoiDestination.builder()
                 .publicId(poi.getPublicId())
                 .poiId(poi.getId())
                 .name(poi.getName())
-                .anchorNodeId(poi.getAnchorNodeId())
+                .anchorNodeId(anchorNodeId)
                 .floorId(floor.getId())
                 .floorName(floor.getName())
                 .buildingId(building.getId())
@@ -280,6 +339,28 @@ public class MapQueryFacade {
                 .campusId(campus == null ? null : campus.getId())
                 .campusName(campus == null ? null : campus.getName())
                 .build());
+    }
+
+    private Optional<UUID> resolvePoiAnchorNodeId(Poi poi) {
+        if (poi.getAnchorNodeId() != null) {
+            return Optional.of(poi.getAnchorNodeId());
+        }
+        if (poi.getMapVersion() == null
+                || poi.getMapVersion().getId() == null
+                || poi.getFloor() == null
+                || poi.getFloor().getId() == null
+                || poi.getGeomPx() == null) {
+            return Optional.empty();
+        }
+
+        Point geomPx = poi.getGeomPx();
+        return nodeRepository.findNearestRoutableNodeByPixel(
+                        poi.getMapVersion().getId(),
+                        poi.getFloor().getId(),
+                        geomPx.getX(),
+                        geomPx.getY()
+                )
+                .map(Node::getId);
     }
 
     @Builder
@@ -371,13 +452,47 @@ public class MapQueryFacade {
             UUID id,
             String kind,
             String name,
+            String landmarkName,
             UUID floorId,
             String floorName,
             double x,
             double y
     ) {
         public String displayName() {
-            return name == null || name.isBlank() ? kind : name;
+            if (hasText(name) && !isGenericNodeName(name, kind)) {
+                return name;
+            }
+            if (hasText(landmarkName)) {
+                return landmarkName;
+            }
+            return localizedKind(kind);
+        }
+
+        private static boolean hasText(String value) {
+            return value != null && !value.isBlank();
+        }
+
+        private static boolean isGenericNodeName(String value, String kind) {
+            String normalized = value.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+            String normalizedKind = kind == null ? "" : kind.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+            return normalized.equals(normalizedKind)
+                    || normalized.equals("corridor")
+                    || normalized.equals("node")
+                    || normalized.equals("point")
+                    || normalized.equals("복도")
+                    || normalized.equals("통로");
+        }
+
+        private static String localizedKind(String kind) {
+            return switch (kind == null ? "" : kind.toLowerCase(Locale.ROOT)) {
+                case "entrance" -> "출입구";
+                case "elevator" -> "엘리베이터";
+                case "escalator" -> "에스컬레이터";
+                case "stair" -> "계단";
+                case "ramp" -> "경사로";
+                case "corridor" -> "통로";
+                default -> "이 지점";
+            };
         }
     }
 

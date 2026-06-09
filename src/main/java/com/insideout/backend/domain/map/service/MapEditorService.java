@@ -18,6 +18,7 @@ import com.insideout.backend.domain.building.repository.FloorplanRepository;
 import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.FloorplanCalibration;
 import com.insideout.backend.domain.building.repository.FloorplanCalibrationRepository;
+import com.insideout.backend.domain.building.service.BuildingDirectorySyncService;
 import com.insideout.backend.domain.map.entity.VerticalConnector;
 import com.insideout.backend.domain.map.entity.VerticalConnectorNode;
 import com.insideout.backend.domain.map.repository.VerticalConnectorRepository;
@@ -116,6 +117,7 @@ public class MapEditorService {
     private final VerticalConnectorRepository verticalConnectorRepository;
     private final VerticalConnectorNodeRepository verticalConnectorNodeRepository;
     private final FloorplanCalibrationRepository floorplanCalibrationRepository;
+    private final BuildingDirectorySyncService buildingDirectorySyncService;
     @PersistenceContext
     private final EntityManager entityManager;
 
@@ -2106,6 +2108,7 @@ public class MapEditorService {
         if (building.getTenant() != null && !"approved".equals(building.getTenant().getStatus())) {
             building.getTenant().updateStatus("approved");
         }
+        buildingDirectorySyncService.sync(building);
 
         Campus campus = building.getCampus();
         if (campus != null && campus.getMeta() != null) {

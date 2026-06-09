@@ -393,6 +393,7 @@ public class NavigationService {
         for (JsonNode legNode : legsNode) {
             LegMode mode = parseTransitLegMode(getNullableText(legNode.path("mode")));
             List<TransitStopDto> stops = parseTransitStops(legNode);
+            List<CoordinateDto> path = parseTransitPath(legNode);
             legs.add(new LegDto(
                     mode,
                     resolveTransitRouteName(legNode),
@@ -407,14 +408,53 @@ public class NavigationService {
                     null,
                     null,
                     null,
-                    null,
-                    List.of(),
+                    path.isEmpty() ? null : CoordinateType.WGS84,
+                    path,
                     List.of(),
                     parseTransitSteps(legNode)
             ));
         }
 
         return legs;
+    }
+
+    private List<CoordinateDto> parseTransitPath(JsonNode legNode) {
+        List<CoordinateDto> path = new ArrayList<>();
+        JsonNode stepsNode = legNode.path("steps");
+
+        if (!stepsNode.isArray()) {
+            return path;
+        }
+
+        for (JsonNode stepNode : stepsNode) {
+            appendLinestringCoordinates(path, stepNode.path("linestring"));
+        }
+
+        return path;
+    }
+
+    private void appendLinestringCoordinates(List<CoordinateDto> path, JsonNode linestringNode) {
+        String linestring = getNullableText(linestringNode);
+        if (linestring == null || linestring.isBlank()) {
+            return;
+        }
+
+        for (String pair : linestring.trim().split("\\s+")) {
+            String[] coordinates = pair.split(",");
+            if (coordinates.length < 2) {
+                continue;
+            }
+
+            try {
+                appendCoordinate(
+                        path,
+                        Double.parseDouble(coordinates[0]),
+                        Double.parseDouble(coordinates[1])
+                );
+            } catch (NumberFormatException ignored) {
+                // Skip malformed pairs from the external API and keep the rest of the path.
+            }
+        }
     }
 
     private List<StepDto> parseTransitSteps(JsonNode legNode) {
@@ -480,6 +520,7 @@ public class NavigationService {
         Integer totalTimeSeconds = getNullableInt(summary.path("totalTime"));
         Integer totalDistanceMeters = getNullableInt(summary.path("totalDistance"));
         List<StepDto> steps = parseFeatureSteps(features);
+        List<CoordinateDto> path = parseFeaturePath(features);
         List<LegDto> legs = new ArrayList<>();
         List<RouteFailureDto> failures = new ArrayList<>();
         prependExitLegsIfNeeded(legs, failures, target, routeMode, routeOption);
@@ -490,8 +531,16 @@ public class NavigationService {
                 totalTimeSeconds,
                 totalDistanceMeters,
                 null,
+                List.of(),
                 null,
                 target.endName(),
+                null,
+                null,
+                null,
+                null,
+                CoordinateType.WGS84,
+                path,
+                List.of(),
                 steps
         ));
         appendEntryLegsIfNeeded(legs, failures, target, routeMode, routeOption);
@@ -539,6 +588,50 @@ public class NavigationService {
         }
 
         return steps;
+    }
+
+    private List<CoordinateDto> parseFeaturePath(JsonNode features) {
+        List<CoordinateDto> path = new ArrayList<>();
+
+        for (JsonNode feature : features) {
+            appendGeometryCoordinates(path, feature.path("geometry").path("coordinates"));
+        }
+
+        return path;
+    }
+
+    private void appendGeometryCoordinates(List<CoordinateDto> path, JsonNode coordinates) {
+        if (!coordinates.isArray() || coordinates.isEmpty()) {
+            return;
+        }
+
+        if (coordinates.size() >= 2 && coordinates.get(0).isNumber() && coordinates.get(1).isNumber()) {
+            appendCoordinate(path, coordinates.get(0).asDouble(), coordinates.get(1).asDouble());
+            return;
+        }
+
+        for (JsonNode child : coordinates) {
+            appendGeometryCoordinates(path, child);
+        }
+    }
+
+    private void appendCoordinate(List<CoordinateDto> path, double x, double y) {
+        if (!isWgs84Coordinate(x, y)) {
+            return;
+        }
+        CoordinateDto last = path.isEmpty() ? null : path.get(path.size() - 1);
+        if (last != null && sameCoordinate(last, x, y)) {
+            return;
+        }
+        path.add(new CoordinateDto(x, y, null));
+    }
+
+    private boolean sameCoordinate(CoordinateDto coordinate, double x, double y) {
+        return Double.compare(coordinate.x(), x) == 0 && Double.compare(coordinate.y(), y) == 0;
+    }
+
+    private boolean isWgs84Coordinate(double x, double y) {
+        return x >= -180 && x <= 180 && y >= -90 && y <= 90;
     }
 
     private CoordinateDto firstPointCoordinate(JsonNode coordinates) {

@@ -31,10 +31,13 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                 b.id AS id,
                 b.name AS name,
                 b.address AS address,
-                CAST(ST_Y(ST_Centroid(b.footprint::geometry)) AS double precision) AS lat,
-                CAST(ST_X(ST_Centroid(b.footprint::geometry)) AS double precision) AS lng,
+                CAST(ST_Y(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lat,
+                CAST(ST_X(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lng,
                 b.external_api_id AS externalApiId
             FROM building b
+            LEFT JOIN building_directory bd
+                ON bd.id = b.id
+               AND bd.is_public = true
             WHERE b.name ILIKE CONCAT('%', :query, '%')
                OR b.address ILIKE CONCAT('%', :query, '%')
             ORDER BY b.created_at DESC
@@ -46,10 +49,13 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                 b.id AS id,
                 b.name AS name,
                 b.address AS address,
-                CAST(ST_Y(ST_Centroid(b.footprint::geometry)) AS double precision) AS lat,
-                CAST(ST_X(ST_Centroid(b.footprint::geometry)) AS double precision) AS lng,
+                CAST(ST_Y(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lat,
+                CAST(ST_X(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lng,
                 b.external_api_id AS externalApiId
             FROM building b
+            LEFT JOIN building_directory bd
+                ON bd.id = b.id
+               AND bd.is_public = true
             WHERE b.name ILIKE CONCAT('%', :query, '%')
                OR b.address ILIKE CONCAT('%', :query, '%')
             ORDER BY b.created_at DESC, b.id DESC
@@ -65,10 +71,13 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                 b.id AS id,
                 b.name AS name,
                 b.address AS address,
-                CAST(ST_Y(ST_Centroid(b.footprint::geometry)) AS double precision) AS lat,
-                CAST(ST_X(ST_Centroid(b.footprint::geometry)) AS double precision) AS lng,
+                CAST(ST_Y(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lat,
+                CAST(ST_X(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lng,
                 b.external_api_id AS externalApiId
             FROM building b
+            LEFT JOIN building_directory bd
+                ON bd.id = b.id
+               AND bd.is_public = true
             WHERE b.external_api_id IN (:externalApiIds)
             """, nativeQuery = true)
     List<BuildingSearchProjection> findRegisteredPlacesByExternalApiIds(@Param("externalApiIds") Collection<String> externalApiIds);
@@ -78,17 +87,27 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                 b.id AS id,
                 b.name AS name,
                 b.address AS address,
-                CAST(ST_Y(ST_Centroid(b.footprint::geometry)) AS double precision) AS lat,
-                CAST(ST_X(ST_Centroid(b.footprint::geometry)) AS double precision) AS lng,
+                CAST(ST_Y(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lat,
+                CAST(ST_X(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lng,
                 b.external_api_id AS externalApiId
             FROM building b
+            LEFT JOIN building_directory bd
+                ON bd.id = b.id
+               AND bd.is_public = true
             WHERE b.footprint IS NOT NULL
+               OR bd.centroid IS NOT NULL
+               OR bd.bbox IS NOT NULL
             ORDER BY b.created_at DESC, b.id DESC
             """,
             countQuery = """
                     SELECT COUNT(*)
                     FROM building b
+                    LEFT JOIN building_directory bd
+                        ON bd.id = b.id
+                       AND bd.is_public = true
                     WHERE b.footprint IS NOT NULL
+                       OR bd.centroid IS NOT NULL
+                       OR bd.bbox IS NOT NULL
                     """,
             nativeQuery = true)
     Page<BuildingSearchProjection> findRegisteredPlacesForIndexing(Pageable pageable);
@@ -101,8 +120,8 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                 b.id AS id,
                 b.name AS name,
                 b.address AS address,
-                CAST(ST_Y(ST_Centroid(b.footprint::geometry)) AS double precision) AS lat,
-                CAST(ST_X(ST_Centroid(b.footprint::geometry)) AS double precision) AS lng,
+                CAST(ST_Y(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lat,
+                CAST(ST_X(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lng,
                 b.external_api_id AS externalApiId
             FROM building b
             LEFT JOIN building_directory bd
@@ -110,10 +129,15 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                AND bd.id = b.id
                AND bd.is_public = true
             CROSS JOIN target t
-            WHERE b.footprint IS NOT NULL
+            WHERE (b.footprint IS NOT NULL OR bd.centroid IS NOT NULL OR bd.bbox IS NOT NULL)
               AND (
                     (bd.bbox IS NOT NULL AND ST_DWithin(
                         bd.bbox,
+                        t.geom::geography,
+                        :radius
+                    ))
+                 OR (bd.centroid IS NOT NULL AND ST_DWithin(
+                        bd.centroid,
                         t.geom::geography,
                         :radius
                     ))

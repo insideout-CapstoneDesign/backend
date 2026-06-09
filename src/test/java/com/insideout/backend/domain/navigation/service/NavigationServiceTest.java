@@ -159,7 +159,7 @@ class NavigationServiceTest {
 
         assertThat(merged)
                 .extracting(StepDto::instruction)
-                .containsExactly("A에서 출발", "휴대폰 충전기 앞에서 우회전", "목적지 도착");
+                .containsExactly("A에서 출발", "휴대폰 충전기 앞까지 직진 후 우회전", "목적지 도착");
         assertThat(merged.get(1).x()).isEqualTo(40.0);
         assertThat(merged.get(1).y()).isEqualTo(80.0);
         assertThat(merged.get(1).pathStartIndex()).isEqualTo(0);
@@ -185,6 +185,26 @@ class NavigationServiceTest {
                 .containsExactly("A에서 출발", "휴대폰 충전기 앞을 지나 계속 직진", "목적지 도착");
         assertThat(merged.get(1).pathStartIndex()).isEqualTo(0);
         assertThat(merged.get(1).pathEndIndex()).isEqualTo(3);
+    }
+
+    @Test
+    void mergeIndoorStepsCombinesAdjacentSameLandmarkStraightAndTurnEvenWhenDistanceIsLong() {
+        List<StepDto> merged = ReflectionTestUtils.invokeMethod(
+                navigationService,
+                "mergeIndoorSteps",
+                List.of(
+                        new StepDto("A에서 출발", null, null, 0.0, 0.0, null, "INDOOR", null),
+                        new StepDto("메시카 앞에서 직진", null, null, 320.0, 0.0, null, "INDOOR", null, 0, 1),
+                        new StepDto("메시카 앞에서 좌회전", null, null, 320.0, -80.0, null, "INDOOR", null, 1, 2),
+                        new StepDto("목적지 도착", null, null, 320.0, -120.0, null, "INDOOR", null)
+                )
+        );
+
+        assertThat(merged)
+                .extracting(StepDto::instruction)
+                .containsExactly("A에서 출발", "메시카 앞까지 직진 후 좌회전", "목적지 도착");
+        assertThat(merged.get(1).pathStartIndex()).isEqualTo(0);
+        assertThat(merged.get(1).pathEndIndex()).isEqualTo(2);
     }
 
     @Test
@@ -521,7 +541,7 @@ class NavigationServiceTest {
         assertThat(indoorLeg.floorSegments().get(0).steps())
                 .extracting(StepDto::instruction)
                 .doesNotContain("목적지 POI 앞에서 우회전")
-                .containsExactly("정문에서 출발", "계속 직진", "우회전", "목적지 POI 도착");
+                .containsExactly("테스트 건물 입구 진입", "계속 직진", "우회전", "목적지 POI 도착");
         assertThat(indoorLeg.floorSegments().get(0).steps())
                 .extracting(StepDto::instruction)
                 .filteredOn(instruction -> !instruction.contains("도착"))

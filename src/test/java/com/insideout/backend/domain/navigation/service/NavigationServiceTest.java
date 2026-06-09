@@ -123,6 +123,80 @@ class NavigationServiceTest {
     }
 
     @Test
+    void mergeIndoorStepsCollapsesConsecutiveDuplicateInstructions() {
+        List<StepDto> merged = ReflectionTestUtils.invokeMethod(
+                navigationService,
+                "mergeIndoorSteps",
+                List.of(
+                        new StepDto("A에서 출발", null, null, 0.0, 0.0, null, "INDOOR", null),
+                        new StepDto("샤넬 앞까지 직진", null, null, 10.0, 0.0, null, "INDOOR", null, 0, 1),
+                        new StepDto("샤넬 앞까지 직진", null, null, 20.0, 0.0, null, "INDOOR", null, 1, 2),
+                        new StepDto("목적지 도착", null, null, 30.0, 0.0, null, "INDOOR", null)
+                )
+        );
+
+        assertThat(merged)
+                .extracting(StepDto::instruction)
+                .containsExactly("A에서 출발", "샤넬 앞까지 직진", "목적지 도착");
+        assertThat(merged.get(1).x()).isEqualTo(20.0);
+        assertThat(merged.get(1).pathStartIndex()).isEqualTo(0);
+        assertThat(merged.get(1).pathEndIndex()).isEqualTo(2);
+    }
+
+    @Test
+    void mergeIndoorStepsSummarizesDenseSameLandmarkTurns() {
+        List<StepDto> merged = ReflectionTestUtils.invokeMethod(
+                navigationService,
+                "mergeIndoorSteps",
+                List.of(
+                        new StepDto("A에서 출발", null, null, 0.0, 0.0, null, "INDOOR", null),
+                        new StepDto("휴대폰 충전기 앞에서 좌회전", null, null, 40.0, 0.0, null, "INDOOR", null, 0, 1),
+                        new StepDto("휴대폰 충전기 앞까지 직진", null, null, 40.0, 40.0, null, "INDOOR", null, 1, 2),
+                        new StepDto("휴대폰 충전기 앞에서 우회전", null, null, 40.0, 80.0, null, "INDOOR", null, 2, 3),
+                        new StepDto("목적지 도착", null, null, 40.0, 100.0, null, "INDOOR", null)
+                )
+        );
+
+        assertThat(merged)
+                .extracting(StepDto::instruction)
+                .containsExactly("A에서 출발", "휴대폰 충전기 앞에서 우회전", "목적지 도착");
+        assertThat(merged.get(1).x()).isEqualTo(40.0);
+        assertThat(merged.get(1).y()).isEqualTo(80.0);
+        assertThat(merged.get(1).pathStartIndex()).isEqualTo(0);
+        assertThat(merged.get(1).pathEndIndex()).isEqualTo(3);
+    }
+
+    @Test
+    void mergeIndoorStepsSummarizesDenseSameLandmarkAsStraightWhenNetTurnIsSmall() {
+        List<StepDto> merged = ReflectionTestUtils.invokeMethod(
+                navigationService,
+                "mergeIndoorSteps",
+                List.of(
+                        new StepDto("A에서 출발", null, null, 0.0, 0.0, null, "INDOOR", null),
+                        new StepDto("휴대폰 충전기 앞에서 좌회전", null, null, 30.0, 0.0, null, "INDOOR", null, 0, 1),
+                        new StepDto("휴대폰 충전기 앞까지 직진", null, null, 60.0, 5.0, null, "INDOOR", null, 1, 2),
+                        new StepDto("휴대폰 충전기 앞에서 우회전", null, null, 90.0, 0.0, null, "INDOOR", null, 2, 3),
+                        new StepDto("목적지 도착", null, null, 110.0, 0.0, null, "INDOOR", null)
+                )
+        );
+
+        assertThat(merged)
+                .extracting(StepDto::instruction)
+                .containsExactly("A에서 출발", "휴대폰 충전기 앞을 지나 계속 직진", "목적지 도착");
+        assertThat(merged.get(1).pathStartIndex()).isEqualTo(0);
+        assertThat(merged.get(1).pathEndIndex()).isEqualTo(3);
+    }
+
+    @Test
+    void visualTurnDirectionUsesDisplayedFloorplanCoordinates() {
+        String rightTurn = ReflectionTestUtils.invokeMethod(navigationService, "visualTurnDirection", 90.0);
+        String leftTurn = ReflectionTestUtils.invokeMethod(navigationService, "visualTurnDirection", -90.0);
+
+        assertThat(rightTurn).isEqualTo("우회전");
+        assertThat(leftTurn).isEqualTo("좌회전");
+    }
+
+    @Test
     void indoorLegStepUsesOriginalDestinationCoordinates() throws Exception {
         UUID buildingId = UUID.randomUUID();
         UUID entranceNodeId = UUID.randomUUID();
@@ -406,7 +480,7 @@ class NavigationServiceTest {
                         .nodes(List.of(
                                 routingNode(entranceNodeId, "entrance", "정문", null, null, 10, 10),
                                 routingNode(middleNodeId, "corridor", "복도", floorId, "1F", 20, 20),
-                                routingNode(destinationNodeId, "poi", "목적지 POI", null, null, 30, 30)
+                                routingNode(destinationNodeId, "poi", "목적지 POI", null, null, 20, 40)
                         ))
                         .edges(List.of(
                                 routingEdge(entranceNodeId, middleNodeId),
@@ -444,6 +518,17 @@ class NavigationServiceTest {
         assertThat(indoorLeg.floorSegments()).hasSize(1);
         assertThat(indoorLeg.floorSegments().get(0).floorId()).isEqualTo(floorId);
         assertThat(indoorLeg.floorSegments().get(0).path()).hasSize(3);
+        assertThat(indoorLeg.floorSegments().get(0).steps())
+                .extracting(StepDto::instruction)
+                .doesNotContain("목적지 POI 앞에서 우회전")
+                .containsExactly("정문에서 출발", "계속 직진", "우회전", "목적지 POI 도착");
+        assertThat(indoorLeg.floorSegments().get(0).steps())
+                .extracting(StepDto::instruction)
+                .filteredOn(instruction -> !instruction.contains("도착"))
+                .allSatisfy(instruction -> assertThat(instruction).doesNotContain("목적지 POI"));
+        StepDto arrivalStep = indoorLeg.floorSegments().get(0).steps().get(3);
+        assertThat(arrivalStep.pathStartIndex()).isEqualTo(2);
+        assertThat(arrivalStep.pathEndIndex()).isEqualTo(2);
     }
 
     private JsonNode walkRouteResponse() throws Exception {

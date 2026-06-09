@@ -69,6 +69,8 @@ public class NavigationService {
     private static final double COMFORTABLE_STAIR_PENALTY_MULTIPLIER = 20.0;
     private static final double COMFORTABLE_OBSTACLE_PENALTY_MULTIPLIER = 10.0;
     private static final double BLOCKING_EDGE_COST = Double.POSITIVE_INFINITY;
+    private static final double INDOOR_INSTRUCTION_CLUSTER_DISTANCE_PX = 260.0;
+    private static final double INDOOR_STRAIGHT_ANGLE_DEGREES = 35.0;
 
     private final MapQueryFacade mapQueryFacade;
     private final RestTemplate restTemplate;
@@ -909,7 +911,7 @@ public class NavigationService {
                 CoordinateType.PIXEL,
                 route.path(),
                 buildFloorSegments(mode, mapType, mapImageUrl, floorId, floorName, route),
-                route.steps()
+                mergeIndoorSteps(route.rawSteps())
         );
     }
 
@@ -933,7 +935,7 @@ public class NavigationService {
                     fallbackMapImageUrl,
                     CoordinateType.PIXEL,
                     route.path(),
-                    route.steps()
+                    mergeIndoorSteps(route.rawSteps())
             ));
         }
 
@@ -964,7 +966,7 @@ public class NavigationService {
                     resolveSegmentMapImageUrl(segmentFloorId, fallbackMapImageUrl, floorImageUrlCache),
                     CoordinateType.PIXEL,
                     segmentPath,
-                    stepsForNodeRange(route.steps(), startIndex, endIndex, route.nodes().size())
+                    mergeIndoorSteps(stepsForNodeRange(route.rawSteps(), startIndex, endIndex, route.nodes().size()))
             ));
 
             startIndex = endIndex;
@@ -990,14 +992,35 @@ public class NavigationService {
 
         int fromIndex = Math.min(Math.max(startIndex, 0), steps.size());
         int toIndex = Math.min(endIndex, steps.size());
-        List<StepDto> segmentSteps = new ArrayList<>(steps.subList(fromIndex, toIndex));
+        List<StepDto> segmentSteps = steps.subList(fromIndex, toIndex).stream()
+                .map(step -> shiftStepPathRange(step, startIndex))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
         int arrivalStepIndex = nodeCount;
         if (endIndex == nodeCount && arrivalStepIndex < steps.size()) {
-            segmentSteps.add(steps.get(arrivalStepIndex));
+            segmentSteps.add(shiftStepPathRange(steps.get(arrivalStepIndex), startIndex));
         }
 
         return segmentSteps;
+    }
+
+    private StepDto shiftStepPathRange(StepDto step, int offset) {
+        return new StepDto(
+                step.instruction(),
+                step.distanceMeters(),
+                step.durationSeconds(),
+                step.x(),
+                step.y(),
+                step.turnType(),
+                step.mode(),
+                step.streetName(),
+                shiftPathIndex(step.pathStartIndex(), offset),
+                shiftPathIndex(step.pathEndIndex(), offset)
+        );
+    }
+
+    private Integer shiftPathIndex(Integer value, int offset) {
+        return value == null ? null : Math.max(value - offset, 0);
     }
 
     private boolean sameFloor(UUID first, UUID second) {
@@ -1161,8 +1184,8 @@ public class NavigationService {
         List<CoordinateDto> path = routeNodes.stream()
                 .map(node -> new CoordinateDto(node.x(), node.y(), node.displayName()))
                 .toList();
-        List<StepDto> steps = buildIndoorSteps(routeNodes, links);
-        return Optional.of(new ComputedIndoorRoute(path, steps, routeNodes));
+        List<StepDto> rawSteps = buildIndoorSteps(routeNodes, links);
+        return Optional.of(new ComputedIndoorRoute(path, mergeIndoorSteps(rawSteps), rawSteps, routeNodes));
     }
 
     private Map<UUID, List<RouteLink>> buildAdjacency(
@@ -1263,7 +1286,9 @@ public class NavigationService {
 
         List<StepDto> steps = new ArrayList<>();
         RoutingNode start = nodes.get(0);
-        steps.add(new StepDto(start.displayName() + "에서 출발", null, null, start.x(), start.y(), null, "INDOOR", null));
+        RoutingNode end = nodes.get(nodes.size() - 1);
+        int arrivalStartPathIndex = nodes.size() - 1;
+        steps.add(new StepDto(start.displayName() + "에서 출발", null, null, start.x(), start.y(), null, "INDOOR", null, 0, 0));
 
         for (int i = 0; i < links.size(); i++) {
             RouteLink link = links.get(i);
@@ -1277,12 +1302,218 @@ public class NavigationService {
                 instruction = horizontalInstruction(nodes, i, next);
             }
 
-            steps.add(new StepDto(instruction, null, null, next.x(), next.y(), null, "INDOOR", null));
+            if (!link.vertical() && isDestinationLandmarkInstruction(instruction, end)) {
+                if (i >= links.size() - 2) {
+                    arrivalStartPathIndex = Math.min(arrivalStartPathIndex, i);
+                    continue;
+                }
+                instruction = destinationFreeInstruction(instruction);
+            }
+            steps.add(new StepDto(instruction, null, null, next.x(), next.y(), null, "INDOOR", null, i, i + 1));
         }
 
-        RoutingNode end = nodes.get(nodes.size() - 1);
-        steps.add(new StepDto(end.displayName() + " 도착", null, null, end.x(), end.y(), null, "INDOOR", null));
+        int endPathIndex = nodes.size() - 1;
+        steps.add(new StepDto(end.displayName() + " 도착", null, null, end.x(), end.y(), null, "INDOOR", null, arrivalStartPathIndex, endPathIndex));
         return steps;
+    }
+
+    private List<StepDto> mergeIndoorSteps(List<StepDto> steps) {
+        if (steps.size() < 2) {
+            return steps;
+        }
+
+        List<StepDto> merged = new ArrayList<>();
+        int index = 0;
+        while (index < steps.size()) {
+            StepDto current = steps.get(index);
+            if (!isMergeableIndoorHorizontalStep(current)) {
+                merged.add(current);
+                index++;
+                continue;
+            }
+
+            int endIndex = index;
+            while (endIndex + 1 < steps.size()
+                    && canMergeIndoorSteps(steps, index, endIndex + 1)) {
+                endIndex++;
+            }
+
+            if (endIndex == index) {
+                merged.add(current);
+            } else {
+                merged.add(mergeIndoorStepCluster(steps, index, endIndex));
+            }
+            index = endIndex + 1;
+        }
+
+        return merged;
+    }
+
+    private boolean canMergeIndoorSteps(List<StepDto> steps, int startIndex, int candidateIndex) {
+        StepDto first = steps.get(startIndex);
+        StepDto candidate = steps.get(candidateIndex);
+        if (!isMergeableIndoorHorizontalStep(candidate)) {
+            return false;
+        }
+        if (sameInstruction(first, candidate)) {
+            return true;
+        }
+
+        String landmark = instructionLandmarkName(first.instruction());
+        String candidateLandmark = instructionLandmarkName(candidate.instruction());
+        return landmark != null
+                && landmark.equals(candidateLandmark)
+                && clusterDistance(steps, startIndex, candidateIndex) <= INDOOR_INSTRUCTION_CLUSTER_DISTANCE_PX;
+    }
+
+    private StepDto mergeIndoorStepCluster(List<StepDto> steps, int startIndex, int endIndex) {
+        StepDto first = steps.get(startIndex);
+        StepDto last = steps.get(endIndex);
+        String instruction = sameInstruction(first, last)
+                ? first.instruction()
+                : mergedLandmarkInstruction(steps, startIndex, endIndex);
+
+        return new StepDto(
+                instruction,
+                last.distanceMeters(),
+                last.durationSeconds(),
+                last.x(),
+                last.y(),
+                last.turnType(),
+                last.mode(),
+                last.streetName(),
+                first.pathStartIndex(),
+                last.pathEndIndex()
+        );
+    }
+
+    private String mergedLandmarkInstruction(List<StepDto> steps, int startIndex, int endIndex) {
+        StepDto first = steps.get(startIndex);
+        String landmark = instructionLandmarkName(first.instruction());
+        if (landmark == null) {
+            return first.instruction();
+        }
+
+        Double angle = clusterTurnAngle(steps, startIndex, endIndex);
+        if (angle == null || Math.abs(angle) < INDOOR_STRAIGHT_ANGLE_DEGREES) {
+            return landmark + " 앞을 지나 계속 직진";
+        }
+
+        return landmark + " 앞에서 " + visualTurnDirection(angle);
+    }
+
+    private Double clusterTurnAngle(List<StepDto> steps, int startIndex, int endIndex) {
+        StepDto entryPrevious = startIndex > 0 ? steps.get(startIndex - 1) : null;
+        StepDto entryCurrent = steps.get(startIndex);
+        StepDto exitPrevious = endIndex > startIndex ? steps.get(endIndex - 1) : steps.get(startIndex);
+        StepDto exitCurrent = steps.get(endIndex);
+        return turnAngle(entryPrevious, entryCurrent, exitPrevious, exitCurrent);
+    }
+
+    private Double turnAngle(StepDto previous, StepDto current, StepDto next) {
+        return turnAngle(previous, current, current, next);
+    }
+
+    private Double turnAngle(StepDto entryPrevious, StepDto entryCurrent, StepDto exitPrevious, StepDto exitCurrent) {
+        if (!hasPoint(entryPrevious) || !hasPoint(entryCurrent) || !hasPoint(exitPrevious) || !hasPoint(exitCurrent)) {
+            return null;
+        }
+
+        double firstVectorX = entryCurrent.x() - entryPrevious.x();
+        double firstVectorY = entryCurrent.y() - entryPrevious.y();
+        double secondVectorX = exitCurrent.x() - exitPrevious.x();
+        double secondVectorY = exitCurrent.y() - exitPrevious.y();
+        if ((firstVectorX == 0 && firstVectorY == 0) || (secondVectorX == 0 && secondVectorY == 0)) {
+            return null;
+        }
+
+        double cross = (firstVectorX * secondVectorY) - (firstVectorY * secondVectorX);
+        double dot = (firstVectorX * secondVectorX) + (firstVectorY * secondVectorY);
+        return Math.toDegrees(Math.atan2(cross, dot));
+    }
+
+    private String visualTurnDirection(double angle) {
+        // Indoor floorplan coordinates are screen/SVG coordinates where y increases downward.
+        // From the previous edge to the next edge, a positive cross product is visually clockwise,
+        // which is a right turn on the displayed floorplan.
+        return angle > 0 ? "우회전" : "좌회전";
+    }
+
+    private double clusterDistance(List<StepDto> steps, int startIndex, int endIndex) {
+        double distance = 0.0;
+        StepDto previous = startIndex > 0 ? steps.get(startIndex - 1) : steps.get(startIndex);
+        for (int i = startIndex; i <= endIndex; i++) {
+            StepDto current = steps.get(i);
+            if (hasPoint(previous) && hasPoint(current)) {
+                double dx = previous.x() - current.x();
+                double dy = previous.y() - current.y();
+                distance += Math.sqrt(dx * dx + dy * dy);
+            }
+            previous = current;
+        }
+        return distance;
+    }
+
+    private boolean sameInstruction(StepDto first, StepDto second) {
+        return normalizeInstruction(first.instruction()).equals(normalizeInstruction(second.instruction()));
+    }
+
+    private boolean isMergeableIndoorHorizontalStep(StepDto step) {
+        String instruction = normalizeInstruction(step.instruction());
+        if (!"INDOOR".equalsIgnoreCase(step.mode()) || instruction.isBlank()) {
+            return false;
+        }
+        if (instruction.contains("출발") || instruction.contains("도착")) {
+            return false;
+        }
+        if (instruction.contains("엘리베이터")
+                || instruction.contains("계단")
+                || instruction.contains("에스컬레이터")
+                || instruction.contains("경사로")) {
+            return false;
+        }
+        return instruction.contains("좌회전")
+                || instruction.contains("우회전")
+                || instruction.contains("직진");
+    }
+
+    private String instructionLandmarkName(String instruction) {
+        String text = normalizeInstruction(instruction);
+        int frontIndex = text.indexOf(" 앞");
+        if (frontIndex <= 0) {
+            return null;
+        }
+
+        String landmark = text.substring(0, frontIndex).trim();
+        return landmark.isBlank() ? null : landmark;
+    }
+
+    private String normalizeInstruction(String instruction) {
+        return instruction == null ? "" : instruction.replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean hasPoint(StepDto step) {
+        return step != null && step.x() != null && step.y() != null;
+    }
+
+    private boolean isDestinationLandmarkInstruction(String instruction, RoutingNode destination) {
+        String destinationLandmark = instructionLandmark(destination);
+        String instructionLandmark = instructionLandmarkName(instruction);
+        return destinationLandmark != null && destinationLandmark.equals(instructionLandmark);
+    }
+
+    private String destinationFreeInstruction(String instruction) {
+        String text = normalizeInstruction(instruction);
+        if (text.contains("좌회전")) {
+            return "좌회전";
+        }
+        if (text.contains("우회전")) {
+            return "우회전";
+        }
+        if (text.contains("직진")) {
+            return "계속 직진";
+        }
+        return text;
     }
 
     private String verticalInstruction(RouteLink link) {
@@ -1313,12 +1544,7 @@ public class NavigationService {
         if (Math.abs(angle) < 35) {
             return straightInstruction(next);
         }
-        // Indoor floorplan coordinates are screen/SVG coordinates where y increases downward,
-        // so the visual turn direction is mirrored from the usual Cartesian cross product sign.
-        if (angle > 0) {
-            return turnInstruction(current, "우회전");
-        }
-        return turnInstruction(current, "좌회전");
+        return turnInstruction(current, visualTurnDirection(angle));
     }
 
     private String straightInstruction(RoutingNode next) {
@@ -1568,6 +1794,7 @@ public class NavigationService {
     private record ComputedIndoorRoute(
             List<CoordinateDto> path,
             List<StepDto> steps,
+            List<StepDto> rawSteps,
             List<RoutingNode> nodes
     ) {
     }

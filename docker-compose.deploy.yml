@@ -8,6 +8,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env.deploy.vm
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy

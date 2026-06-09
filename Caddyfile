@@ -1,4 +1,4 @@
-{$APP_HOST:localhost} {
+http://{$APP_HOST:localhost} {
     encode gzip zstd
 
     reverse_proxy app:8080

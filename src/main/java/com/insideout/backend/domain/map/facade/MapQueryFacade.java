@@ -293,14 +293,21 @@ public class MapQueryFacade {
 
         Optional<Building> buildingEntity = buildingRepository.findById(building.getId());
         Campus campus = buildingEntity.map(Building::getCampus).orElse(null);
+        boolean hasPublishedCampusMap = campus != null && mapVersionRepository
+                .findFirstByCampusIdAndMapTypeAndStatusOrderByCreatedAtDesc(
+                        campus.getId(),
+                        MapType.CAMPUS,
+                        "published"
+                )
+                .isPresent();
         Point campusEntrance = campus == null ? null : campus.getPrimaryEntrance();
 
         return Optional.of(IndoorDestinationAnchor.builder()
-                .campusId(campus == null ? null : campus.getId())
-                .campusName(campus == null ? null : campus.getName())
-                .campusEntranceName(campus == null ? null : campus.getPrimaryEntranceName())
-                .campusEntranceX(campusEntrance == null ? null : campusEntrance.getX())
-                .campusEntranceY(campusEntrance == null ? null : campusEntrance.getY())
+                .campusId(hasPublishedCampusMap ? campus.getId() : null)
+                .campusName(hasPublishedCampusMap ? campus.getName() : null)
+                .campusEntranceName(hasPublishedCampusMap ? campus.getPrimaryEntranceName() : null)
+                .campusEntranceX(hasPublishedCampusMap && campusEntrance != null ? campusEntrance.getX() : null)
+                .campusEntranceY(hasPublishedCampusMap && campusEntrance != null ? campusEntrance.getY() : null)
                 .buildingId(building.getId())
                 .buildingName(building.getName())
                 .entranceNodeId(node.getId())

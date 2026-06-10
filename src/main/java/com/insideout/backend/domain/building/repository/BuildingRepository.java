@@ -157,10 +157,15 @@ public interface BuildingRepository extends JpaRepository<Building, UUID> {
                     WHEN ST_Covers(b.footprint::geometry, t.geom) THEN 1
                     ELSE 2
                 END,
-                CASE
-                    WHEN bd.bbox IS NOT NULL THEN ST_Distance(bd.bbox, t.geom::geography)
-                    ELSE ST_Distance(b.footprint, t.geom::geography)
-                END,
+                COALESCE(
+                    CASE
+                        WHEN bd.bbox IS NOT NULL THEN ST_Distance(bd.bbox, t.geom::geography)
+                    END,
+                    CASE
+                        WHEN b.footprint IS NOT NULL THEN ST_Distance(b.footprint, t.geom::geography)
+                    END,
+                    ST_Distance(bd.centroid, t.geom::geography)
+                ),
                 ST_Area(b.footprint::geometry),
                 b.id
             LIMIT 1

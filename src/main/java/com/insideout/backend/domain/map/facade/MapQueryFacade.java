@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -52,6 +53,7 @@ public class MapQueryFacade {
 
     private static final double REGISTERED_BUILDING_SEARCH_RADIUS_METERS = 50.0;
     private static final double INSTRUCTION_LANDMARK_RADIUS_PX = 180.0;
+    private static final double POI_ANCHOR_SNAP_RADIUS_PX = 120.0;
 
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
@@ -128,7 +130,27 @@ public class MapQueryFacade {
             return List.of();
         }
 
+        Optional<MapVersion> publishedVersion = mapVersionRepository.findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(
+                buildingId,
+                MapType.BUILDING,
+                "published"
+        );
+        if (publishedVersion.isEmpty()) {
+            return List.of();
+        }
+
+        Set<UUID> publishedFloorIds = nodeRepository.findByMapVersionId(publishedVersion.get().getId()).stream()
+                .map(Node::getFloor)
+                .filter(Objects::nonNull)
+                .map(Floor::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (publishedFloorIds.isEmpty()) {
+            return List.of();
+        }
+
         return floorRepository.findAllByBuilding_IdOrderByLevelDesc(buildingId).stream()
+                .filter(floor -> publishedFloorIds.contains(floor.getId()))
                 .map(floor -> mapAssetStorage.findCurrentMapAsset(MapType.BUILDING, floor.getId())
                         .map(asset -> toPublishedFloorplan(floor, asset))
                         .orElse(null))
@@ -391,6 +413,8 @@ public class MapQueryFacade {
                         geomPx.getX(),
                         geomPx.getY()
                 )
+                .filter(node -> node.getGeomPx() != null
+                        && geomPx.distance(node.getGeomPx()) <= POI_ANCHOR_SNAP_RADIUS_PX)
                 .map(Node::getId);
     }
 

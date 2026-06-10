@@ -217,16 +217,12 @@ class NavigationServiceTest {
     }
 
     @Test
-    void indoorLegStepUsesOriginalDestinationCoordinates() throws Exception {
+    void buildingOnlyDestinationUsesOutdoorRouteWithoutIndoorLeg() throws Exception {
         UUID buildingId = UUID.randomUUID();
-        UUID entranceNodeId = UUID.randomUUID();
         double originalEndX = 127.1000;
         double originalEndY = 37.5000;
-        double entranceX = 127.2000;
-        double entranceY = 37.6000;
 
-        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, originalEndX, originalEndY))
-                .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, entranceX, entranceY)));
+        when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
         when(restTemplate.postForObject(
                 eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
                 any(HttpEntity.class),
@@ -246,14 +242,13 @@ class NavigationServiceTest {
         ));
 
         RouteDto route = response.routes().get(0);
-        LegDto indoorLeg = route.legs().get(route.legs().size() - 1);
-        StepDto indoorStep = indoorLeg.steps().get(0);
 
-        assertThat(response.routedDestination().x()).isEqualTo(entranceX);
-        assertThat(response.routedDestination().y()).isEqualTo(entranceY);
-        assertThat(indoorLeg.mode()).isEqualTo(LegMode.INDOOR);
-        assertThat(indoorStep.x()).isEqualTo(originalEndX);
-        assertThat(indoorStep.y()).isEqualTo(originalEndY);
+        assertThat(response.routedDestination().x()).isEqualTo(originalEndX);
+        assertThat(response.routedDestination().y()).isEqualTo(originalEndY);
+        assertThat(route.legs())
+                .extracting(LegDto::mode)
+                .doesNotContain(LegMode.INDOOR);
+        verify(mapQueryFacade, never()).findIndoorDestinationAnchor(buildingId, originalEndX, originalEndY);
         assertThat(route.failures()).isEmpty();
         assertThat(response.failures()).isEmpty();
     }

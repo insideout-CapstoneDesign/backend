@@ -221,12 +221,12 @@ public class NavigationService {
         }
 
         Optional<IndoorPoiDestination> destination = mapQueryFacade.findIndoorPoiDestination(request.destinationPoiId());
-        UUID destinationBuildingId = request.destinationBuildingId() != null
-                ? request.destinationBuildingId()
-                : destination.map(IndoorPoiDestination::buildingId).orElse(null);
+        if (destination.isEmpty()) {
+            return RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName());
+        }
 
         Optional<IndoorDestinationAnchor> anchor = mapQueryFacade.findIndoorDestinationAnchor(
-                destinationBuildingId,
+                destination.get().buildingId(),
                 request.endX(),
                 request.endY()
         );
@@ -234,7 +234,7 @@ public class NavigationService {
         return anchor
                 .map(value -> RouteTarget.withIndoor(
                         value,
-                        destination.orElse(null),
+                        destination.get(),
                         request.endX(),
                         request.endY(),
                         request.endName()

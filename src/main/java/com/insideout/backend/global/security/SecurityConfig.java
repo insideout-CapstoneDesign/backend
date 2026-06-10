@@ -47,6 +47,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/places/**").permitAll()
                         .requestMatchers("/api/v1/navigation/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SYS_ADMIN")
                         .requestMatchers("/api/v1/tenant/**").hasRole("TENANT_USER")
                         .requestMatchers("/api/v1/user/**").hasRole("END_USER")
@@ -66,11 +67,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
+        config.setAllowedOriginPatterns(List.of(
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
+                "http://127.0.0.1:5173",
+                "https://*.vercel.app"
         ));
         config.setAllowedMethods(List.of(
                 HttpMethod.GET.name(),

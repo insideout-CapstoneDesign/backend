@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
+import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.map.entity.Poi;
 import com.insideout.backend.domain.map.repository.EdgeRepository;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
@@ -35,6 +36,9 @@ class MapQueryFacadeTest {
     private BuildingRepository buildingRepository;
 
     @Mock
+    private FloorRepository floorRepository;
+
+    @Mock
     private PoiRepository poiRepository;
 
     @Mock
@@ -60,6 +64,7 @@ class MapQueryFacadeTest {
                 nodeRepository,
                 buildingDirectoryRepository,
                 buildingRepository,
+                floorRepository,
                 poiRepository,
                 edgeRepository,
                 mapVersionRepository,

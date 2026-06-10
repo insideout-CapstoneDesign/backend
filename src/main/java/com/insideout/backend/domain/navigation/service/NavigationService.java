@@ -16,6 +16,7 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.FloorSegmentDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.FloorplanDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.IndoorInfoDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegMode;
@@ -141,7 +142,7 @@ public class NavigationService {
         return new NavigationResponseDto(
                 new CoordinateDto(request.endX(), request.endY(), request.endName()),
                 new CoordinateDto(target.endX(), target.endY(), target.endName()),
-                target.toIndoorInfo(),
+                toIndoorInfo(target),
                 routes,
                 notFoundRouteTypes,
                 failures,
@@ -163,6 +164,32 @@ public class NavigationService {
                 routeOption,
                 legMode,
                 mapType
+        );
+    }
+
+    private IndoorInfoDto toIndoorInfo(RouteTarget target) {
+        if (!target.includesIndoor()) {
+            return new IndoorInfoDto(false, null, null, null, null, null, null, null, List.of());
+        }
+
+        var floorplans = mapQueryFacade.findCurrentBuildingFloorplans(target.anchor().buildingId());
+        return new IndoorInfoDto(
+                true,
+                target.anchor().campusId(),
+                target.anchor().campusName(),
+                target.anchor().campusEntranceName(),
+                target.anchor().buildingId(),
+                target.anchor().buildingName(),
+                target.anchor().entranceNodeId(),
+                target.anchor().entranceName(),
+                (floorplans == null ? List.<MapQueryFacade.PublishedFloorplan>of() : floorplans).stream()
+                        .map(floorplan -> new FloorplanDto(
+                                floorplan.floorId(),
+                                floorplan.floorName(),
+                                floorplan.mapImageUrl(),
+                                CoordinateType.PIXEL
+                        ))
+                        .toList()
         );
     }
 
@@ -675,6 +702,12 @@ public class NavigationService {
         return (buildingName == null || buildingName.isBlank() ? "건물" : buildingName) + " 도착";
     }
 
+    private String indoorExitInstruction(RouteTarget target) {
+        String buildingName = target.buildingName();
+        String safeBuildingName = buildingName == null || buildingName.isBlank() ? "건물" : buildingName;
+        return safeBuildingName + " 출구로 나가기";
+    }
+
     private List<CoordinateDto> parseFeaturePath(JsonNode features) {
         List<CoordinateDto> path = new ArrayList<>();
 
@@ -751,7 +784,7 @@ public class NavigationService {
             RouteMode routeMode,
             RouteOption routeOption
     ) {
-        if (!target.includesIndoor()) {
+        if (!target.includesIndoor() || target.startsIndoor()) {
             return;
         }
 
@@ -889,7 +922,7 @@ public class NavigationService {
                         target.entranceName(),
                         route,
                         target.source().name() + "에서 출발",
-                        buildingArrivalInstruction(target)
+                        indoorExitInstruction(target)
                 ));
     }
 
@@ -2024,22 +2057,6 @@ public class NavigationService {
                     source,
                     null,
                     anchor
-            );
-        }
-
-        private IndoorInfoDto toIndoorInfo() {
-            if (!includesIndoor) {
-                return new IndoorInfoDto(false, null, null, null, null, null, null, null);
-            }
-            return new IndoorInfoDto(
-                    true,
-                    anchor.campusId(),
-                    anchor.campusName(),
-                    anchor.campusEntranceName(),
-                    anchor.buildingId(),
-                    anchor.buildingName(),
-                    anchor.entranceNodeId(),
-                    anchor.entranceName()
             );
         }
 

@@ -6,6 +6,7 @@ import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.BuildingDirectory;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.map.entity.Edge;
 import com.insideout.backend.domain.map.entity.MapVersion;
 import com.insideout.backend.domain.map.entity.Node;
@@ -20,6 +21,7 @@ import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.ObstacleRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
+import com.insideout.backend.domain.map.storage.MapAssetDescriptor;
 import com.insideout.backend.domain.map.storage.MapAssetStorage;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +56,7 @@ public class MapQueryFacade {
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
     private final BuildingRepository buildingRepository;
+    private final FloorRepository floorRepository;
     private final PoiRepository poiRepository;
     private final EdgeRepository edgeRepository;
     private final MapVersionRepository mapVersionRepository;
@@ -118,6 +121,27 @@ public class MapQueryFacade {
         }
         return mapAssetStorage.findCurrentMapAsset(MapType.BUILDING, floorId)
                 .map(asset -> asset.imageUrl());
+    }
+
+    public List<PublishedFloorplan> findCurrentBuildingFloorplans(UUID buildingId) {
+        if (buildingId == null) {
+            return List.of();
+        }
+
+        return floorRepository.findAllByBuilding_IdOrderByLevelDesc(buildingId).stream()
+                .map(floor -> mapAssetStorage.findCurrentMapAsset(MapType.BUILDING, floor.getId())
+                        .map(asset -> toPublishedFloorplan(floor, asset))
+                        .orElse(null))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private PublishedFloorplan toPublishedFloorplan(Floor floor, MapAssetDescriptor asset) {
+        return new PublishedFloorplan(
+                floor.getId(),
+                floor.getName(),
+                asset.imageUrl()
+        );
     }
 
     public Optional<String> findCurrentCampusMapImageUrl(UUID campusId) {
@@ -437,6 +461,13 @@ public class MapQueryFacade {
         public boolean hasCampus() {
             return campusId != null;
         }
+    }
+
+    public record PublishedFloorplan(
+            UUID floorId,
+            String floorName,
+            String mapImageUrl
+    ) {
     }
 
     @Builder

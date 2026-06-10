@@ -40,7 +40,16 @@ public record NavigationResponseDto(
             UUID buildingId,
             String buildingName,
             UUID entranceNodeId,
-            String entranceName
+            String entranceName,
+            List<FloorplanDto> floorplans
+    ) {
+    }
+
+    public record FloorplanDto(
+            UUID floorId,
+            String floorName,
+            String mapImageUrl,
+            CoordinateType coordinateType
     ) {
     }
 

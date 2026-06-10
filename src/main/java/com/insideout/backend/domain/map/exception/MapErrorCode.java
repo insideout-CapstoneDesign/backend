@@ -74,6 +74,11 @@ public enum MapErrorCode implements BaseErrorCode {
         "MAP404_1",
         "해당 건물의 맵 버전을 찾을 수 없습니다."
     ),
+    MAP_FLOOR_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "MAP404_2",
+        "해당 층의 지도 정보를 찾을 수 없습니다."
+    ),
     MAP_VERSION_NOT_EDITABLE(
         HttpStatus.BAD_REQUEST,
         "MAP400_13",

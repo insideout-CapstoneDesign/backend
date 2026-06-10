@@ -40,7 +40,16 @@ public record NavigationResponseDto(
             UUID buildingId,
             String buildingName,
             UUID entranceNodeId,
-            String entranceName
+            String entranceName,
+            List<FloorplanDto> floorplans
+    ) {
+    }
+
+    public record FloorplanDto(
+            UUID floorId,
+            String floorName,
+            String mapImageUrl,
+            CoordinateType coordinateType
     ) {
     }
 
@@ -137,8 +146,22 @@ public record NavigationResponseDto(
             Double y,
             Integer turnType,
             String mode,
-            String streetName
+            String streetName,
+            Integer pathStartIndex,
+            Integer pathEndIndex
     ) {
+        public StepDto(
+                String instruction,
+                Integer distanceMeters,
+                Integer durationSeconds,
+                Double x,
+                Double y,
+                Integer turnType,
+                String mode,
+                String streetName
+        ) {
+            this(instruction, distanceMeters, durationSeconds, x, y, turnType, mode, streetName, null, null);
+        }
     }
 
     public enum RouteMode {

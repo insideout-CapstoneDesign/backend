@@ -101,7 +101,7 @@ public class PlaceDetailService {
 
         return Optional.of(new PlaceDetailResponse(
                 resolvedPlace.placeId(),
-                resolvedPlace.poiId(),
+                resolvedPlace.poiPublicId(),
                 resolvedPlace.externalApiId(),
                 resolvedPlace.name(),
                 resolvedPlace.address(),
@@ -182,7 +182,7 @@ public class PlaceDetailService {
 
         return new ResolvedPlace(
                 building.getId(),
-                selectedPoi != null ? selectedPoi.getId() : null,
+                selectedPoi != null ? selectedPoi.getPublicId() : null,
                 selectedExternalApiId,
                 selectedName,
                 selectedAddress,
@@ -211,7 +211,7 @@ public class PlaceDetailService {
     private List<PlaceDetailResponse.PoiResponse> toPoiResponses(List<Poi> pois) {
         return pois.stream()
                 .map(poi -> new PlaceDetailResponse.PoiResponse(
-                        poi.getId(),
+                        poi.getPublicId(),
                         poi.getName(),
                         poi.getFloor() == null ? null : poi.getFloor().getName(),
                         poi.getExternalApiId()
@@ -281,7 +281,7 @@ public class PlaceDetailService {
 
     private record ResolvedPlace(
             UUID placeId,
-            UUID poiId,
+            Long poiPublicId,
             String externalApiId,
             String name,
             String address,

@@ -70,7 +70,7 @@ class PlaceSearchControllerTest {
         String placeId = "7969138";
         PlaceDetailResponse expected = new PlaceDetailResponse(
                 java.util.UUID.fromString("2c4a5480-bbf7-4a5d-b3dd-8b7b1e270001"),
-                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                1001L,
                 "18217490",
                 "신세계백화점 본점 디 에스테이트",
                 "서울특별시 중구 퇴계로 77",
@@ -81,7 +81,7 @@ class PlaceSearchControllerTest {
                         1,
                         "1F",
                         List.of(new PoiResponse(
-                                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                                1001L,
                                 "구찌",
                                 "1F",
                                 "22320326"

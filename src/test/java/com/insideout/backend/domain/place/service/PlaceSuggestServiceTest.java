@@ -40,6 +40,7 @@ class PlaceSuggestServiceTest {
 
     private static final UUID BUILDING_ID = UUID.fromString("2c4a5480-bbf7-4a5d-b3dd-8b7b1e270001");
     private static final UUID POI_ID = UUID.fromString("956d4fc7-343a-4821-9794-ba6e7ca834dc");
+    private static final Long POI_PUBLIC_ID = 1001L;
 
     @Mock
     private PlaceSuggestElasticsearchClient placeSuggestElasticsearchClient;
@@ -221,7 +222,7 @@ class PlaceSuggestServiceTest {
                 .thenReturn(List.of());
         when(poiRepository.findRegisteredPlacesByExternalApiIds(Set.of("22320326", "7969138")))
                 .thenReturn(List.of(
-                        registeredPoiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326", BUILDING_ID, POI_ID)
+                        registeredPoiProjection("구찌", "서울 중구 퇴계로 77", "신세계백화점 본점 디 에스테이트", "22320326", BUILDING_ID, POI_PUBLIC_ID)
                 ));
 
         List<PlaceSearchItemResponse> result = placeSuggestService.suggest("신세계백화점 본점 디 에스테이트 구찌", null, null, 10);
@@ -231,7 +232,7 @@ class PlaceSuggestServiceTest {
         assertThat(result.get(0).parentBuildingName()).isEqualTo("신세계백화점 본점 디 에스테이트");
         assertThat(result.get(0).displayName()).isEqualTo("신세계백화점 본점 디 에스테이트 · 구찌");
         assertThat(result.get(0).placeId()).isEqualTo(BUILDING_ID);
-        assertThat(result.get(0).poiId()).isEqualTo(POI_ID);
+        assertThat(result.get(0).poiId()).isEqualTo(POI_PUBLIC_ID);
     }
 
     @Test
@@ -376,7 +377,7 @@ class PlaceSuggestServiceTest {
             String buildingName,
             String externalApiId,
             UUID buildingId,
-            UUID poiId
+            Long poiId
     ) {
         return new com.insideout.backend.domain.map.repository.RegisteredPoiSearchProjection() {
             @Override
@@ -385,7 +386,7 @@ class PlaceSuggestServiceTest {
             }
 
             @Override
-            public UUID getPoiId() {
+            public Long getPoiId() {
                 return poiId;
             }
 
@@ -407,6 +408,16 @@ class PlaceSuggestServiceTest {
             @Override
             public String getExternalApiId() {
                 return externalApiId;
+            }
+
+            @Override
+            public Double getLat() {
+                return 37.5609;
+            }
+
+            @Override
+            public Double getLng() {
+                return 126.9810;
             }
         };
     }

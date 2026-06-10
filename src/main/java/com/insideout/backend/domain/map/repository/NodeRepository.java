@@ -61,6 +61,28 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
             @Param("y") double y
     );
 
+    @Query(value = """
+            SELECT n.*
+            FROM node n
+            WHERE n.map_version_id = :mapVersionId
+              AND n.floor_id = :floorId
+              AND n.geom_px IS NOT NULL
+              AND EXISTS (
+                    SELECT 1
+                    FROM edge e
+                    WHERE e.map_version_id = n.map_version_id
+                      AND (e.from_node_id = n.id OR e.to_node_id = n.id)
+              )
+            ORDER BY n.geom_px <-> ST_SetSRID(ST_MakePoint(:x, :y), 0)
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Node> findNearestRoutableNodeByPixel(
+            @Param("mapVersionId") UUID mapVersionId,
+            @Param("floorId") UUID floorId,
+            @Param("x") double x,
+            @Param("y") double y
+    );
+
     List<Node> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
 
     @Modifying

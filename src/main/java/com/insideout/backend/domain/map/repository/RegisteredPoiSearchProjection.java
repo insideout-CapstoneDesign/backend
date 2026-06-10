@@ -3,7 +3,7 @@ package com.insideout.backend.domain.map.repository;
 public interface RegisteredPoiSearchProjection {
     java.util.UUID getBuildingId();
 
-    java.util.UUID getPoiId();
+    Long getPoiId();
 
     String getName();
 
@@ -12,4 +12,8 @@ public interface RegisteredPoiSearchProjection {
     String getBuildingName();
 
     String getExternalApiId();
+
+    Double getLat();
+
+    Double getLng();
 }

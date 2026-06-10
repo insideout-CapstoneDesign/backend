@@ -65,15 +65,20 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
     @Query(value = """
             SELECT
                 b.id AS buildingId,
-                p.id AS poiId,
+                p.public_id AS poiId,
                 p.name AS name,
                 b.address AS address,
                 b.name AS buildingName,
-                p.external_api_id AS externalApiId
+                p.external_api_id AS externalApiId,
+                CAST(ST_Y(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lat,
+                CAST(ST_X(COALESCE(bd.centroid::geometry, ST_Centroid(bd.bbox::geometry), ST_Centroid(b.footprint::geometry))) AS double precision) AS lng
             FROM poi p
                 JOIN floor f ON f.id = p.floor_id
                 JOIN building b ON b.id = f.building_id
                 JOIN map_version mv ON mv.id = p.map_version_id
+                LEFT JOIN building_directory bd
+                    ON bd.id = b.id
+                   AND bd.is_public = true
             WHERE p.external_api_id IN (:externalApiIds)
               AND mv.status = 'published'
             """, nativeQuery = true)

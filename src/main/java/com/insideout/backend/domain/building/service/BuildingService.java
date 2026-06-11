@@ -144,6 +144,8 @@ public class BuildingService {
                     .orElseThrow(() -> new BuildingException(BuildingErrorCode.CAMPUS_NOT_FOUND));
         }
 
+        validateNoDuplicateBuilding(tenantId, req.name(), req.address(), req.externalApiId());
+
         // 위경도 좌표와 등록 플로우 관련 메타를 JSON에 함께 저장
         Map<String, Object> meta = new LinkedHashMap<>();
         if (req.longitude() != null && req.latitude() != null) {
@@ -230,17 +232,29 @@ public class BuildingService {
 
     /**
      * 건물을 활성화(active) 상태로 변경합니다.
+     * 반드시 최종 배포(published MapVersion)된 이력이 있어야 합니다.
+     * 활성화는 일반적으로 최종 배포 시 자동으로 이루어지며,
+     * 이 엔드포인트는 비활성화 이후 재활성화 시에만 사용 가능합니다.
      */
     @Transactional
     public BuildingSummaryDTO activateBuilding(UUID tenantId, UUID buildingId) {
         Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
 
+        // 최종 배포된 MapVersion이 있어야만 활성화 가능
+        boolean hasPublished = mapVersionRepository
+                .findBuildingIdsByMapTypeAndStatus(List.of(buildingId), MapType.BUILDING, "published")
+                .contains(buildingId);
+        if (!hasPublished) {
+            throw new BuildingException(BuildingErrorCode.BUILDING_NOT_PUBLISHED);
+        }
+
         building.updateActivationStatus("active");
         buildingRepository.save(building);
 
         return getBuilding(tenantId, buildingId);
     }
+
 
     private void validateNoDuplicateFloors(UUID buildingId, List<LevelNamePair> newFloors) {
         if (newFloors == null || newFloors.isEmpty()) {
@@ -269,6 +283,37 @@ public class BuildingService {
                 }
             }
         }
+    }
+
+    private void validateNoDuplicateBuilding(UUID tenantId, String name, String address, String externalApiId) {
+        String normalizedExternalApiId = normalizeValue(externalApiId);
+        String normalizedName = normalizeValue(name);
+        String normalizedAddress = normalizeValue(address);
+
+        boolean duplicated = buildingRepository.findByTenant_IdOrderByCreatedAtDesc(tenantId).stream()
+                .anyMatch(existing -> {
+                    String existingExternalApiId = normalizeValue(existing.getExternalApiId());
+                    if (normalizedExternalApiId != null && normalizedExternalApiId.equals(existingExternalApiId)) {
+                        return true;
+                    }
+
+                    String existingName = normalizeValue(existing.getName());
+                    String existingAddress = normalizeValue(existing.getAddress());
+                    return Objects.equals(normalizedName, existingName)
+                            && Objects.equals(normalizedAddress, existingAddress);
+                });
+
+        if (duplicated) {
+            throw new BuildingException(BuildingErrorCode.DUPLICATE_BUILDING);
+        }
+    }
+
+    private String normalizeValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private record LevelNamePair(int level, String name) {}

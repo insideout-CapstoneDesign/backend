@@ -67,6 +67,8 @@ public class CampusService {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.TENANT_NOT_FOUND));
 
+        validateNoDuplicateCampus(tenantId, null, req.name(), req.address());
+
         Polygon boundary = createPolygon(req.boundary());
         Point centroid = createPoint(req.centroid());
         List<CampusGateDTO> normalizedGates = normalizeGates(req);
@@ -96,6 +98,8 @@ public class CampusService {
     public CampusResponseDTO updateCampus(UUID tenantId, UUID campusId, CampusCreateRequestDTO req) {
         Campus campus = campusRepository.findByIdAndTenant_Id(campusId, tenantId)
                 .orElseThrow(() -> new BuildingException(BuildingErrorCode.CAMPUS_NOT_FOUND));
+
+        validateNoDuplicateCampus(tenantId, campusId, req.name(), req.address());
 
         Polygon boundary = createPolygon(req.boundary());
         Point centroid = createPoint(req.centroid());
@@ -273,6 +277,30 @@ public class CampusService {
                 ))
                 .toList());
         return meta;
+    }
+
+    private void validateNoDuplicateCampus(UUID tenantId, UUID campusIdToExclude, String name, String address) {
+        String normalizedName = normalizeValue(name);
+        String normalizedAddress = normalizeValue(address);
+
+        boolean duplicated = campusRepository.findAllByTenant_IdOrderByCreatedAtDesc(tenantId).stream()
+                .filter(existing -> campusIdToExclude == null || !existing.getId().equals(campusIdToExclude))
+                .anyMatch(existing ->
+                        Objects.equals(normalizedName, normalizeValue(existing.getName()))
+                                && Objects.equals(normalizedAddress, normalizeValue(existing.getAddress()))
+                );
+
+        if (duplicated) {
+            throw new BuildingException(BuildingErrorCode.DUPLICATE_CAMPUS);
+        }
+    }
+
+    private String normalizeValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private Polygon createPolygon(List<CoordinateDTO> boundary) {

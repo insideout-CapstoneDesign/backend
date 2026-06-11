@@ -109,6 +109,16 @@ public enum BuildingErrorCode implements BaseErrorCode {
         "BUILDING400_13",
         "이미 존재하는 층 레벨 또는 이름입니다."
     ),
+    DUPLICATE_BUILDING(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_16",
+        "이미 등록된 건물입니다. 같은 건물은 중복 등록할 수 없습니다."
+    ),
+    DUPLICATE_CAMPUS(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_17",
+        "이미 등록된 단지입니다. 같은 단지는 중복 등록할 수 없습니다."
+    ),
     BUILDING_ENTRANCE_NOT_EDITABLE(
         HttpStatus.BAD_REQUEST,
         "BUILDING400_14",
@@ -118,6 +128,11 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.NOT_FOUND,
         "BUILDING404_7",
         "해당 수직 커넥터를 찾을 수 없습니다."
+    ),
+    BUILDING_NOT_PUBLISHED(
+        HttpStatus.BAD_REQUEST,
+        "BUILDING400_15",
+        "최종 배포된 이력이 없는 건물은 활성화할 수 없습니다. 맵 에디터에서 최종 배포를 진행해 주세요."
     );
 
     private final HttpStatus status;

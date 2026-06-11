@@ -31,6 +31,17 @@ tmap:
 server:
   port: 8080
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
 storage:
   s3:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}

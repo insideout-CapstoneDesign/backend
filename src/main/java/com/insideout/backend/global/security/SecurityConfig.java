@@ -6,6 +6,8 @@ import com.insideout.backend.global.security.jwt.JwtAccessDeniedHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -29,6 +31,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final Environment environment;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -48,6 +51,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/places/**").permitAll()
                         .requestMatchers("/api/v1/navigation/**").permitAll()
                         .requestMatchers("/api/v1/maps/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SYS_ADMIN")
                         .requestMatchers(
                                 "/api/v1/buildings/**",
@@ -73,12 +77,20 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
+        List<String> allowedOrigins = environment.acceptsProfiles(Profiles.of("prod"))
+                ? List.of(
+                "https://insideout-user-web.vercel.app",
+                "https://insideout-admin-web.vercel.app"
+        )
+                : List.of(
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
-        ));
+                "http://127.0.0.1:5173",
+                "https://insideout-user-web.vercel.app",
+                "https://insideout-admin-web.vercel.app"
+        );
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of(
                 HttpMethod.GET.name(),
                 HttpMethod.POST.name(),

@@ -67,12 +67,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of(
+        config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "https://*.vercel.app"
+                "https://insideout-user-web.vercel.app",
+                "https://insideout-admin-web.vercel.app"
         ));
         config.setAllowedMethods(List.of(
                 HttpMethod.GET.name(),

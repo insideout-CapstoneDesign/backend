@@ -65,7 +65,13 @@ class BackendApplicationTests {
     private PoiRepository poiRepository;
 
     @MockitoBean
+    private PoiCategoryRepository poiCategoryRepository;
+
+    @MockitoBean
     private EdgeRepository edgeRepository;
+
+    @MockitoBean
+    private FloorplanObjectRepository floorplanObjectRepository;
 
     @MockitoBean
     private MapVersionRepository mapVersionRepository;

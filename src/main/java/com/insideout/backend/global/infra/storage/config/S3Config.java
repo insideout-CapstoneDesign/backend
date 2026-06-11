@@ -51,12 +51,8 @@ public class S3Config {
      */
     @Bean
     public S3Presigner s3Presigner(S3Properties props) {
-        String presignerEndpoint = (props.publicEndpoint() == null || props.publicEndpoint().isBlank())
-                ? props.endpoint()
-                : props.publicEndpoint();
-
         return S3Presigner.builder()
-                .endpointOverride(URI.create(presignerEndpoint))
+                .endpointOverride(resolvePresignerEndpoint(props))
                 .region(Region.of(props.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(
@@ -68,5 +64,17 @@ public class S3Config {
                         .pathStyleAccessEnabled(props.pathStyleAccess())
                         .build())
                 .build();
+    }
+
+    private URI resolvePresignerEndpoint(S3Properties props) {
+        String endpoint = (props.publicEndpoint() == null || props.publicEndpoint().isBlank())
+                ? props.endpoint()
+                : props.publicEndpoint();
+
+        if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
+            throw new IllegalArgumentException("S3 public endpoint must include http:// or https://");
+        }
+
+        return URI.create(endpoint);
     }
 }

@@ -101,7 +101,7 @@ class MapQueryFacadeTest {
                 .build();
         ReflectionTestUtils.setField(poi, "publicId", publicId);
 
-        when(poiRepository.findByPublicId(publicId)).thenReturn(Optional.of(poi));
+        when(poiRepository.findPublishedByPublicId(publicId)).thenReturn(Optional.of(poi));
 
         assertThat(mapQueryFacade.findIndoorPoiDestination(publicId)).isEmpty();
     }
@@ -221,7 +221,7 @@ class MapQueryFacadeTest {
                 .build();
         ReflectionTestUtils.setField(farNode, "id", UUID.randomUUID());
 
-        when(poiRepository.findByPublicId(publicId)).thenReturn(Optional.of(poi));
+        when(poiRepository.findPublishedByPublicId(publicId)).thenReturn(Optional.of(poi));
         when(nodeRepository.findNearestRoutableNodeByPixel(mapVersionId, floorId, 0.0, 0.0))
                 .thenReturn(Optional.of(farNode));
 

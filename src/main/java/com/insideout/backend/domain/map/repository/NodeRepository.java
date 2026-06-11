@@ -19,6 +19,8 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
             FROM node n
             JOIN map_version mv ON mv.id = n.map_version_id
             WHERE mv.building_id = :buildingId
+              AND mv.map_type = 'BUILDING'
+              AND mv.status = 'published'
               AND n.kind = 'entrance'
               AND n.geom_wgs84 IS NOT NULL
             ORDER BY ST_Distance(

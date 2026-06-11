@@ -17,6 +17,18 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
 
     Optional<Poi> findByPublicId(Long publicId);
 
+    @Query("""
+            select p
+            from Poi p
+                join fetch p.floor f
+                join fetch f.building b
+                join fetch p.mapVersion mv
+            where p.publicId = :publicId
+              and mv.mapType = com.insideout.backend.domain.map.enums.MapType.BUILDING
+              and mv.status = 'published'
+            """)
+    Optional<Poi> findPublishedByPublicId(@Param("publicId") Long publicId);
+
     Optional<Poi> findFirstByExternalApiId(String externalApiId);
 
     List<Poi> findByAnchorNodeIdIn(List<UUID> anchorNodeIds);

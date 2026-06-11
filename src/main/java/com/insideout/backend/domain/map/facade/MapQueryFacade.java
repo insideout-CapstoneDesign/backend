@@ -89,7 +89,7 @@ public class MapQueryFacade {
             return Optional.empty();
         }
 
-        return poiRepository.findByPublicId(destinationPoiId)
+        return poiRepository.findPublishedByPublicId(destinationPoiId)
                 .flatMap(this::toIndoorPoiDestination);
     }
 

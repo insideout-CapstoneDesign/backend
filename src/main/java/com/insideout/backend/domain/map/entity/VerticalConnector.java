@@ -25,6 +25,8 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VerticalConnector {
 
+    public static final String DEFAULT_DIRECTION = "both";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -80,6 +82,9 @@ public class VerticalConnector {
         if (this.accessibility == null) {
             this.accessibility = Map.of();
         }
+        if (this.direction == null) {
+            this.direction = DEFAULT_DIRECTION;
+        }
     }
 
     @Builder
@@ -91,7 +96,7 @@ public class VerticalConnector {
         this.name = name;
         this.capacity = capacity;
         this.avgWaitSeconds = avgWaitSeconds;
-        this.direction = direction;
+        this.direction = direction != null ? direction : DEFAULT_DIRECTION;
         this.accessibility = accessibility != null ? accessibility : Map.of();
     }
 }

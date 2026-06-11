@@ -185,12 +185,15 @@ public class MapEditorVerticalConnectorService {
         verticalConnectorNodeRepository.save(mapping);
         verticalConnectorNodeRepository.flush();
 
-        // Built directly from local variables (connector, node, floor) instead of getVerticalConnectors(tenantId, buildingId) and filtering by connectorId
-        String nodeName = node.getNameKo() != null ? node.getNameKo() : (node.getKindCode() + " 노드");
-        MapEditorVerticalConnectorNodeDTO nodeDTO = new MapEditorVerticalConnectorNodeDTO(
-                floor.getId(), floor.getName(), node.getId(), nodeName
-        );
-        return new MapEditorVerticalConnectorDTO(connector.getId(), connector.getKind(), connector.getName(), List.of(nodeDTO));
+        return getVerticalConnectors(tenantId, buildingId).stream()
+                .filter(dto -> dto.id().equals(connector.getId()))
+                .findFirst()
+                .orElse(new MapEditorVerticalConnectorDTO(
+                        connector.getId(),
+                        connector.getKind(),
+                        connector.getName(),
+                        List.of()
+                ));
     }
 
     @Transactional
@@ -213,8 +216,15 @@ public class MapEditorVerticalConnectorService {
         verticalConnectorNodeRepository.deleteByConnectorIdAndFloorId(connectorId, floorId);
         verticalConnectorNodeRepository.flush();
 
-        // Built directly from local variables (connector) instead of getVerticalConnectors(tenantId, buildingId) and filtering by connectorId
-        return new MapEditorVerticalConnectorDTO(connector.getId(), connector.getKind(), connector.getName(), List.of());
+        return getVerticalConnectors(tenantId, buildingId).stream()
+                .filter(dto -> dto.id().equals(connector.getId()))
+                .findFirst()
+                .orElse(new MapEditorVerticalConnectorDTO(
+                        connector.getId(),
+                        connector.getKind(),
+                        connector.getName(),
+                        List.of()
+                ));
     }
 
     private MapVersion getDraftMapVersionOrThrow(UUID buildingId) {

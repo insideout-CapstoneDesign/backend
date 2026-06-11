@@ -51,19 +51,30 @@ public final class ZoneDedupUtil {
             return false;
         }
 
-        if (!existingPolygon.intersects(candidatePolygon)) {
+        org.locationtech.jts.geom.Geometry repairedExisting = existingPolygon.isValid() ? existingPolygon : existingPolygon.buffer(0);
+        org.locationtech.jts.geom.Geometry repairedCandidate = candidatePolygon.isValid() ? candidatePolygon : candidatePolygon.buffer(0);
+
+        if (repairedExisting == null || repairedCandidate == null || repairedExisting.isEmpty() || repairedCandidate.isEmpty()) {
             return false;
         }
 
-        double existingArea = existingPolygon.getArea();
-        double candidateArea = candidatePolygon.getArea();
-        double minArea = Math.min(existingArea, candidateArea);
-        if (minArea <= 0.0) {
+        try {
+            if (!repairedExisting.intersects(repairedCandidate)) {
+                return false;
+            }
+
+            double existingArea = repairedExisting.getArea();
+            double candidateArea = repairedCandidate.getArea();
+            double minArea = Math.min(existingArea, candidateArea);
+            if (minArea <= 0.0) {
+                return false;
+            }
+
+            double overlapArea = repairedExisting.intersection(repairedCandidate).getArea();
+            return (overlapArea / minArea) >= 0.92;
+        } catch (org.locationtech.jts.geom.TopologyException e) {
             return false;
         }
-
-        double overlapArea = existingPolygon.intersection(candidatePolygon).getArea();
-        return (overlapArea / minArea) >= 0.92;
     }
 
     public static boolean shouldPreferRoomZone(Zone candidate, Zone existing) {

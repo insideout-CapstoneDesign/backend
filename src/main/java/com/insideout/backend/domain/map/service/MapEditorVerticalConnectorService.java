@@ -102,16 +102,7 @@ public class MapEditorVerticalConnectorService {
         MapVersion draftMapVersion = draftResult.mapVersion();
 
         // 종류별 평균 대기 시간 기본값 정의
-        Integer resolvedWaitSeconds = request.avgWaitSeconds();
-        if (resolvedWaitSeconds == null) {
-            resolvedWaitSeconds = switch (request.kind() != null ? request.kind().toLowerCase() : "") {
-                case "elevator" -> 30;
-                case "stair" -> 20;
-                case "escalator" -> 15;
-                case "ramp" -> 10;
-                default -> 15;
-            };
-        }
+        Integer resolvedWaitSeconds = resolveAvgWaitSeconds(request.avgWaitSeconds(), request.kind());
 
         VerticalConnector connector = VerticalConnector.builder()
                 .tenantId(tenantId)
@@ -276,7 +267,12 @@ public class MapEditorVerticalConnectorService {
             throw new MapException(MapErrorCode.MAP_VERSION_NOT_EDITABLE);
         }
 
-        connector.update(request.name(), request.kind(), request.avgWaitSeconds(), request.direction());
+        Integer resolvedWaitSeconds = resolveAvgWaitSeconds(
+                request.avgWaitSeconds(),
+                request.kind() != null ? request.kind() : connector.getKind()
+        );
+
+        connector.update(request.name(), request.kind(), resolvedWaitSeconds, request.direction());
         verticalConnectorRepository.save(connector);
 
         return getVerticalConnectors(tenantId, buildingId).stream()
@@ -290,5 +286,22 @@ public class MapEditorVerticalConnectorService {
                         connector.getDirection(),
                         List.of()
                 ));
+    }
+
+    /**
+     * avgWaitSeconds가 null일 때 kind에 따라 기본값을 반환합니다.
+     * create / update 모두 동일한 정책을 공유합니다.
+     */
+    private Integer resolveAvgWaitSeconds(Integer avgWaitSeconds, String kind) {
+        if (avgWaitSeconds != null) {
+            return avgWaitSeconds;
+        }
+        return switch (kind != null ? kind.toLowerCase() : "") {
+            case "elevator" -> 30;
+            case "stair" -> 20;
+            case "escalator" -> 15;
+            case "ramp" -> 10;
+            default -> 15;
+        };
     }
 }

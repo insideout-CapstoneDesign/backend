@@ -160,11 +160,26 @@ public class TenantService {
                 .orElseThrow(() -> new TenantException(TenantErrorCode.TENANT_NOT_FOUND));
 
         // 검증: 테넌트 내 활성화(active)된 건물이 있는지 확인
+        // BuildingSummaryDTO.extractActivationStatus와 동일한 우선순위로 판정:
+        //   1) meta.activationStatus가 명시된 경우 해당 값 사용
+        //   2) meta에 값이 없고 published MapVersion이 존재하면 active로 간주
         List<Building> tenantBuildings = buildingRepository.findByTenant_IdOrderByCreatedAtDesc(tenantId);
+
+        List<UUID> buildingIds = tenantBuildings.stream().map(Building::getId).toList();
+        Set<UUID> publishedBuildingIds = buildingIds.isEmpty()
+                ? java.util.Collections.emptySet()
+                : new java.util.HashSet<>(
+                        mapVersionRepository.findBuildingIdsByMapTypeAndStatus(buildingIds, MapType.BUILDING, "published")
+                  );
+
         boolean hasActiveBuilding = tenantBuildings.stream()
                 .anyMatch(b -> {
                     Object statusObj = b.getMeta() != null ? b.getMeta().get("activationStatus") : null;
-                    return "active".equals(statusObj);
+                    if (statusObj instanceof String s && !s.isBlank()) {
+                        return "active".equals(s);
+                    }
+                    // meta에 명시된 값이 없으면 published 이력으로 판단
+                    return publishedBuildingIds.contains(b.getId());
                 });
 
         if (hasActiveBuilding) {

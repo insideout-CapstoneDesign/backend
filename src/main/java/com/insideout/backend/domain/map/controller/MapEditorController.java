@@ -30,6 +30,7 @@ import com.insideout.backend.domain.map.dto.request.MapEditorVerticalConnectorMa
 import com.insideout.backend.domain.map.dto.response.MapEditorVerticalConnectorDTO;
 import com.insideout.backend.domain.map.dto.response.MapEditorDraftPoiResponseDTO;
 import com.insideout.backend.domain.map.dto.request.MapEditorPoiMappingsSaveRequestDTO;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import java.util.List;
 import java.util.UUID;
@@ -132,7 +133,7 @@ public class MapEditorController {
     public ApiResponse<MapEditorVerticalConnectorDTO> createVerticalConnector(
             @PathVariable UUID buildingId,
             @RequestParam UUID tenantId,
-            @RequestBody MapEditorVerticalConnectorCreateRequestDTO request,
+            @Valid @RequestBody MapEditorVerticalConnectorCreateRequestDTO request,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         validateTenantAccess(userDetails, tenantId);
@@ -171,7 +172,7 @@ public class MapEditorController {
             @PathVariable UUID buildingId,
             @PathVariable UUID connectorId,
             @RequestParam UUID tenantId,
-            @RequestBody MapEditorVerticalConnectorUpdateRequestDTO request,
+            @Valid @RequestBody MapEditorVerticalConnectorUpdateRequestDTO request,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         validateTenantAccess(userDetails, tenantId);

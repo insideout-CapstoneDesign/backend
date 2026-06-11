@@ -9,6 +9,7 @@ import com.insideout.backend.domain.building.entity.FloorplanCalibration;
 import com.insideout.backend.domain.building.repository.BuildingEntranceMappingRepository;
 import com.insideout.backend.domain.building.repository.FloorplanCalibrationRepository;
 import com.insideout.backend.domain.building.repository.FloorplanRepository;
+import com.insideout.backend.domain.building.service.BuildingDirectorySyncService;
 import com.insideout.backend.domain.map.entity.MapVersion;
 import com.insideout.backend.domain.map.entity.Node;
 import com.insideout.backend.domain.map.entity.Poi;
@@ -38,6 +39,7 @@ public class MapEditorPublishFinalizeService {
     private final FloorplanCalibrationRepository floorplanCalibrationRepository;
     private final NodeRepository nodeRepository;
     private final PoiRepository poiRepository;
+    private final BuildingDirectorySyncService buildingDirectorySyncService;
     @PersistenceContext
     private final EntityManager entityManager;
 
@@ -80,6 +82,8 @@ public class MapEditorPublishFinalizeService {
         if (building.getTenant() != null && !"approved".equals(building.getTenant().getStatus())) {
             building.getTenant().updateStatus("approved");
         }
+
+        buildingDirectorySyncService.sync(building);
     }
 
     private void syncPublishedGeometry(

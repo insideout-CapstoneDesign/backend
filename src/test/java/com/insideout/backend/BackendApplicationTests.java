@@ -71,6 +71,9 @@ class BackendApplicationTests {
     private EdgeRepository edgeRepository;
 
     @MockitoBean
+    private FloorplanObjectRepository floorplanObjectRepository;
+
+    @MockitoBean
     private MapVersionRepository mapVersionRepository;
 
     @MockitoBean
@@ -120,9 +123,6 @@ class BackendApplicationTests {
 
     @MockitoBean
     private ZoneRepository zoneRepository;
-
-    @MockitoBean
-    private FloorplanObjectRepository floorplanObjectRepository;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

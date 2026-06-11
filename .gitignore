@@ -44,6 +44,9 @@ out/
 
 src/main/resources/application-local.yml
 .env
+.env.deploy
+.env.deploy.vm
+.env.ai.deploy
 .db.local.env
 *.local.sql
 src/main/resources/db.properties

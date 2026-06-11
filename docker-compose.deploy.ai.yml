@@ -1,0 +1,19 @@
+services:
+  app:
+    env_file:
+      - .env.deploy.vm
+    depends_on:
+      ai:
+        condition: service_started
+
+  ai:
+    # Update this to either a real image or the AI repo build context before deployment.
+    image: insideout-ai:latest
+    restart: unless-stopped
+    env_file:
+      - .env.ai.deploy
+    expose:
+      - "8000"
+    depends_on:
+      minio:
+        condition: service_started

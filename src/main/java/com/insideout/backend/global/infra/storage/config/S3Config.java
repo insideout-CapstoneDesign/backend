@@ -51,8 +51,12 @@ public class S3Config {
      */
     @Bean
     public S3Presigner s3Presigner(S3Properties props) {
+        String presignerEndpoint = (props.publicEndpoint() == null || props.publicEndpoint().isBlank())
+                ? props.endpoint()
+                : props.publicEndpoint();
+
         return S3Presigner.builder()
-                .endpointOverride(URI.create(props.endpoint()))
+                .endpointOverride(URI.create(presignerEndpoint))
                 .region(Region.of(props.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(

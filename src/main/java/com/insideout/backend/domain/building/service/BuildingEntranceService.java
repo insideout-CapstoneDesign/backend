@@ -138,7 +138,7 @@ public class BuildingEntranceService {
                 .collect(Collectors.toMap(Poi::getAnchorNodeId, Function.identity()));
 
         Map<UUID, BuildingEntranceMapping> mappingByNodeId = buildingEntranceMappingRepository
-                .findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(tenantId, buildingId)
+                .findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(tenantId, buildingId, currentMapVersionId)
                 .stream()
                 .collect(Collectors.toMap(BuildingEntranceMapping::getEntranceNodeId, Function.identity()));
 
@@ -192,12 +192,13 @@ public class BuildingEntranceService {
             throw new BuildingException(BuildingErrorCode.BUILDING_ENTRANCE_NOT_EDITABLE);
         }
 
+        UUID mapVersionId = entranceNode.getMapVersion().getId();
         Optional<BuildingEntranceMapping> existingByGate = buildingEntranceMappingRepository
-                .findByTenantIdAndCampusIdAndCampusGateId(tenantId, campus.getId(), request.campusGateId());
+                .findByTenantIdAndCampusIdAndMapVersionIdAndCampusGateId(tenantId, campus.getId(), mapVersionId, request.campusGateId());
         existingByGate.ifPresent(buildingEntranceMappingRepository::delete);
 
         Optional<BuildingEntranceMapping> existingByNode = buildingEntranceMappingRepository
-                .findByTenantIdAndBuildingIdAndEntranceNodeId(tenantId, buildingId, request.entranceNodeId());
+                .findByTenantIdAndBuildingIdAndMapVersionIdAndEntranceNodeId(tenantId, buildingId, mapVersionId, request.entranceNodeId());
         existingByNode.ifPresent(mapping -> {
             if (existingByGate.isEmpty() || !existingByGate.get().getId().equals(mapping.getId())) {
                 buildingEntranceMappingRepository.delete(mapping);
@@ -220,6 +221,7 @@ public class BuildingEntranceService {
                 .tenantId(tenantId)
                 .campusId(campus.getId())
                 .buildingId(buildingId)
+                .mapVersion(entranceNode.getMapVersion())
                 .campusGateId(request.campusGateId())
                 .entranceNodeId(entranceNode.getId())
                 .entrancePoiId(entrancePoi != null ? entrancePoi.getId() : null)

@@ -1,10 +1,14 @@
 package com.insideout.backend.domain.building.entity;
 
+import com.insideout.backend.domain.map.entity.MapVersion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Table;
@@ -22,11 +26,11 @@ import java.util.UUID;
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_building_entrance_mapping_gate",
-                        columnNames = {"tenant_id", "campus_id", "campus_gate_id"}
+                        columnNames = {"tenant_id", "campus_id", "map_version_id", "campus_gate_id"}
                 ),
                 @UniqueConstraint(
                         name = "uk_building_entrance_mapping_node",
-                        columnNames = {"tenant_id", "building_id", "entrance_node_id"}
+                        columnNames = {"tenant_id", "building_id", "map_version_id", "entrance_node_id"}
                 )
         }
 )
@@ -46,6 +50,10 @@ public class BuildingEntranceMapping {
 
     @Column(name = "building_id", nullable = false)
     private UUID buildingId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "map_version_id", nullable = false)
+    private MapVersion mapVersion;
 
     @Column(name = "campus_gate_id", nullable = false)
     private String campusGateId;
@@ -71,6 +79,7 @@ public class BuildingEntranceMapping {
             UUID tenantId,
             UUID campusId,
             UUID buildingId,
+            MapVersion mapVersion,
             String campusGateId,
             UUID entranceNodeId,
             UUID entrancePoiId
@@ -78,6 +87,7 @@ public class BuildingEntranceMapping {
         this.tenantId = tenantId;
         this.campusId = campusId;
         this.buildingId = buildingId;
+        this.mapVersion = mapVersion;
         this.campusGateId = campusGateId;
         this.entranceNodeId = entranceNodeId;
         this.entrancePoiId = entrancePoiId;

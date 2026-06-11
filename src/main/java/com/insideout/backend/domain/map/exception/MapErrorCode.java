@@ -83,6 +83,16 @@ public enum MapErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "MAP400_13",
         "수정 가능한 초안 상태의 맵 버전만 변경할 수 있습니다."
+    ),
+    MAP_INVALID_GEOMETRY(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_14",
+        "올바르지 않은 지오메트리 좌표 형식입니다."
+    ),
+    DEGENERATE_AFFINE_TRANSFORM(
+        HttpStatus.BAD_REQUEST,
+        "MAP400_15",
+        "기준점 배치 오류(일직선상 배치 등)로 인해 아핀 변환 행렬을 계산할 수 없습니다."
     );
 
     private final HttpStatus status;

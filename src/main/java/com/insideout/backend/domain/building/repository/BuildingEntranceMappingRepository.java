@@ -11,9 +11,9 @@ import java.util.UUID;
 @Repository
 public interface BuildingEntranceMappingRepository extends JpaRepository<BuildingEntranceMapping, UUID> {
 
-    List<BuildingEntranceMapping> findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(UUID tenantId, UUID buildingId);
+    List<BuildingEntranceMapping> findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(UUID tenantId, UUID buildingId, UUID mapVersionId);
 
-    Optional<BuildingEntranceMapping> findByTenantIdAndBuildingIdAndEntranceNodeId(UUID tenantId, UUID buildingId, UUID entranceNodeId);
+    Optional<BuildingEntranceMapping> findByTenantIdAndBuildingIdAndMapVersionIdAndEntranceNodeId(UUID tenantId, UUID buildingId, UUID mapVersionId, UUID entranceNodeId);
 
-    Optional<BuildingEntranceMapping> findByTenantIdAndCampusIdAndCampusGateId(UUID tenantId, UUID campusId, String campusGateId);
+    Optional<BuildingEntranceMapping> findByTenantIdAndCampusIdAndMapVersionIdAndCampusGateId(UUID tenantId, UUID campusId, UUID mapVersionId, String campusGateId);
 }

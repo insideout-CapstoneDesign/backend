@@ -25,6 +25,9 @@ public interface PoiRepository extends JpaRepository<Poi, UUID> {
 
     List<Poi> findByMapVersionId(UUID mapVersionId);
 
+    @Query("select distinct p.floor.id from Poi p where p.mapVersion.id = :mapVersionId")
+    List<UUID> findFloorIdsWithPois(@Param("mapVersionId") UUID mapVersionId);
+
     @Modifying
     @Query("delete from Poi p where p.mapVersion.id = :mapVersionId and p.floor.id = :floorId")
     void deleteByMapVersionIdAndFloorId(

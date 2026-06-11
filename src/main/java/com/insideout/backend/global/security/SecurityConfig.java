@@ -50,6 +50,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/places/**").permitAll()
                         .requestMatchers("/api/v1/navigation/**").permitAll()
+                        .requestMatchers("/api/v1/maps/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("SYS_ADMIN")
                         .requestMatchers(

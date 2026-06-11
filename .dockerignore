@@ -1,0 +1,12 @@
+.git
+.gitignore
+.gradle
+.idea
+build
+out
+*.iml
+.env
+.db.local.env
+src/main/resources/application-local.yml
+src/main/resources/db.properties
+src/main/resources/security.yml

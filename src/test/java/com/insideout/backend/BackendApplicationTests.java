@@ -31,6 +31,7 @@ import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(properties = {
@@ -64,7 +65,13 @@ class BackendApplicationTests {
     private PoiRepository poiRepository;
 
     @MockitoBean
+    private PoiCategoryRepository poiCategoryRepository;
+
+    @MockitoBean
     private EdgeRepository edgeRepository;
+
+    @MockitoBean
+    private FloorplanObjectRepository floorplanObjectRepository;
 
     @MockitoBean
     private MapVersionRepository mapVersionRepository;
@@ -125,6 +132,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     private EntityManagerFactory entityManagerFactory;
+
+    @MockitoBean
+    private TransactionTemplate transactionTemplate;
 
     @Test
     void contextLoads() {

@@ -110,11 +110,14 @@ public class MapEditorDraftReadService {
                 ? Set.of()
                 : Set.copyOf(aiDetectionRepository.findAnalyzedFloorplanIdsByTenantIdAndFloorplanIds(tenantId, currentFloorplanIds));
 
+        Map<UUID, FloorDraftContentState> contentStates = getFloorDraftContentStates(draftMapVersion.getId(), floorIds);
+
         List<MapEditorInitBuildingDraftFloorDTO> floorStates = floors.stream()
                 .map(floor -> {
                     Floorplan currentFloorplan = currentFloorplansByFloorId.get(floor.getId());
                     boolean analyzed = currentFloorplan != null && analyzedFloorplanIds.contains(currentFloorplan.getId());
-                    FloorDraftContentState contentState = getFloorDraftContentState(draftMapVersion.getId(), floor.getId());
+                    FloorDraftContentState contentState = contentStates.getOrDefault(floor.getId(),
+                            new FloorDraftContentState(false, false, false, false, false));
                     return MapEditorInitBuildingDraftFloorDTO.of(
                             floor,
                             currentFloorplan,
@@ -136,6 +139,30 @@ public class MapEditorDraftReadService {
                 draftReadyFloorCount,
                 floorStates
         );
+    }
+
+    public Map<UUID, FloorDraftContentState> getFloorDraftContentStates(UUID mapVersionId, List<UUID> floorIds) {
+        if (floorIds == null || floorIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<UUID> floorsWithZones = Set.copyOf(zoneRepository.findFloorIdsWithZones(mapVersionId));
+        Set<UUID> floorsWithFloorplanObjects = Set.copyOf(floorplanObjectRepository.findFloorIdsWithFloorplanObjects(mapVersionId));
+        Set<UUID> floorsWithEdges = Set.copyOf(edgeRepository.findFloorIdsWithEdges(mapVersionId));
+        Set<UUID> floorsWithNodes = Set.copyOf(nodeRepository.findFloorIdsWithNodes(mapVersionId));
+        Set<UUID> floorsWithPois = Set.copyOf(poiRepository.findFloorIdsWithPois(mapVersionId));
+
+        Map<UUID, FloorDraftContentState> result = new LinkedHashMap<>();
+        for (UUID floorId : floorIds) {
+            result.put(floorId, new FloorDraftContentState(
+                    floorsWithZones.contains(floorId),
+                    floorsWithFloorplanObjects.contains(floorId),
+                    floorsWithEdges.contains(floorId),
+                    floorsWithNodes.contains(floorId),
+                    floorsWithPois.contains(floorId)
+            ));
+        }
+        return result;
     }
 
     public FloorDraftContentState getFloorDraftContentState(UUID mapVersionId, UUID floorId) {

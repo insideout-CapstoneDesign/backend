@@ -85,6 +85,9 @@ public interface NodeRepository extends JpaRepository<Node, UUID> {
 
     List<Node> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
 
+    @Query("select distinct n.floor.id from Node n where n.mapVersion.id = :mapVersionId")
+    List<UUID> findFloorIdsWithNodes(@Param("mapVersionId") UUID mapVersionId);
+
     @Modifying
     @Query("delete from Node n where n.mapVersion.id = :mapVersionId and n.floor.id = :floorId")
     void deleteByMapVersionIdAndFloorId(

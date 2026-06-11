@@ -15,6 +15,11 @@ public interface ZoneRepository extends JpaRepository<Zone, UUID> {
 
     List<Zone> findByMapVersionIdAndFloorId(UUID mapVersionId, UUID floorId);
 
+    List<Zone> findByMapVersionId(UUID mapVersionId);
+
+    @Query("select distinct z.floor.id from Zone z where z.mapVersion.id = :mapVersionId")
+    List<UUID> findFloorIdsWithZones(@Param("mapVersionId") UUID mapVersionId);
+
     @Modifying
     @Query("delete from Zone z where z.mapVersion.id = :mapVersionId and z.floor.id = :floorId")
     void deleteByMapVersionIdAndFloorId(

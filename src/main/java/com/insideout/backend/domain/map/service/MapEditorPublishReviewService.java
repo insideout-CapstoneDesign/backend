@@ -39,6 +39,7 @@ public class MapEditorPublishReviewService {
     private final BuildingEntranceMappingRepository buildingEntranceMappingRepository;
     private final MapVersionRepository mapVersionRepository;
     private final PoiRepository poiRepository;
+    private final MapEditorPublishFinalizeService mapEditorPublishFinalizeService;
 
     public List<MapEditorDraftPoiResponseDTO> getBuildingDraftPois(UUID tenantId, UUID buildingId) {
         buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
@@ -60,9 +61,20 @@ public class MapEditorPublishReviewService {
         MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
         GeometryFactory wgsGeometryFactory = new GeometryFactory(new org.locationtech.jts.geom.PrecisionModel(), 4326);
 
+        List<UUID> poiIds = request.mappings().stream()
+                .map(MapEditorPoiMappingRequestDTO::poiId)
+                .toList();
+
+        List<Poi> pois = poiRepository.findAllById(poiIds);
+        Map<UUID, Poi> poiMap = pois.stream()
+                .collect(java.util.stream.Collectors.toMap(Poi::getId, poi -> poi));
+
         for (MapEditorPoiMappingRequestDTO mapping : request.mappings()) {
-            Poi poi = poiRepository.findById(mapping.poiId())
-                    .orElseThrow(() -> new MapException(MapErrorCode.MAP_VERSION_NOT_FOUND));
+            // Originally retrieved using: poiRepository.findById(mapping.poiId())
+            Poi poi = poiMap.get(mapping.poiId());
+            if (poi == null) {
+                throw new MapException(MapErrorCode.MAP_VERSION_NOT_FOUND);
+            }
 
             if (!poi.getTenantId().equals(tenantId) || poi.getMapVersion() == null
                     || !poi.getMapVersion().getId().equals(draftMapVersion.getId())) {
@@ -78,13 +90,13 @@ public class MapEditorPublishReviewService {
                 geomWgs84.setSRID(4326);
                 poi.updateExternalMapping(mapping.externalApiId(), geomWgs84, mapping.placeName(), mapping.address());
             }
-            poiRepository.save(poi);
         }
     }
 
     public void validatePublishPreconditions(UUID tenantId, Building building, MapVersion draftMapVersion) {
-        validateEntranceCalibrationForPublish(tenantId, building);
+        validateEntranceCalibrationForPublish(tenantId, building, draftMapVersion);
         validatePoiExternalMappingsForPublish(draftMapVersion);
+        mapEditorPublishFinalizeService.validateAffineTransform(tenantId, building, draftMapVersion);
     }
 
     private MapEditorDraftPoiResponseDTO toDraftPoiResponse(Poi poi) {
@@ -110,7 +122,7 @@ public class MapEditorPublishReviewService {
                 .orElseThrow(() -> new MapException(MapErrorCode.MAP_VERSION_NOT_FOUND));
     }
 
-    private void validateEntranceCalibrationForPublish(UUID tenantId, Building building) {
+    private void validateEntranceCalibrationForPublish(UUID tenantId, Building building, MapVersion draftMapVersion) {
         Campus campus = building.getCampus();
         if (campus == null || campus.getMeta() == null) {
             return;
@@ -138,7 +150,7 @@ public class MapEditorPublishReviewService {
         }
 
         Set<String> mappedGateIds = buildingEntranceMappingRepository
-                .findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(tenantId, building.getId())
+                .findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(tenantId, building.getId(), draftMapVersion.getId())
                 .stream()
                 .map(BuildingEntranceMapping::getCampusGateId)
                 .filter(StringUtils::hasText)

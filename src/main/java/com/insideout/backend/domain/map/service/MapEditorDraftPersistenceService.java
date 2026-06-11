@@ -1,7 +1,7 @@
 package com.insideout.backend.domain.map.service;
 
-import com.insideout.backend.domain.ai.exception.AiErrorCode;
-import com.insideout.backend.domain.ai.exception.AiException;
+import com.insideout.backend.domain.map.exception.MapErrorCode;
+import com.insideout.backend.domain.map.exception.MapException;
 import com.insideout.backend.domain.building.entity.BuildingEntranceMapping;
 import com.insideout.backend.domain.building.entity.Floor;
 import com.insideout.backend.domain.map.dto.request.MapEditorDraftEdgeSaveDTO;
@@ -80,7 +80,7 @@ public class MapEditorDraftPersistenceService {
                 ));
 
         List<BuildingEntranceMapping> floorMappings = buildingEntranceMappingRepository
-                .findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(tenantId, buildingId).stream()
+                .findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(tenantId, buildingId, draftMapVersion.getId()).stream()
                 .filter(mapping -> existingFloorNodeIds.contains(mapping.getEntranceNodeId()))
                 .toList();
 
@@ -186,7 +186,7 @@ public class MapEditorDraftPersistenceService {
         }
 
         if (!zonesToSave.isEmpty()) {
-            zoneRepository.saveAll(suppressDuplicateRoomZones(zonesToSave));
+            zoneRepository.saveAll(ZoneDedupUtil.suppressDuplicateRoomZones(zonesToSave));
         }
     }
 
@@ -321,6 +321,7 @@ public class MapEditorDraftPersistenceService {
                             .tenantId(cachedMapping.getTenantId())
                             .campusId(cachedMapping.getCampusId())
                             .buildingId(cachedMapping.getBuildingId())
+                            .mapVersion(cachedMapping.getMapVersion())
                             .campusGateId(cachedMapping.getCampusGateId())
                             .entranceNodeId(replacementNode.getId())
                             .entrancePoiId(newPoiId)
@@ -364,78 +365,6 @@ public class MapEditorDraftPersistenceService {
         }
     }
 
-    private List<Zone> suppressDuplicateRoomZones(List<Zone> zones) {
-        List<Zone> filtered = new ArrayList<>();
-        for (Zone candidate : zones) {
-            int duplicateIndex = -1;
-            for (int index = 0; index < filtered.size(); index++) {
-                Zone existing = filtered.get(index);
-                if (isDuplicateRoomZone(existing, candidate)) {
-                    duplicateIndex = index;
-                    if (shouldPreferRoomZone(candidate, existing)) {
-                        filtered.set(index, candidate);
-                    }
-                    break;
-                }
-            }
-            if (duplicateIndex < 0) {
-                filtered.add(candidate);
-            }
-        }
-        return filtered;
-    }
-
-    private boolean isDuplicateRoomZone(Zone existing, Zone candidate) {
-        if (existing.getKind() != ZoneKind.room || candidate.getKind() != ZoneKind.room) {
-            return false;
-        }
-
-        String existingName = normalizeZoneName(existing.getName());
-        String candidateName = normalizeZoneName(candidate.getName());
-        if (existingName != null && candidateName != null && !existingName.equals(candidateName)) {
-            return false;
-        }
-
-        Polygon existingPolygon = existing.getGeomPx();
-        Polygon candidatePolygon = candidate.getGeomPx();
-        if (existingPolygon == null || candidatePolygon == null) {
-            return false;
-        }
-
-        if (!existingPolygon.intersects(candidatePolygon)) {
-            return false;
-        }
-
-        double existingArea = existingPolygon.getArea();
-        double candidateArea = candidatePolygon.getArea();
-        double minArea = Math.min(existingArea, candidateArea);
-        if (minArea <= 0.0) {
-            return false;
-        }
-
-        double overlapArea = existingPolygon.intersection(candidatePolygon).getArea();
-        return (overlapArea / minArea) >= 0.92;
-    }
-
-    private boolean shouldPreferRoomZone(Zone candidate, Zone existing) {
-        boolean candidateNamed = normalizeZoneName(candidate.getName()) != null;
-        boolean existingNamed = normalizeZoneName(existing.getName()) != null;
-
-        if (candidateNamed != existingNamed) {
-            return candidateNamed;
-        }
-
-        return candidate.getGeomPx().getArea() > existing.getGeomPx().getArea();
-    }
-
-    private String normalizeZoneName(String name) {
-        if (name == null) {
-            return null;
-        }
-
-        String trimmed = name.trim();
-        return trimmed.isBlank() ? null : trimmed.toLowerCase();
-    }
 
     private String normalizePoiCategoryCodeForDraft(String code, Map<String, Object> attrs) {
         String normalizedCode = blankToNull(code);
@@ -585,7 +514,7 @@ public class MapEditorDraftPersistenceService {
     private Coordinate[] asCoordinateArray(Object value, int minSize) {
         List<?> coordinateList = asList(value);
         if (coordinateList.size() < minSize) {
-            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+            throw new MapException(MapErrorCode.MAP_INVALID_GEOMETRY);
         }
         return coordinateList.stream()
                 .map(this::toCoordinate)
@@ -606,7 +535,7 @@ public class MapEditorDraftPersistenceService {
 
     private Coordinate[] requireValidRing(Coordinate[] coordinates) {
         if (coordinates.length < 4) {
-            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+            throw new MapException(MapErrorCode.MAP_INVALID_GEOMETRY);
         }
         return coordinates;
     }
@@ -614,7 +543,7 @@ public class MapEditorDraftPersistenceService {
     private Coordinate toCoordinate(Object value) {
         List<?> pair = asList(value);
         if (pair.size() < 2 || !(pair.get(0) instanceof Number x) || !(pair.get(1) instanceof Number y)) {
-            throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+            throw new MapException(MapErrorCode.MAP_INVALID_GEOMETRY);
         }
         return new Coordinate(x.doubleValue(), y.doubleValue());
     }
@@ -623,7 +552,7 @@ public class MapEditorDraftPersistenceService {
         if (value instanceof List<?> list) {
             return list;
         }
-        throw new AiException(AiErrorCode.AI_INVALID_DETECTION_GEOMETRY);
+        throw new MapException(MapErrorCode.MAP_INVALID_GEOMETRY);
     }
 
     private Node resolveSavedNode(UUID requestNodeId, Map<UUID, Node> savedNodesByRequestId) {

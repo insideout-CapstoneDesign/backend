@@ -55,7 +55,6 @@ public class SecurityConfig {
                                 "/api/v1/ai/**",
                                 "/api/v1/tenants/**"
                         ).hasAnyRole("SYS_ADMIN", "TENANT_USER")
-                        .requestMatchers("/api/v1/tenant/**").hasRole("TENANT_USER")
                         .requestMatchers("/api/v1/user/**").hasRole("END_USER")
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/error").permitAll()
                         .anyRequest().authenticated()

@@ -42,6 +42,10 @@ public class MapEditorAiDraftInitializationService {
     private static final GeometryFactory GEOMETRY_FACTORY =
             new GeometryFactory(new org.locationtech.jts.geom.PrecisionModel(), 0);
 
+    private static final double POI_TEXT_BUFFER_PX = 4.0;
+    private static final double POI_TEXT_DISTANCE_PENALTY = 180.0;
+    private static final double POI_TEXT_MAX_DISTANCE_PX = 140.0;
+
     private final NodeRepository nodeRepository;
     private final ZoneRepository zoneRepository;
     private final FloorplanObjectRepository floorplanObjectRepository;
@@ -171,7 +175,7 @@ public class MapEditorAiDraftInitializationService {
         }
 
         if (!zonesToSave.isEmpty()) {
-            List<Zone> savedZones = zoneRepository.saveAll(suppressDuplicateRoomZones(zonesToSave));
+            List<Zone> savedZones = zoneRepository.saveAll(ZoneDedupUtil.suppressDuplicateRoomZones(zonesToSave));
             savedZones.forEach(zone -> detections.stream()
                     .filter(detection -> Objects.equals(detection.getId(), extractAiDetectionId(zone)))
                     .findFirst()
@@ -494,40 +498,8 @@ public class MapEditorAiDraftInitializationService {
         return filtered;
     }
 
-    private List<Zone> suppressDuplicateRoomZones(List<Zone> zones) {
-        List<Zone> filtered = new ArrayList<>();
-
-        for (Zone zone : zones) {
-            if (zone.getKind() != ZoneKind.room) {
-                filtered.add(zone);
-                continue;
-            }
-
-            int duplicateIndex = -1;
-            for (int i = 0; i < filtered.size(); i++) {
-                Zone existing = filtered.get(i);
-                if (isDuplicateRoomZone(existing, zone)) {
-                    duplicateIndex = i;
-                    if (shouldPreferRoomZone(zone, existing)) {
-                        filtered.set(i, zone);
-                    }
-                    break;
-                }
-            }
-
-            if (duplicateIndex < 0) {
-                filtered.add(zone);
-            }
-        }
-
-        return filtered;
-    }
-
     private Map<String, Object> buildDetectionProperties(AiDetection detection) {
         Map<String, Object> properties = new LinkedHashMap<>();
-        if (detection.getAttrs() != null && !detection.getAttrs().isEmpty()) {
-            properties.putAll(detection.getAttrs());
-        }
         properties.put("detectType", detection.getDetectType());
         if (detection.getConfidence() != null) {
             properties.put("confidence", detection.getConfidence().setScale(4, RoundingMode.HALF_UP));
@@ -653,10 +625,10 @@ public class MapEditorAiDraftInitializationService {
             }
 
             double distance = poiGeometry.distance(textPoint);
-            boolean inside = poiGeometry instanceof Polygon polygon && polygon.buffer(4).contains(textPoint);
-            double score = inside ? distance : distance + 180.0;
+            boolean inside = poiGeometry instanceof Polygon polygon && polygon.buffer(POI_TEXT_BUFFER_PX).contains(textPoint);
+            double score = inside ? distance : distance + POI_TEXT_DISTANCE_PENALTY;
 
-            if (!inside && distance > 140.0) {
+            if (!inside && distance > POI_TEXT_MAX_DISTANCE_PX) {
                 continue;
             }
 
@@ -737,57 +709,7 @@ public class MapEditorAiDraftInitializationService {
         return trimmed;
     }
 
-    private boolean isDuplicateRoomZone(Zone existing, Zone candidate) {
-        if (existing.getKind() != ZoneKind.room || candidate.getKind() != ZoneKind.room) {
-            return false;
-        }
 
-        String existingName = normalizeZoneName(existing.getName());
-        String candidateName = normalizeZoneName(candidate.getName());
-        if (existingName != null && candidateName != null && !existingName.equals(candidateName)) {
-            return false;
-        }
-
-        Polygon existingPolygon = existing.getGeomPx();
-        Polygon candidatePolygon = candidate.getGeomPx();
-        if (existingPolygon == null || candidatePolygon == null) {
-            return false;
-        }
-
-        if (!existingPolygon.intersects(candidatePolygon)) {
-            return false;
-        }
-
-        double existingArea = existingPolygon.getArea();
-        double candidateArea = candidatePolygon.getArea();
-        double minArea = Math.min(existingArea, candidateArea);
-        if (minArea <= 0.0) {
-            return false;
-        }
-
-        double overlapArea = existingPolygon.intersection(candidatePolygon).getArea();
-        return (overlapArea / minArea) >= 0.92;
-    }
-
-    private boolean shouldPreferRoomZone(Zone candidate, Zone existing) {
-        boolean candidateNamed = normalizeZoneName(candidate.getName()) != null;
-        boolean existingNamed = normalizeZoneName(existing.getName()) != null;
-
-        if (candidateNamed != existingNamed) {
-            return candidateNamed;
-        }
-
-        return candidate.getGeomPx().getArea() > existing.getGeomPx().getArea();
-    }
-
-    private String normalizeZoneName(String name) {
-        if (name == null) {
-            return null;
-        }
-
-        String trimmed = name.trim();
-        return trimmed.isBlank() ? null : trimmed.toLowerCase();
-    }
 
     private String resolveDetectionName(AiDetection detection) {
         return extractReadableText(detection);
@@ -866,8 +788,7 @@ public class MapEditorAiDraftInitializationService {
     }
 
     private String toNodeCacheKey(Point point) {
-        Coordinate coordinate = point.getCoordinate();
-        return "%.3f:%.3f".formatted(coordinate.x, coordinate.y);
+        return toNodeCacheKey(point.getCoordinate());
     }
 
     private String toNodeCacheKey(Coordinate coordinate) {

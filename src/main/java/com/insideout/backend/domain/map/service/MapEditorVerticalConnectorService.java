@@ -105,8 +105,6 @@ public class MapEditorVerticalConnectorService {
                 .building(building)
                 .kind(request.kind())
                 .name(request.name())
-                .direction("both")
-                .accessibility(Map.of())
                 .build();
 
         VerticalConnector saved = verticalConnectorRepository.save(connector);
@@ -116,11 +114,9 @@ public class MapEditorVerticalConnectorService {
     @Transactional
     public void deleteVerticalConnector(UUID tenantId, UUID buildingId, UUID connectorId) {
         VerticalConnector connector = verticalConnectorRepository.findById(connectorId)
-                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.VERTICAL_CONNECTOR_NOT_FOUND));
 
-        if (!connector.getTenantId().equals(tenantId) || !connector.getBuilding().getId().equals(buildingId)) {
-            throw new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND);
-        }
+        validateConnectorOwnership(connector, tenantId, buildingId);
 
         MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
         if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
@@ -140,11 +136,9 @@ public class MapEditorVerticalConnectorService {
             MapEditorVerticalConnectorMapRequestDTO request
     ) {
         VerticalConnector connector = verticalConnectorRepository.findById(connectorId)
-                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.VERTICAL_CONNECTOR_NOT_FOUND));
 
-        if (!connector.getTenantId().equals(tenantId) || !connector.getBuilding().getId().equals(buildingId)) {
-            throw new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND);
-        }
+        validateConnectorOwnership(connector, tenantId, buildingId);
 
         MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
         if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
@@ -191,10 +185,12 @@ public class MapEditorVerticalConnectorService {
         verticalConnectorNodeRepository.save(mapping);
         verticalConnectorNodeRepository.flush();
 
-        return getVerticalConnectors(tenantId, buildingId).stream()
-                .filter(verticalConnector -> verticalConnector.id().equals(connectorId))
-                .findFirst()
-                .orElse(null);
+        // Built directly from local variables (connector, node, floor) instead of getVerticalConnectors(tenantId, buildingId) and filtering by connectorId
+        String nodeName = node.getNameKo() != null ? node.getNameKo() : (node.getKindCode() + " 노드");
+        MapEditorVerticalConnectorNodeDTO nodeDTO = new MapEditorVerticalConnectorNodeDTO(
+                floor.getId(), floor.getName(), node.getId(), nodeName
+        );
+        return new MapEditorVerticalConnectorDTO(connector.getId(), connector.getKind(), connector.getName(), List.of(nodeDTO));
     }
 
     @Transactional
@@ -205,11 +201,9 @@ public class MapEditorVerticalConnectorService {
             UUID floorId
     ) {
         VerticalConnector connector = verticalConnectorRepository.findById(connectorId)
-                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.VERTICAL_CONNECTOR_NOT_FOUND));
 
-        if (!connector.getTenantId().equals(tenantId) || !connector.getBuilding().getId().equals(buildingId)) {
-            throw new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND);
-        }
+        validateConnectorOwnership(connector, tenantId, buildingId);
 
         MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
         if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
@@ -219,15 +213,19 @@ public class MapEditorVerticalConnectorService {
         verticalConnectorNodeRepository.deleteByConnectorIdAndFloorId(connectorId, floorId);
         verticalConnectorNodeRepository.flush();
 
-        return getVerticalConnectors(tenantId, buildingId).stream()
-                .filter(verticalConnector -> verticalConnector.id().equals(connectorId))
-                .findFirst()
-                .orElse(null);
+        // Built directly from local variables (connector) instead of getVerticalConnectors(tenantId, buildingId) and filtering by connectorId
+        return new MapEditorVerticalConnectorDTO(connector.getId(), connector.getKind(), connector.getName(), List.of());
     }
 
     private MapVersion getDraftMapVersionOrThrow(UUID buildingId) {
         return mapVersionRepository
                 .findFirstByBuildingIdAndMapTypeAndStatusOrderByCreatedAtDesc(buildingId, MapType.BUILDING, "draft")
                 .orElseThrow(() -> new MapException(MapErrorCode.MAP_VERSION_NOT_FOUND));
+    }
+
+    private void validateConnectorOwnership(VerticalConnector connector, UUID tenantId, UUID buildingId) {
+        if (!connector.getTenantId().equals(tenantId) || !connector.getBuilding().getId().equals(buildingId)) {
+            throw new BuildingException(BuildingErrorCode.VERTICAL_CONNECTOR_NOT_FOUND);
+        }
     }
 }

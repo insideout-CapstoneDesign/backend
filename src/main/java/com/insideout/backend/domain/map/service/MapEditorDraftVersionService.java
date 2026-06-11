@@ -195,6 +195,8 @@ public class MapEditorDraftVersionService {
         List<Edge> sourceEdges = edgeRepository.findByMapVersionId(publishedMapVersion.getId());
         if (!sourceEdges.isEmpty()) {
             edgeRepository.saveAll(sourceEdges.stream()
+                    .filter(edge -> clonedNodesBySourceId.containsKey(edge.getFromNode().getId())
+                            && clonedNodesBySourceId.containsKey(edge.getToNode().getId()))
                     .map(edge -> Edge.builder()
                             .tenantId(draftMapVersion.getTenantId())
                             .mapVersion(draftMapVersion)
@@ -249,8 +251,13 @@ public class MapEditorDraftVersionService {
         }
 
         List<BuildingEntranceMapping> mappings = buildingEntranceMappingRepository
-                .findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(building.getTenant().getId(), building.getId());
+                .findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(
+                        building.getTenant().getId(),
+                        building.getId(),
+                        publishedMapVersion.getId()
+                );
         if (!mappings.isEmpty()) {
+            List<BuildingEntranceMapping> draftMappings = new ArrayList<>();
             for (BuildingEntranceMapping mapping : mappings) {
                 UUID newEntranceNodeId = mapping.getEntranceNodeId();
                 if (clonedNodesBySourceId.containsKey(newEntranceNodeId)) {
@@ -260,9 +267,17 @@ public class MapEditorDraftVersionService {
                 if (newEntrancePoiId != null && clonedPoisBySourceId.containsKey(newEntrancePoiId)) {
                     newEntrancePoiId = clonedPoisBySourceId.get(newEntrancePoiId).getId();
                 }
-                mapping.updateEntrance(newEntranceNodeId, newEntrancePoiId);
+                draftMappings.add(BuildingEntranceMapping.builder()
+                        .tenantId(mapping.getTenantId())
+                        .campusId(mapping.getCampusId())
+                        .buildingId(mapping.getBuildingId())
+                        .mapVersion(draftMapVersion)
+                        .campusGateId(mapping.getCampusGateId())
+                        .entranceNodeId(newEntranceNodeId)
+                        .entrancePoiId(newEntrancePoiId)
+                        .build());
             }
-            buildingEntranceMappingRepository.saveAll(mappings);
+            buildingEntranceMappingRepository.saveAll(draftMappings);
         }
     }
 

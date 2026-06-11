@@ -14,6 +14,8 @@ import com.insideout.backend.domain.map.entity.MapVersion;
 import com.insideout.backend.domain.map.entity.Node;
 import com.insideout.backend.domain.map.entity.Poi;
 import com.insideout.backend.domain.map.enums.MapType;
+import com.insideout.backend.domain.map.exception.MapErrorCode;
+import com.insideout.backend.domain.map.exception.MapException;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
@@ -49,13 +51,14 @@ public class MapEditorPublishFinalizeService {
             List<Floor> floors,
             MapVersion draftMapVersion
     ) {
+        syncPublishedGeometry(tenantId, building, floors, draftMapVersion);
+
         archiveExistingPublishedVersions(building.getId());
 
         draftMapVersion.publish();
         mapVersionRepository.save(draftMapVersion);
 
         updateBuildingPublishState(building);
-        syncPublishedGeometry(tenantId, building, floors, draftMapVersion);
     }
 
     private void archiveExistingPublishedVersions(UUID buildingId) {
@@ -125,13 +128,63 @@ public class MapEditorPublishFinalizeService {
         }
 
         List<MapPointPair> pairs = collectAffinePointPairs(tenantId, building.getId(), draftMapVersion.getId(), gateCoordsById);
+        if (pairs.size() < 3) {
+            return;
+        }
         List<Double> affine = calculateAffineTransform(pairs);
         if (affine == null) {
-            return;
+            throw new MapException(MapErrorCode.DEGENERATE_AFFINE_TRANSFORM);
         }
 
         saveFloorplanCalibrations(tenantId, floors, affine);
         updatePublishedGeometry(draftMapVersion.getId(), affine);
+    }
+
+    public void validateAffineTransform(
+            UUID tenantId,
+            Building building,
+            MapVersion draftMapVersion
+    ) {
+        Campus campus = building.getCampus();
+        if (campus == null || campus.getMeta() == null) {
+            return;
+        }
+
+        Object gatesValue = campus.getMeta().get("gates");
+        if (!(gatesValue instanceof List<?> gates)) {
+            return;
+        }
+
+        Map<String, Coordinate> gateCoordsById = new HashMap<>();
+        for (Object item : gates) {
+            if (!(item instanceof Map<?, ?> entry)) {
+                continue;
+            }
+
+            Object idObj = entry.get("id");
+            Object locObj = entry.get("location");
+            if (idObj == null || !(locObj instanceof Map<?, ?> loc)) {
+                continue;
+            }
+
+            Object lonObj = loc.get("longitude");
+            Object latObj = loc.get("latitude");
+            if (lonObj instanceof Number lonNum && latObj instanceof Number latNum) {
+                gateCoordsById.put(
+                        String.valueOf(idObj),
+                        new Coordinate(lonNum.doubleValue(), latNum.doubleValue())
+                );
+            }
+        }
+
+        List<MapPointPair> pairs = collectAffinePointPairs(tenantId, building.getId(), draftMapVersion.getId(), gateCoordsById);
+        if (pairs.size() < 3) {
+            return;
+        }
+        List<Double> affine = calculateAffineTransform(pairs);
+        if (affine == null) {
+            throw new MapException(MapErrorCode.DEGENERATE_AFFINE_TRANSFORM);
+        }
     }
 
     private List<MapPointPair> collectAffinePointPairs(
@@ -143,7 +196,7 @@ public class MapEditorPublishFinalizeService {
         List<MapPointPair> pairs = new ArrayList<>();
 
         List<BuildingEntranceMapping> mappings = buildingEntranceMappingRepository
-                .findAllByTenantIdAndBuildingIdOrderByCreatedAtAsc(tenantId, buildingId);
+                .findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(tenantId, buildingId, mapVersionId);
         for (BuildingEntranceMapping mapping : mappings) {
             Node node = nodeRepository.findById(mapping.getEntranceNodeId()).orElse(null);
             Coordinate gateCoord = gateCoordsById.get(mapping.getCampusGateId());

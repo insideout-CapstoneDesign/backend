@@ -113,6 +113,11 @@ public enum BuildingErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "BUILDING400_14",
         "수정 가능한 초안 상태의 출입구 노드만 매핑할 수 있습니다."
+    ),
+    VERTICAL_CONNECTOR_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "BUILDING404_7",
+        "해당 수직 커넥터를 찾을 수 없습니다."
     );
 
     private final HttpStatus status;

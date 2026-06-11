@@ -15,6 +15,9 @@ public interface EdgeRepository extends JpaRepository<Edge, UUID> {
 
     List<Edge> findByMapVersionId(UUID mapVersionId);
 
+    @Query("select distinct e.fromNode.floor.id from Edge e where e.mapVersion.id = :mapVersionId")
+    List<UUID> findFloorIdsWithEdges(@Param("mapVersionId") UUID mapVersionId);
+
     @Query("""
             select e
             from Edge e

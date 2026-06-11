@@ -112,12 +112,14 @@ public record BuildingSummaryDTO(
     }
 
     private static String extractActivationStatus(Building building, boolean published) {
-        if (published) {
-            return "active";
-        }
+        // 명시적으로 저장된 activationStatus가 있으면 우선 적용 (inactive로 비활성화된 경우 포함)
         Object value = building.getMeta() != null ? building.getMeta().get("activationStatus") : null;
         if (value instanceof String stringValue && !stringValue.isBlank()) {
             return stringValue;
+        }
+        // meta에 status가 없고 publish된 이력이 있으면 active
+        if (published) {
+            return "active";
         }
         return "draft";
     }

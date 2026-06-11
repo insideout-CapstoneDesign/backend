@@ -3,7 +3,7 @@ package com.insideout.backend.domain.map.dto.request;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 
-public record MapEditorVerticalConnectorCreateRequestDTO(
+public record MapEditorVerticalConnectorUpdateRequestDTO(
         String kind,
         String name,
         @Min(value = 0, message = "평균 대기 시간은 0 이상이어야 합니다")

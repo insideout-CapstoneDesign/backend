@@ -18,16 +18,19 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import com.insideout.backend.domain.map.dto.request.MapEditorVerticalConnectorCreateRequestDTO;
+import com.insideout.backend.domain.map.dto.request.MapEditorVerticalConnectorUpdateRequestDTO;
 import com.insideout.backend.domain.map.dto.request.MapEditorVerticalConnectorMapRequestDTO;
 import com.insideout.backend.domain.map.dto.response.MapEditorVerticalConnectorDTO;
 import com.insideout.backend.domain.map.dto.response.MapEditorDraftPoiResponseDTO;
 import com.insideout.backend.domain.map.dto.request.MapEditorPoiMappingsSaveRequestDTO;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import java.util.List;
 import java.util.UUID;
@@ -130,7 +133,7 @@ public class MapEditorController {
     public ApiResponse<MapEditorVerticalConnectorDTO> createVerticalConnector(
             @PathVariable UUID buildingId,
             @RequestParam UUID tenantId,
-            @RequestBody MapEditorVerticalConnectorCreateRequestDTO request,
+            @Valid @RequestBody MapEditorVerticalConnectorCreateRequestDTO request,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         validateTenantAccess(userDetails, tenantId);
@@ -161,6 +164,28 @@ public class MapEditorController {
                 userDetails != null ? userDetails.getUserId() : null
         );
         return ApiResponse.success(GeneralSuccessCode.OK, null);
+    }
+
+    @Operation(summary = "수직 이동수단 정보 수정", description = "수직 이동수단의 명칭, 종류, 대기 시간(가중치), 방향 속성을 수정합니다.")
+    @PatchMapping("/buildings/{buildingId}/vertical-connectors/{connectorId}")
+    public ApiResponse<MapEditorVerticalConnectorDTO> updateVerticalConnector(
+            @PathVariable UUID buildingId,
+            @PathVariable UUID connectorId,
+            @RequestParam UUID tenantId,
+            @Valid @RequestBody MapEditorVerticalConnectorUpdateRequestDTO request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        validateTenantAccess(userDetails, tenantId);
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                mapEditorService.updateVerticalConnector(
+                        tenantId,
+                        buildingId,
+                        connectorId,
+                        userDetails != null ? userDetails.getUserId() : null,
+                        request
+                )
+        );
     }
 
     @Operation(summary = "수직 이동수단 노드 연결", description = "특정 층의 노드를 지정한 수직 이동수단에 연결(매핑)합니다.")

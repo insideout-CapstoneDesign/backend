@@ -71,4 +71,20 @@ public class TenantController {
                 tenantService.activateTenant(userDetails.getUserId(), tenantId)
         );
     }
+
+    @Operation(summary = "테넌트 비활성화 (구독 취소)", description = "테넌트의 상태를 suspended(구독 취소)로 변경합니다.")
+    @PatchMapping("/{tenantId}/deactivate")
+    public ApiResponse<TenantSummaryResDTO> deactivateTenant(
+            @PathVariable UUID tenantId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        if (userDetails == null) {
+            throw new AuthenticationCredentialsNotFoundException("인증 정보가 없습니다.");
+        }
+
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                tenantService.deactivateTenant(userDetails.getUserId(), tenantId)
+        );
+    }
 }

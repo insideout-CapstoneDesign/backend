@@ -243,6 +243,17 @@ public class MapEditorService {
     }
 
     @Transactional
+    public MapEditorVerticalConnectorDTO updateVerticalConnector(
+            UUID tenantId,
+            UUID buildingId,
+            UUID connectorId,
+            UUID userId,
+            com.insideout.backend.domain.map.dto.request.MapEditorVerticalConnectorUpdateRequestDTO request
+    ) {
+        return mapEditorVerticalConnectorService.updateVerticalConnector(tenantId, buildingId, connectorId, request);
+    }
+
+    @Transactional
     public MapEditorVerticalConnectorDTO mapVerticalConnectorNode(
             UUID tenantId,
             UUID buildingId,

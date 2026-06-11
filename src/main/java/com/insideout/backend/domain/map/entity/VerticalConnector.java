@@ -99,4 +99,11 @@ public class VerticalConnector {
         this.direction = direction != null ? direction : DEFAULT_DIRECTION;
         this.accessibility = accessibility != null ? accessibility : Map.of();
     }
+
+    public void update(String name, String kind, Integer avgWaitSeconds, String direction) {
+        this.name = name;
+        this.kind = kind;
+        this.avgWaitSeconds = avgWaitSeconds;
+        this.direction = direction != null ? direction : DEFAULT_DIRECTION;
+    }
 }

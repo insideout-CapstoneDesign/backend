@@ -214,6 +214,34 @@ public class BuildingService {
         return getBuilding(tenantId, buildingId);
     }
 
+    /**
+     * 건물을 비활성화(inactive) 상태로 변경합니다.
+     */
+    @Transactional
+    public BuildingSummaryDTO deactivateBuilding(UUID tenantId, UUID buildingId) {
+        Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+
+        building.updateActivationStatus("inactive");
+        buildingRepository.save(building);
+
+        return getBuilding(tenantId, buildingId);
+    }
+
+    /**
+     * 건물을 활성화(active) 상태로 변경합니다.
+     */
+    @Transactional
+    public BuildingSummaryDTO activateBuilding(UUID tenantId, UUID buildingId) {
+        Building building = buildingRepository.findByIdAndTenant_Id(buildingId, tenantId)
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.BUILDING_NOT_FOUND));
+
+        building.updateActivationStatus("active");
+        buildingRepository.save(building);
+
+        return getBuilding(tenantId, buildingId);
+    }
+
     private void validateNoDuplicateFloors(UUID buildingId, List<LevelNamePair> newFloors) {
         if (newFloors == null || newFloors.isEmpty()) {
             return;

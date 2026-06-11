@@ -28,6 +28,11 @@ public enum TenantErrorCode implements BaseErrorCode {
             HttpStatus.FORBIDDEN,
             "TENANT403_1",
             "해당 테넌트의 소유자 권한이 없습니다."
+    ),
+    TENANT_HAS_ACTIVE_BUILDINGS(
+            HttpStatus.BAD_REQUEST,
+            "TENANT400_1",
+            "활성화된 건물이 존재하여 구독을 취소할 수 없습니다. 건물들을 먼저 비활성화해 주세요."
     );
 
     private final HttpStatus status;

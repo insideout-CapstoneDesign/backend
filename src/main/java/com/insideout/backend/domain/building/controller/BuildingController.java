@@ -92,6 +92,34 @@ public class BuildingController {
         );
     }
 
+    @Operation(summary = "건물 비활성화", description = "건물을 비활성화(inactive) 상태로 변경합니다.")
+    @PostMapping("/{buildingId}/deactivate")
+    public ApiResponse<BuildingSummaryDTO> deactivateBuilding(
+            @PathVariable UUID buildingId,
+            @RequestParam UUID tenantId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        validateTenantAccess(userDetails, tenantId);
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                buildingService.deactivateBuilding(tenantId, buildingId)
+        );
+    }
+
+    @Operation(summary = "건물 활성화", description = "건물을 활성화(active) 상태로 변경합니다.")
+    @PostMapping("/{buildingId}/activate")
+    public ApiResponse<BuildingSummaryDTO> activateBuilding(
+            @PathVariable UUID buildingId,
+            @RequestParam UUID tenantId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        validateTenantAccess(userDetails, tenantId);
+        return ApiResponse.success(
+                GeneralSuccessCode.OK,
+                buildingService.activateBuilding(tenantId, buildingId)
+        );
+    }
+
     /**
      * 로그인한 유저가 요청한 tenantId에 소속되어 있는지 검증합니다.
      */

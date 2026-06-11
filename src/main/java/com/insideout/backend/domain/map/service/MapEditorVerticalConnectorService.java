@@ -79,6 +79,8 @@ public class MapEditorVerticalConnectorService {
                     connector.getId(),
                     connector.getKind(),
                     connector.getName(),
+                    connector.getAvgWaitSeconds(),
+                    connector.getDirection(),
                     nodesByConnectorId.getOrDefault(connector.getId(), List.of())
             ));
         }
@@ -99,16 +101,30 @@ public class MapEditorVerticalConnectorService {
                 mapEditorDraftVersionService.getOrCreateBuildingDraftMapVersion(building, userId);
         MapVersion draftMapVersion = draftResult.mapVersion();
 
+        // 종류별 평균 대기 시간 기본값 정의
+        Integer resolvedWaitSeconds = request.avgWaitSeconds();
+        if (resolvedWaitSeconds == null) {
+            resolvedWaitSeconds = switch (request.kind() != null ? request.kind().toLowerCase() : "") {
+                case "elevator" -> 30;
+                case "stair" -> 20;
+                case "escalator" -> 15;
+                case "ramp" -> 10;
+                default -> 15;
+            };
+        }
+
         VerticalConnector connector = VerticalConnector.builder()
                 .tenantId(tenantId)
                 .mapVersion(draftMapVersion)
                 .building(building)
                 .kind(request.kind())
                 .name(request.name())
+                .avgWaitSeconds(resolvedWaitSeconds)
+                .direction(request.direction())
                 .build();
 
         VerticalConnector saved = verticalConnectorRepository.save(connector);
-        return new MapEditorVerticalConnectorDTO(saved.getId(), saved.getKind(), saved.getName(), List.of());
+        return new MapEditorVerticalConnectorDTO(saved.getId(), saved.getKind(), saved.getName(), saved.getAvgWaitSeconds(), saved.getDirection(), List.of());
     }
 
     @Transactional
@@ -192,6 +208,8 @@ public class MapEditorVerticalConnectorService {
                         connector.getId(),
                         connector.getKind(),
                         connector.getName(),
+                        connector.getAvgWaitSeconds(),
+                        connector.getDirection(),
                         List.of()
                 ));
     }
@@ -223,6 +241,8 @@ public class MapEditorVerticalConnectorService {
                         connector.getId(),
                         connector.getKind(),
                         connector.getName(),
+                        connector.getAvgWaitSeconds(),
+                        connector.getDirection(),
                         List.of()
                 ));
     }
@@ -237,5 +257,38 @@ public class MapEditorVerticalConnectorService {
         if (!connector.getTenantId().equals(tenantId) || !connector.getBuilding().getId().equals(buildingId)) {
             throw new BuildingException(BuildingErrorCode.VERTICAL_CONNECTOR_NOT_FOUND);
         }
+    }
+
+    @Transactional
+    public MapEditorVerticalConnectorDTO updateVerticalConnector(
+            UUID tenantId,
+            UUID buildingId,
+            UUID connectorId,
+            com.insideout.backend.domain.map.dto.request.MapEditorVerticalConnectorUpdateRequestDTO request
+    ) {
+        VerticalConnector connector = verticalConnectorRepository.findById(connectorId)
+                .orElseThrow(() -> new BuildingException(BuildingErrorCode.VERTICAL_CONNECTOR_NOT_FOUND));
+
+        validateConnectorOwnership(connector, tenantId, buildingId);
+
+        MapVersion draftMapVersion = getDraftMapVersionOrThrow(buildingId);
+        if (!connector.getMapVersion().getId().equals(draftMapVersion.getId())) {
+            throw new MapException(MapErrorCode.MAP_VERSION_NOT_EDITABLE);
+        }
+
+        connector.update(request.name(), request.kind(), request.avgWaitSeconds(), request.direction());
+        verticalConnectorRepository.save(connector);
+
+        return getVerticalConnectors(tenantId, buildingId).stream()
+                .filter(dto -> dto.id().equals(connector.getId()))
+                .findFirst()
+                .orElse(new MapEditorVerticalConnectorDTO(
+                        connector.getId(),
+                        connector.getKind(),
+                        connector.getName(),
+                        connector.getAvgWaitSeconds(),
+                        connector.getDirection(),
+                        List.of()
+                ));
     }
 }

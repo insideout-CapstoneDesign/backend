@@ -7,5 +7,8 @@ public record MapEditorVerticalConnectorDTO(
         UUID id,
         String kind,
         String name,
+        Integer avgWaitSeconds,
+        String direction,
         List<MapEditorVerticalConnectorNodeDTO> nodes
 ) {}
+

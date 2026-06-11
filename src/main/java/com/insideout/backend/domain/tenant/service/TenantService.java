@@ -143,4 +143,42 @@ public class TenantService {
         );
     }
 
+    /**
+     * 테넌트를 비활성화("suspended")합니다.
+     * 요청한 유저가 해당 테넌트의 소유자(owner)여야 합니다.
+     */
+    @Transactional
+    public TenantSummaryResDTO deactivateTenant(UUID userId, UUID tenantId) {
+        TenantMembership membership = tenantMembershipRepository.findByUser_IdAndTenant_Id(userId, tenantId)
+                .orElseThrow(() -> new TenantException(TenantErrorCode.MEMBERSHIP_NOT_FOUND));
+
+        if (!"owner".equals(membership.getRole())) {
+            throw new TenantException(TenantErrorCode.NOT_TENANT_OWNER);
+        }
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantException(TenantErrorCode.TENANT_NOT_FOUND));
+
+        // 검증: 테넌트 내 활성화(active)된 건물이 있는지 확인
+        List<Building> tenantBuildings = buildingRepository.findByTenant_IdOrderByCreatedAtDesc(tenantId);
+        boolean hasActiveBuilding = tenantBuildings.stream()
+                .anyMatch(b -> {
+                    Object statusObj = b.getMeta() != null ? b.getMeta().get("activationStatus") : null;
+                    return "active".equals(statusObj);
+                });
+
+        if (hasActiveBuilding) {
+            throw new TenantException(TenantErrorCode.TENANT_HAS_ACTIVE_BUILDINGS);
+        }
+
+        tenant.updateStatus("suspended");
+        return TenantSummaryResDTO.from(
+                tenant,
+                membership.getRole(),
+                membership.getJoinedAt(),
+                false,
+                tenantBuildings.size()
+        );
+    }
+
 }

@@ -16,6 +16,7 @@ import com.insideout.backend.domain.navigation.dto.NavigationResponseDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateType;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.CoordinateDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.FloorSegmentDto;
+import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.FloorplanDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.IndoorInfoDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegDto;
 import com.insideout.backend.domain.navigation.dto.NavigationResponseDto.LegMode;
@@ -69,6 +70,8 @@ public class NavigationService {
     private static final double COMFORTABLE_STAIR_PENALTY_MULTIPLIER = 20.0;
     private static final double COMFORTABLE_OBSTACLE_PENALTY_MULTIPLIER = 10.0;
     private static final double BLOCKING_EDGE_COST = Double.POSITIVE_INFINITY;
+    private static final double INDOOR_INSTRUCTION_CLUSTER_DISTANCE_PX = 260.0;
+    private static final double INDOOR_STRAIGHT_ANGLE_DEGREES = 35.0;
 
     private final MapQueryFacade mapQueryFacade;
     private final RestTemplate restTemplate;
@@ -139,7 +142,7 @@ public class NavigationService {
         return new NavigationResponseDto(
                 new CoordinateDto(request.endX(), request.endY(), request.endName()),
                 new CoordinateDto(target.endX(), target.endY(), target.endName()),
-                target.toIndoorInfo(),
+                toIndoorInfo(target),
                 routes,
                 notFoundRouteTypes,
                 failures,
@@ -161,6 +164,32 @@ public class NavigationService {
                 routeOption,
                 legMode,
                 mapType
+        );
+    }
+
+    private IndoorInfoDto toIndoorInfo(RouteTarget target) {
+        if (!target.includesIndoor()) {
+            return new IndoorInfoDto(false, null, null, null, null, null, null, null, List.of());
+        }
+
+        var floorplans = mapQueryFacade.findCurrentBuildingFloorplans(target.anchor().buildingId());
+        return new IndoorInfoDto(
+                true,
+                target.anchor().campusId(),
+                target.anchor().campusName(),
+                target.anchor().campusEntranceName(),
+                target.anchor().buildingId(),
+                target.anchor().buildingName(),
+                target.anchor().entranceNodeId(),
+                target.anchor().entranceName(),
+                (floorplans == null ? List.<MapQueryFacade.PublishedFloorplan>of() : floorplans).stream()
+                        .map(floorplan -> new FloorplanDto(
+                                floorplan.floorId(),
+                                floorplan.floorName(),
+                                floorplan.mapImageUrl(),
+                                CoordinateType.PIXEL
+                        ))
+                        .toList()
         );
     }
 
@@ -219,12 +248,12 @@ public class NavigationService {
         }
 
         Optional<IndoorPoiDestination> destination = mapQueryFacade.findIndoorPoiDestination(request.destinationPoiId());
-        UUID destinationBuildingId = request.destinationBuildingId() != null
-                ? request.destinationBuildingId()
-                : destination.map(IndoorPoiDestination::buildingId).orElse(null);
+        if (destination.isEmpty()) {
+            return RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName());
+        }
 
         Optional<IndoorDestinationAnchor> anchor = mapQueryFacade.findIndoorDestinationAnchor(
-                destinationBuildingId,
+                destination.get().buildingId(),
                 request.endX(),
                 request.endY()
         );
@@ -232,7 +261,7 @@ public class NavigationService {
         return anchor
                 .map(value -> RouteTarget.withIndoor(
                         value,
-                        destination.orElse(null),
+                        destination.get(),
                         request.endX(),
                         request.endY(),
                         request.endName()
@@ -393,6 +422,7 @@ public class NavigationService {
         for (JsonNode legNode : legsNode) {
             LegMode mode = parseTransitLegMode(getNullableText(legNode.path("mode")));
             List<TransitStopDto> stops = parseTransitStops(legNode);
+            List<CoordinateDto> path = parseTransitPath(legNode);
             legs.add(new LegDto(
                     mode,
                     resolveTransitRouteName(legNode),
@@ -407,14 +437,97 @@ public class NavigationService {
                     null,
                     null,
                     null,
-                    null,
-                    List.of(),
+                    path.isEmpty() ? null : CoordinateType.WGS84,
+                    path,
                     List.of(),
                     parseTransitSteps(legNode)
             ));
         }
 
         return legs;
+    }
+
+    private List<CoordinateDto> parseTransitPath(JsonNode legNode) {
+        List<CoordinateDto> path = new ArrayList<>();
+        JsonNode stepsNode = legNode.path("steps");
+
+        if (stepsNode.isArray()) {
+            for (JsonNode stepNode : stepsNode) {
+                appendLinestringCoordinates(path, stepNode.path("linestring"));
+            }
+        }
+
+        if (path.size() < 2) {
+            path.clear();
+            appendTransitPointCoordinate(path, legNode.path("start"));
+            appendTransitStationCoordinates(path, transitStationListNode(legNode));
+            appendTransitPointCoordinate(path, legNode.path("end"));
+        }
+
+        return path;
+    }
+
+    private void appendTransitStationCoordinates(List<CoordinateDto> path, JsonNode stationList) {
+        if (!stationList.isArray()) {
+            return;
+        }
+
+        for (JsonNode stationNode : stationList) {
+            appendTransitPointCoordinate(path, stationNode);
+        }
+    }
+
+    private void appendLinestringCoordinates(List<CoordinateDto> path, JsonNode linestringNode) {
+        String linestring = getNullableText(linestringNode);
+        if (linestring == null || linestring.isBlank()) {
+            return;
+        }
+
+        for (String pair : linestring.trim().split("\\s+")) {
+            String[] coordinates = pair.split(",");
+            if (coordinates.length < 2) {
+                continue;
+            }
+
+            try {
+                appendCoordinate(
+                        path,
+                        Double.parseDouble(coordinates[0]),
+                        Double.parseDouble(coordinates[1])
+                );
+            } catch (NumberFormatException ignored) {
+                // Skip malformed pairs from the external API and keep the rest of the path.
+            }
+        }
+    }
+
+    private void appendTransitPointCoordinate(List<CoordinateDto> path, JsonNode pointNode) {
+        Double x = firstNonNull(
+                getNullableDouble(pointNode.path("lon")),
+                firstNonNull(
+                        getNullableDouble(pointNode.path("x")),
+                        firstNonNull(
+                                getNullableDouble(pointNode.path("stationX")),
+                                getNullableDouble(pointNode.path("stopX"))
+                        )
+                )
+        );
+        Double y = firstNonNull(
+                getNullableDouble(pointNode.path("lat")),
+                firstNonNull(
+                        getNullableDouble(pointNode.path("y")),
+                        firstNonNull(
+                                getNullableDouble(pointNode.path("stationY")),
+                                getNullableDouble(pointNode.path("stopY"))
+                        )
+                )
+        );
+
+        if (x == null || y == null) {
+            return;
+        }
+
+        appendCoordinate(path, x, y);
     }
 
     private List<StepDto> parseTransitSteps(JsonNode legNode) {
@@ -479,7 +592,8 @@ public class NavigationService {
         JsonNode summary = features.get(0).path("properties");
         Integer totalTimeSeconds = getNullableInt(summary.path("totalTime"));
         Integer totalDistanceMeters = getNullableInt(summary.path("totalDistance"));
-        List<StepDto> steps = parseFeatureSteps(features);
+        List<StepDto> steps = rewriteOutdoorArrivalSteps(parseFeatureSteps(features), target);
+        List<CoordinateDto> path = parseFeaturePath(features);
         List<LegDto> legs = new ArrayList<>();
         List<RouteFailureDto> failures = new ArrayList<>();
         prependExitLegsIfNeeded(legs, failures, target, routeMode, routeOption);
@@ -490,8 +604,16 @@ public class NavigationService {
                 totalTimeSeconds,
                 totalDistanceMeters,
                 null,
+                List.of(),
                 null,
                 target.endName(),
+                null,
+                null,
+                null,
+                null,
+                CoordinateType.WGS84,
+                path,
+                List.of(),
                 steps
         ));
         appendEntryLegsIfNeeded(legs, failures, target, routeMode, routeOption);
@@ -541,6 +663,95 @@ public class NavigationService {
         return steps;
     }
 
+    private List<StepDto> rewriteOutdoorArrivalSteps(List<StepDto> steps, RouteTarget target) {
+        if (!target.includesIndoor() || target.startsIndoor() || target.buildingName() == null || steps.isEmpty()) {
+            return steps;
+        }
+
+        List<StepDto> rewritten = new ArrayList<>(steps);
+        for (int index = rewritten.size() - 1; index >= 0; index--) {
+            StepDto step = rewritten.get(index);
+            if (!normalizeInstruction(step.instruction()).contains("도착")) {
+                continue;
+            }
+            rewritten.set(index, new StepDto(
+                    buildingArrivalInstruction(target),
+                    step.distanceMeters(),
+                    step.durationSeconds(),
+                    step.x(),
+                    step.y(),
+                    step.turnType(),
+                    "BUILDING",
+                    step.streetName(),
+                    step.pathStartIndex(),
+                    step.pathEndIndex()
+            ));
+            return rewritten;
+        }
+
+        return rewritten;
+    }
+
+    private String indoorEntryInstruction(RouteTarget target) {
+        String buildingName = target.buildingName();
+        return (buildingName == null || buildingName.isBlank() ? "건물" : buildingName) + " 입구 진입";
+    }
+
+    private String buildingArrivalInstruction(RouteTarget target) {
+        String buildingName = target.buildingName();
+        return (buildingName == null || buildingName.isBlank() ? "건물" : buildingName) + " 도착";
+    }
+
+    private String indoorExitInstruction(RouteTarget target) {
+        String buildingName = target.buildingName();
+        String safeBuildingName = buildingName == null || buildingName.isBlank() ? "건물" : buildingName;
+        return safeBuildingName + " 출구로 나가기";
+    }
+
+    private List<CoordinateDto> parseFeaturePath(JsonNode features) {
+        List<CoordinateDto> path = new ArrayList<>();
+
+        for (JsonNode feature : features) {
+            appendGeometryCoordinates(path, feature.path("geometry").path("coordinates"));
+        }
+
+        return path;
+    }
+
+    private void appendGeometryCoordinates(List<CoordinateDto> path, JsonNode coordinates) {
+        if (!coordinates.isArray() || coordinates.isEmpty()) {
+            return;
+        }
+
+        if (coordinates.size() >= 2 && coordinates.get(0).isNumber() && coordinates.get(1).isNumber()) {
+            appendCoordinate(path, coordinates.get(0).asDouble(), coordinates.get(1).asDouble());
+            return;
+        }
+
+        for (JsonNode child : coordinates) {
+            appendGeometryCoordinates(path, child);
+        }
+    }
+
+    private void appendCoordinate(List<CoordinateDto> path, double x, double y) {
+        if (!isWgs84Coordinate(x, y)) {
+            return;
+        }
+        CoordinateDto last = path.isEmpty() ? null : path.get(path.size() - 1);
+        if (last != null && sameCoordinate(last, x, y)) {
+            return;
+        }
+        path.add(new CoordinateDto(x, y, null));
+    }
+
+    private boolean sameCoordinate(CoordinateDto coordinate, double x, double y) {
+        return Double.compare(coordinate.x(), x) == 0 && Double.compare(coordinate.y(), y) == 0;
+    }
+
+    private boolean isWgs84Coordinate(double x, double y) {
+        return x >= -180 && x <= 180 && y >= -90 && y <= 90;
+    }
+
     private CoordinateDto firstPointCoordinate(JsonNode coordinates) {
         if (coordinates.isArray() && coordinates.size() >= 2 && coordinates.get(0).isNumber()) {
             return new CoordinateDto(coordinates.get(0).asDouble(), coordinates.get(1).asDouble(), null);
@@ -573,7 +784,7 @@ public class NavigationService {
             RouteMode routeMode,
             RouteOption routeOption
     ) {
-        if (!target.includesIndoor()) {
+        if (!target.includesIndoor() || target.startsIndoor()) {
             return;
         }
 
@@ -684,7 +895,9 @@ public class NavigationService {
                         target.destination().floorName(),
                         target.entranceName(),
                         target.destination().name(),
-                        route
+                        route,
+                        indoorEntryInstruction(target),
+                        target.destination().name() + " 도착"
                 ));
     }
 
@@ -707,7 +920,9 @@ public class NavigationService {
                         target.source().floorName(),
                         target.source().name(),
                         target.entranceName(),
-                        route
+                        route,
+                        target.source().name() + "에서 출발",
+                        indoorExitInstruction(target)
                 ));
     }
 
@@ -755,6 +970,22 @@ public class NavigationService {
             String endName,
             ComputedIndoorRoute route
     ) {
+        return toNavigationLeg(mode, mapType, mapImageUrl, floorId, floorName, startName, endName, route, null, null);
+    }
+
+    private LegDto toNavigationLeg(
+            LegMode mode,
+            MapType mapType,
+            String mapImageUrl,
+            UUID floorId,
+            String floorName,
+            String startName,
+            String endName,
+            ComputedIndoorRoute route,
+            String startInstruction,
+            String endInstruction
+    ) {
+        List<StepDto> rawSteps = rewriteBoundarySteps(route.rawSteps(), startInstruction, endInstruction);
         return new LegDto(
                 mode,
                 null,
@@ -771,8 +1002,8 @@ public class NavigationService {
                 floorName,
                 CoordinateType.PIXEL,
                 route.path(),
-                buildFloorSegments(mode, mapType, mapImageUrl, floorId, floorName, route),
-                route.steps()
+                buildFloorSegments(mode, mapType, mapImageUrl, floorId, floorName, route, rawSteps),
+                mergeIndoorSteps(rawSteps)
         );
     }
 
@@ -782,7 +1013,8 @@ public class NavigationService {
             String fallbackMapImageUrl,
             UUID fallbackFloorId,
             String fallbackFloorName,
-            ComputedIndoorRoute route
+            ComputedIndoorRoute route,
+            List<StepDto> rawSteps
     ) {
         if (route.nodes().isEmpty()) {
             return List.of();
@@ -796,7 +1028,7 @@ public class NavigationService {
                     fallbackMapImageUrl,
                     CoordinateType.PIXEL,
                     route.path(),
-                    route.steps()
+                    mergeIndoorSteps(rawSteps)
             ));
         }
 
@@ -827,7 +1059,7 @@ public class NavigationService {
                     resolveSegmentMapImageUrl(segmentFloorId, fallbackMapImageUrl, floorImageUrlCache),
                     CoordinateType.PIXEL,
                     segmentPath,
-                    stepsForNodeRange(route.steps(), startIndex, endIndex, route.nodes().size())
+                    mergeIndoorSteps(stepsForNodeRange(rawSteps, startIndex, endIndex, route.nodes().size()))
             ));
 
             startIndex = endIndex;
@@ -853,14 +1085,67 @@ public class NavigationService {
 
         int fromIndex = Math.min(Math.max(startIndex, 0), steps.size());
         int toIndex = Math.min(endIndex, steps.size());
-        List<StepDto> segmentSteps = new ArrayList<>(steps.subList(fromIndex, toIndex));
+        List<StepDto> segmentSteps = steps.subList(fromIndex, toIndex).stream()
+                .map(step -> shiftStepPathRange(step, startIndex))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
         int arrivalStepIndex = nodeCount;
         if (endIndex == nodeCount && arrivalStepIndex < steps.size()) {
-            segmentSteps.add(steps.get(arrivalStepIndex));
+            segmentSteps.add(shiftStepPathRange(steps.get(arrivalStepIndex), startIndex));
         }
 
         return segmentSteps;
+    }
+
+    private StepDto shiftStepPathRange(StepDto step, int offset) {
+        return new StepDto(
+                step.instruction(),
+                step.distanceMeters(),
+                step.durationSeconds(),
+                step.x(),
+                step.y(),
+                step.turnType(),
+                step.mode(),
+                step.streetName(),
+                shiftPathIndex(step.pathStartIndex(), offset),
+                shiftPathIndex(step.pathEndIndex(), offset)
+        );
+    }
+
+    private Integer shiftPathIndex(Integer value, int offset) {
+        return value == null ? null : Math.max(value - offset, 0);
+    }
+
+    private List<StepDto> rewriteBoundarySteps(List<StepDto> steps, String startInstruction, String endInstruction) {
+        if (steps.isEmpty()) {
+            return steps;
+        }
+
+        List<StepDto> rewritten = new ArrayList<>(steps);
+        if (startInstruction != null && !startInstruction.isBlank()) {
+            rewritten.set(0, rewriteStepInstruction(rewritten.get(0), startInstruction));
+        }
+        if (endInstruction != null && !endInstruction.isBlank()) {
+            int lastIndex = rewritten.size() - 1;
+            rewritten.set(lastIndex, rewriteStepInstruction(rewritten.get(lastIndex), endInstruction));
+        }
+
+        return rewritten;
+    }
+
+    private StepDto rewriteStepInstruction(StepDto step, String instruction) {
+        return new StepDto(
+                instruction,
+                step.distanceMeters(),
+                step.durationSeconds(),
+                step.x(),
+                step.y(),
+                step.turnType(),
+                step.mode(),
+                step.streetName(),
+                step.pathStartIndex(),
+                step.pathEndIndex()
+        );
     }
 
     private boolean sameFloor(UUID first, UUID second) {
@@ -1024,8 +1309,8 @@ public class NavigationService {
         List<CoordinateDto> path = routeNodes.stream()
                 .map(node -> new CoordinateDto(node.x(), node.y(), node.displayName()))
                 .toList();
-        List<StepDto> steps = buildIndoorSteps(routeNodes, links);
-        return Optional.of(new ComputedIndoorRoute(path, steps, routeNodes));
+        List<StepDto> rawSteps = buildIndoorSteps(routeNodes, links);
+        return Optional.of(new ComputedIndoorRoute(path, mergeIndoorSteps(rawSteps), rawSteps, routeNodes));
     }
 
     private Map<UUID, List<RouteLink>> buildAdjacency(
@@ -1126,7 +1411,9 @@ public class NavigationService {
 
         List<StepDto> steps = new ArrayList<>();
         RoutingNode start = nodes.get(0);
-        steps.add(new StepDto(start.displayName() + "에서 출발", null, null, start.x(), start.y(), null, "INDOOR", null));
+        RoutingNode end = nodes.get(nodes.size() - 1);
+        int arrivalStartPathIndex = nodes.size() - 1;
+        steps.add(new StepDto(start.displayName() + "에서 출발", null, null, start.x(), start.y(), null, "INDOOR", null, 0, 0));
 
         for (int i = 0; i < links.size(); i++) {
             RouteLink link = links.get(i);
@@ -1140,12 +1427,257 @@ public class NavigationService {
                 instruction = horizontalInstruction(nodes, i, next);
             }
 
-            steps.add(new StepDto(instruction, null, null, next.x(), next.y(), null, "INDOOR", null));
+            if (!link.vertical() && isDestinationLandmarkInstruction(instruction, end)) {
+                if (i >= links.size() - 2) {
+                    arrivalStartPathIndex = Math.min(arrivalStartPathIndex, i);
+                    continue;
+                }
+                instruction = destinationFreeInstruction(instruction);
+            }
+            steps.add(new StepDto(instruction, null, null, next.x(), next.y(), null, "INDOOR", null, i, i + 1));
         }
 
-        RoutingNode end = nodes.get(nodes.size() - 1);
-        steps.add(new StepDto(end.displayName() + " 도착", null, null, end.x(), end.y(), null, "INDOOR", null));
+        int endPathIndex = nodes.size() - 1;
+        steps.add(new StepDto(end.displayName() + " 도착", null, null, end.x(), end.y(), null, "INDOOR", null, arrivalStartPathIndex, endPathIndex));
         return steps;
+    }
+
+    private List<StepDto> mergeIndoorSteps(List<StepDto> steps) {
+        if (steps.size() < 2) {
+            return steps;
+        }
+
+        List<StepDto> merged = new ArrayList<>();
+        int index = 0;
+        while (index < steps.size()) {
+            StepDto current = steps.get(index);
+            if (!isMergeableIndoorHorizontalStep(current)) {
+                merged.add(current);
+                index++;
+                continue;
+            }
+
+            int endIndex = index;
+            while (endIndex + 1 < steps.size()
+                    && canMergeIndoorSteps(steps, index, endIndex + 1)) {
+                endIndex++;
+            }
+
+            if (endIndex == index) {
+                merged.add(current);
+            } else {
+                merged.add(mergeIndoorStepCluster(steps, index, endIndex));
+            }
+            index = endIndex + 1;
+        }
+
+        return merged;
+    }
+
+    private boolean canMergeIndoorSteps(List<StepDto> steps, int startIndex, int candidateIndex) {
+        StepDto first = steps.get(startIndex);
+        StepDto candidate = steps.get(candidateIndex);
+        if (!isMergeableIndoorHorizontalStep(candidate)) {
+            return false;
+        }
+        if (sameInstruction(first, candidate)) {
+            return true;
+        }
+
+        String landmark = instructionLandmarkName(first.instruction());
+        String candidateLandmark = instructionLandmarkName(candidate.instruction());
+        if (landmark == null || !landmark.equals(candidateLandmark)) {
+            return false;
+        }
+        if (candidateIndex == startIndex + 1 && hasStraightAndTurnInstruction(steps, startIndex, candidateIndex)) {
+            return true;
+        }
+        return clusterDistance(steps, startIndex, candidateIndex) <= INDOOR_INSTRUCTION_CLUSTER_DISTANCE_PX;
+    }
+
+    private StepDto mergeIndoorStepCluster(List<StepDto> steps, int startIndex, int endIndex) {
+        StepDto first = steps.get(startIndex);
+        StepDto last = steps.get(endIndex);
+        String instruction = sameInstruction(first, last)
+                ? first.instruction()
+                : mergedLandmarkInstruction(steps, startIndex, endIndex);
+
+        return new StepDto(
+                instruction,
+                last.distanceMeters(),
+                last.durationSeconds(),
+                last.x(),
+                last.y(),
+                last.turnType(),
+                last.mode(),
+                last.streetName(),
+                first.pathStartIndex(),
+                last.pathEndIndex()
+        );
+    }
+
+    private String mergedLandmarkInstruction(List<StepDto> steps, int startIndex, int endIndex) {
+        StepDto first = steps.get(startIndex);
+        String landmark = instructionLandmarkName(first.instruction());
+        if (landmark == null) {
+            return first.instruction();
+        }
+
+        Double angle = clusterTurnAngle(steps, startIndex, endIndex);
+        if (angle == null || Math.abs(angle) < INDOOR_STRAIGHT_ANGLE_DEGREES) {
+            String fallbackDirection = lastTurnDirection(steps, startIndex, endIndex);
+            if (hasStraightInstruction(steps, startIndex, endIndex) && fallbackDirection != null && angle == null) {
+                return landmark + " 앞까지 직진 후 " + fallbackDirection;
+            }
+            return landmark + " 앞을 지나 계속 직진";
+        }
+
+        String direction = visualTurnDirection(angle);
+        if (hasStraightInstruction(steps, startIndex, endIndex)) {
+            return landmark + " 앞까지 직진 후 " + direction;
+        }
+        return landmark + " 앞에서 " + direction;
+    }
+
+    private boolean hasStraightInstruction(List<StepDto> steps, int startIndex, int endIndex) {
+        for (int index = startIndex; index <= endIndex; index++) {
+            if (normalizeInstruction(steps.get(index).instruction()).contains("직진")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasStraightAndTurnInstruction(List<StepDto> steps, int startIndex, int endIndex) {
+        return hasStraightInstruction(steps, startIndex, endIndex)
+                && lastTurnDirection(steps, startIndex, endIndex) != null;
+    }
+
+    private String lastTurnDirection(List<StepDto> steps, int startIndex, int endIndex) {
+        for (int index = endIndex; index >= startIndex; index--) {
+            String instruction = normalizeInstruction(steps.get(index).instruction());
+            if (instruction.contains("좌회전")) {
+                return "좌회전";
+            }
+            if (instruction.contains("우회전")) {
+                return "우회전";
+            }
+        }
+        return null;
+    }
+
+    private Double clusterTurnAngle(List<StepDto> steps, int startIndex, int endIndex) {
+        StepDto entryPrevious = startIndex > 0 ? steps.get(startIndex - 1) : null;
+        StepDto entryCurrent = steps.get(startIndex);
+        StepDto exitPrevious = endIndex > startIndex ? steps.get(endIndex - 1) : steps.get(startIndex);
+        StepDto exitCurrent = steps.get(endIndex);
+        return turnAngle(entryPrevious, entryCurrent, exitPrevious, exitCurrent);
+    }
+
+    private Double turnAngle(StepDto previous, StepDto current, StepDto next) {
+        return turnAngle(previous, current, current, next);
+    }
+
+    private Double turnAngle(StepDto entryPrevious, StepDto entryCurrent, StepDto exitPrevious, StepDto exitCurrent) {
+        if (!hasPoint(entryPrevious) || !hasPoint(entryCurrent) || !hasPoint(exitPrevious) || !hasPoint(exitCurrent)) {
+            return null;
+        }
+
+        double firstVectorX = entryCurrent.x() - entryPrevious.x();
+        double firstVectorY = entryCurrent.y() - entryPrevious.y();
+        double secondVectorX = exitCurrent.x() - exitPrevious.x();
+        double secondVectorY = exitCurrent.y() - exitPrevious.y();
+        if ((firstVectorX == 0 && firstVectorY == 0) || (secondVectorX == 0 && secondVectorY == 0)) {
+            return null;
+        }
+
+        double cross = (firstVectorX * secondVectorY) - (firstVectorY * secondVectorX);
+        double dot = (firstVectorX * secondVectorX) + (firstVectorY * secondVectorY);
+        return Math.toDegrees(Math.atan2(cross, dot));
+    }
+
+    private String visualTurnDirection(double angle) {
+        // Indoor floorplan coordinates are screen/SVG coordinates where y increases downward.
+        // From the previous edge to the next edge, a positive cross product is visually clockwise,
+        // which is a right turn on the displayed floorplan.
+        return angle > 0 ? "우회전" : "좌회전";
+    }
+
+    private double clusterDistance(List<StepDto> steps, int startIndex, int endIndex) {
+        double distance = 0.0;
+        StepDto previous = startIndex > 0 ? steps.get(startIndex - 1) : steps.get(startIndex);
+        for (int i = startIndex; i <= endIndex; i++) {
+            StepDto current = steps.get(i);
+            if (hasPoint(previous) && hasPoint(current)) {
+                double dx = previous.x() - current.x();
+                double dy = previous.y() - current.y();
+                distance += Math.sqrt(dx * dx + dy * dy);
+            }
+            previous = current;
+        }
+        return distance;
+    }
+
+    private boolean sameInstruction(StepDto first, StepDto second) {
+        return normalizeInstruction(first.instruction()).equals(normalizeInstruction(second.instruction()));
+    }
+
+    private boolean isMergeableIndoorHorizontalStep(StepDto step) {
+        String instruction = normalizeInstruction(step.instruction());
+        if (!"INDOOR".equalsIgnoreCase(step.mode()) || instruction.isBlank()) {
+            return false;
+        }
+        if (instruction.contains("출발") || instruction.contains("도착")) {
+            return false;
+        }
+        if (instruction.contains("엘리베이터")
+                || instruction.contains("계단")
+                || instruction.contains("에스컬레이터")
+                || instruction.contains("경사로")) {
+            return false;
+        }
+        return instruction.contains("좌회전")
+                || instruction.contains("우회전")
+                || instruction.contains("직진");
+    }
+
+    private String instructionLandmarkName(String instruction) {
+        String text = normalizeInstruction(instruction);
+        int frontIndex = text.indexOf(" 앞");
+        if (frontIndex <= 0) {
+            return null;
+        }
+
+        String landmark = text.substring(0, frontIndex).trim();
+        return landmark.isBlank() ? null : landmark;
+    }
+
+    private String normalizeInstruction(String instruction) {
+        return instruction == null ? "" : instruction.replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean hasPoint(StepDto step) {
+        return step != null && step.x() != null && step.y() != null;
+    }
+
+    private boolean isDestinationLandmarkInstruction(String instruction, RoutingNode destination) {
+        String destinationLandmark = instructionLandmark(destination);
+        String instructionLandmark = instructionLandmarkName(instruction);
+        return destinationLandmark != null && destinationLandmark.equals(instructionLandmark);
+    }
+
+    private String destinationFreeInstruction(String instruction) {
+        String text = normalizeInstruction(instruction);
+        if (text.contains("좌회전")) {
+            return "좌회전";
+        }
+        if (text.contains("우회전")) {
+            return "우회전";
+        }
+        if (text.contains("직진")) {
+            return "계속 직진";
+        }
+        return text;
     }
 
     private String verticalInstruction(RouteLink link) {
@@ -1162,7 +1694,7 @@ public class NavigationService {
 
     private String horizontalInstruction(List<RoutingNode> nodes, int linkIndex, RoutingNode next) {
         if (linkIndex == 0) {
-            return next.displayName() + " 앞까지 직진";
+            return straightInstruction(next);
         }
 
         RoutingNode previous = nodes.get(linkIndex - 1);
@@ -1174,12 +1706,34 @@ public class NavigationService {
         double angle = Math.toDegrees(Math.atan2(cross, dot));
 
         if (Math.abs(angle) < 35) {
-            return next.displayName() + " 앞까지 직진";
+            return straightInstruction(next);
         }
-        if (angle > 0) {
-            return current.displayName() + " 앞에서 좌회전";
+        return turnInstruction(current, visualTurnDirection(angle));
+    }
+
+    private String straightInstruction(RoutingNode next) {
+        String landmark = instructionLandmark(next);
+        return landmark == null ? "계속 직진" : landmark + " 앞까지 직진";
+    }
+
+    private String turnInstruction(RoutingNode current, String direction) {
+        String landmark = instructionLandmark(current);
+        return landmark == null ? direction : landmark + " 앞에서 " + direction;
+    }
+
+    private String instructionLandmark(RoutingNode node) {
+        String displayName = node.displayName();
+        if (displayName == null || displayName.isBlank()) {
+            return null;
         }
-        return current.displayName() + " 앞에서 우회전";
+        String normalized = displayName.toLowerCase().replaceAll("\\s+", "");
+        if (normalized.equals("통로")
+                || normalized.equals("복도")
+                || normalized.equals("corridor")
+                || normalized.equals("이지점")) {
+            return null;
+        }
+        return displayName;
     }
 
     private String safeLower(String value) {
@@ -1404,6 +1958,7 @@ public class NavigationService {
     private record ComputedIndoorRoute(
             List<CoordinateDto> path,
             List<StepDto> steps,
+            List<StepDto> rawSteps,
             List<RoutingNode> nodes
     ) {
     }
@@ -1505,22 +2060,6 @@ public class NavigationService {
             );
         }
 
-        private IndoorInfoDto toIndoorInfo() {
-            if (!includesIndoor) {
-                return new IndoorInfoDto(false, null, null, null, null, null, null, null);
-            }
-            return new IndoorInfoDto(
-                    true,
-                    anchor.campusId(),
-                    anchor.campusName(),
-                    anchor.campusEntranceName(),
-                    anchor.buildingId(),
-                    anchor.buildingName(),
-                    anchor.entranceNodeId(),
-                    anchor.entranceName()
-            );
-        }
-
         private boolean hasCampus() {
             return anchor != null && anchor.hasCampus();
         }
@@ -1535,6 +2074,19 @@ public class NavigationService {
 
         private String entranceName() {
             return anchor == null ? null : anchor.entranceName();
+        }
+
+        private String buildingName() {
+            if (anchor != null && anchor.buildingName() != null && !anchor.buildingName().isBlank()) {
+                return anchor.buildingName();
+            }
+            if (destination != null && destination.buildingName() != null && !destination.buildingName().isBlank()) {
+                return destination.buildingName();
+            }
+            if (source != null && source.buildingName() != null && !source.buildingName().isBlank()) {
+                return source.buildingName();
+            }
+            return null;
         }
 
         private double buildingEntranceX() {

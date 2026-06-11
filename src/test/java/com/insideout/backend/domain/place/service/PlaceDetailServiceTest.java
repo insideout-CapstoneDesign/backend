@@ -41,6 +41,7 @@ class PlaceDetailServiceTest {
     private static final UUID MAP_VERSION_ID = UUID.fromString("9a7c2a10-0001-4000-8000-000000000001");
     private static final UUID FLOOR_ID = UUID.fromString("11111111-1111-1111-1111-111111111101");
     private static final UUID POI_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final Long POI_PUBLIC_ID = 1001L;
 
     @Mock
     private BuildingRepository buildingRepository;
@@ -109,7 +110,7 @@ class PlaceDetailServiceTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().placeId()).isEqualTo(BUILDING_ID);
-        assertThat(result.get().poiId()).isEqualTo(POI_ID);
+        assertThat(result.get().poiId()).isEqualTo(POI_PUBLIC_ID);
         assertThat(result.get().externalApiId()).isEqualTo("18217490");
         assertThat(result.get().name()).isEqualTo("신세계백화점 본점 디 에스테이트");
         assertThat(result.get().isRegistered()).isTrue();
@@ -215,6 +216,7 @@ class PlaceDetailServiceTest {
     private Poi poi(Floor floor, MapVersion mapVersion, String name, String externalApiId, Long categoryId) {
         Poi poi = mock(Poi.class);
         lenient().when(poi.getId()).thenReturn(POI_ID);
+        lenient().when(poi.getPublicId()).thenReturn(POI_PUBLIC_ID);
         lenient().when(poi.getName()).thenReturn(name);
         lenient().when(poi.getExternalApiId()).thenReturn(externalApiId);
         lenient().when(poi.getCategoryId()).thenReturn(categoryId);

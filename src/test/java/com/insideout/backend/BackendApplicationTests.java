@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -62,6 +63,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     private PoiRepository poiRepository;
+
+    @MockitoBean
+    private PoiCategoryRepository poiCategoryRepository;
 
     @MockitoBean
     private EdgeRepository edgeRepository;
@@ -118,6 +122,9 @@ class BackendApplicationTests {
     private ZoneRepository zoneRepository;
 
     @MockitoBean
+    private FloorplanObjectRepository floorplanObjectRepository;
+
+    @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
 
     @MockitoBean
@@ -125,6 +132,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     private EntityManagerFactory entityManagerFactory;
+
+    @MockitoBean
+    private TransactionTemplate transactionTemplate;
 
     @Test
     void contextLoads() {

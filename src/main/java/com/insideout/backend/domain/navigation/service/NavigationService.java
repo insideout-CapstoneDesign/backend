@@ -90,6 +90,9 @@ public class NavigationService {
     public NavigationResponseDto findRoutes(NavigationRequestDto request) {
         RouteTarget target = resolveRouteTarget(request);
         EnumSet<RouteType> routeTypes = resolveRouteTypes(request);
+        if (target.isIndoorOnly()) {
+            return findIndoorOnlyRoutes(request, target, routeTypes);
+        }
         List<RouteDto> routes = new ArrayList<>();
         List<RouteMode> notFoundRouteTypes = new ArrayList<>();
         List<RouteFailureDto> failures = new ArrayList<>();
@@ -172,16 +175,17 @@ public class NavigationService {
             return new IndoorInfoDto(false, null, null, null, null, null, null, null, List.of());
         }
 
-        var floorplans = mapQueryFacade.findCurrentBuildingFloorplans(target.anchor().buildingId());
+        UUID buildingId = target.indoorBuildingId();
+        var floorplans = mapQueryFacade.findCurrentBuildingFloorplans(buildingId);
         return new IndoorInfoDto(
                 true,
-                target.anchor().campusId(),
-                target.anchor().campusName(),
-                target.anchor().campusEntranceName(),
-                target.anchor().buildingId(),
-                target.anchor().buildingName(),
-                target.anchor().entranceNodeId(),
-                target.anchor().entranceName(),
+                target.campusId(),
+                target.campusName(),
+                target.campusEntranceName(),
+                buildingId,
+                target.buildingName(),
+                target.anchor() == null ? null : target.anchor().entranceNodeId(),
+                target.entranceName(),
                 (floorplans == null ? List.<MapQueryFacade.PublishedFloorplan>of() : floorplans).stream()
                         .map(floorplan -> new FloorplanDto(
                                 floorplan.floorId(),
@@ -230,6 +234,19 @@ public class NavigationService {
 
         Optional<IndoorPoiDestination> source = mapQueryFacade.findIndoorPoiDestination(request.startPoiId());
         if (source.isPresent()) {
+            Optional<IndoorPoiDestination> destination = request.destinationPoiId() == null
+                    ? Optional.empty()
+                    : mapQueryFacade.findIndoorPoiDestination(request.destinationPoiId());
+            if (destination.isPresent() && sameId(source.get().buildingId(), destination.get().buildingId())) {
+                return RouteTarget.fromIndoorToIndoor(
+                        source.get(),
+                        destination.get(),
+                        request.endX(),
+                        request.endY(),
+                        request.endName()
+                );
+            }
+
             Optional<IndoorDestinationAnchor> exitAnchor = mapQueryFacade.findIndoorDestinationAnchor(
                     source.get().buildingId(),
                     request.endX(),
@@ -271,6 +288,62 @@ public class NavigationService {
                         request.endName()
                 ))
                 .orElseGet(() -> RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName()));
+    }
+
+    private NavigationResponseDto findIndoorOnlyRoutes(
+            NavigationRequestDto request,
+            RouteTarget target,
+            EnumSet<RouteType> routeTypes
+    ) {
+        List<RouteDto> routes = new ArrayList<>();
+        List<RouteFailureDto> failures = new ArrayList<>();
+
+        if (routeTypes.contains(RouteType.WALK)) {
+            createIndoorOnlyRouteDto(target, RouteOption.SHORTEST, failures).ifPresent(routes::add);
+            createIndoorOnlyRouteDto(target, RouteOption.COMFORTABLE, failures).ifPresent(routes::add);
+        } else {
+            createIndoorOnlyRouteDto(target, RouteOption.SHORTEST, failures).ifPresent(routes::add);
+        }
+
+        if (routes.isEmpty() && failures.isEmpty()) {
+            failures.add(routeFailure(NavigationErrorCode.INDOOR_ROUTE_NOT_FOUND, RouteMode.WALK, RouteOption.SHORTEST, LegMode.INDOOR, MapType.BUILDING));
+        }
+
+        List<RouteMode> notFoundRouteTypes = routes.isEmpty() ? List.of(RouteMode.WALK) : List.of();
+        return new NavigationResponseDto(
+                new CoordinateDto(request.endX(), request.endY(), request.endName()),
+                new CoordinateDto(request.endX(), request.endY(), target.destination().name()),
+                toIndoorInfo(target),
+                routes,
+                notFoundRouteTypes,
+                failures,
+                resolveRouteMessage(routes, notFoundRouteTypes, failures)
+        );
+    }
+
+    private Optional<RouteDto> createIndoorOnlyRouteDto(
+            RouteTarget target,
+            RouteOption routeOption,
+            List<RouteFailureDto> failures
+    ) {
+        Optional<LegDto> indoorLeg = createIndoorPointToPointLeg(target, routeOption);
+        if (indoorLeg.isEmpty()) {
+            failures.add(routeFailure(NavigationErrorCode.INDOOR_ROUTE_NOT_FOUND, RouteMode.WALK, routeOption, LegMode.INDOOR, MapType.BUILDING));
+            return Optional.empty();
+        }
+
+        return Optional.of(new RouteDto(
+                RouteMode.WALK,
+                routeOption,
+                null,
+                null,
+                formatDuration(null, true),
+                List.of(indoorLeg.get())
+        ));
+    }
+
+    private boolean sameId(UUID first, UUID second) {
+        return first != null && first.equals(second);
     }
 
     private EnumSet<RouteType> resolveRouteTypes(NavigationRequestDto request) {
@@ -1045,6 +1118,31 @@ public class NavigationService {
                         route,
                         target.source().name() + "에서 출발",
                         indoorExitInstruction(target)
+                ));
+    }
+
+    private Optional<LegDto> createIndoorPointToPointLeg(RouteTarget target, RouteOption routeOption) {
+        if (target.source() == null || target.destination() == null) {
+            return Optional.empty();
+        }
+
+        Optional<RoutingGraph> graph = mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, target.source().buildingId());
+        if (graph.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return computeIndoorRoute(graph.get(), target.source().anchorNodeId(), target.destination().anchorNodeId(), routeOption)
+                .map(route -> toNavigationLeg(
+                        LegMode.INDOOR,
+                        MapType.BUILDING,
+                        mapQueryFacade.findCurrentFloorplanImageUrl(target.source().floorId()).orElse(graph.get().mapImageUrl()),
+                        target.source().floorId(),
+                        target.source().floorName(),
+                        target.source().name(),
+                        target.destination().name(),
+                        route,
+                        target.source().name() + "에서 출발",
+                        target.destination().name() + " 도착"
                 ));
     }
 
@@ -2182,6 +2280,36 @@ public class NavigationService {
             );
         }
 
+        private static RouteTarget fromIndoorToIndoor(
+                IndoorPoiDestination source,
+                IndoorPoiDestination destination,
+                double originalEndX,
+                double originalEndY,
+                String originalEndName
+        ) {
+            return new RouteTarget(
+                    originalEndX,
+                    originalEndY,
+                    null,
+                    null,
+                    null,
+                    originalEndX,
+                    originalEndY,
+                    source.name(),
+                    destination.name(),
+                    true,
+                    true,
+                    originalEndName,
+                    source,
+                    destination,
+                    null
+            );
+        }
+
+        private boolean isIndoorOnly() {
+            return source != null && destination != null && anchor == null;
+        }
+
         private boolean hasCampus() {
             return anchor != null && anchor.hasCampus();
         }
@@ -2194,8 +2322,38 @@ public class NavigationService {
             return anchor == null ? null : anchor.outdoorTargetName();
         }
 
+        private UUID campusId() {
+            if (anchor != null) {
+                return anchor.campusId();
+            }
+            if (destination != null && destination.campusId() != null) {
+                return destination.campusId();
+            }
+            return source == null ? null : source.campusId();
+        }
+
+        private String campusName() {
+            if (anchor != null) {
+                return anchor.campusName();
+            }
+            if (destination != null && destination.campusName() != null && !destination.campusName().isBlank()) {
+                return destination.campusName();
+            }
+            return source == null ? null : source.campusName();
+        }
+
         private String entranceName() {
             return anchor == null ? null : anchor.entranceName();
+        }
+
+        private UUID indoorBuildingId() {
+            if (anchor != null) {
+                return anchor.buildingId();
+            }
+            if (destination != null && destination.buildingId() != null) {
+                return destination.buildingId();
+            }
+            return source == null ? null : source.buildingId();
         }
 
         private String buildingName() {

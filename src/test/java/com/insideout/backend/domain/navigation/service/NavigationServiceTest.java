@@ -346,6 +346,102 @@ class NavigationServiceTest {
     }
 
     @Test
+    void indoorToIndoorUsesOnlyIndoorLegWithoutTmapLookup() {
+        UUID buildingId = UUID.randomUUID();
+        UUID mapVersionId = UUID.randomUUID();
+        UUID sourceNodeId = UUID.randomUUID();
+        UUID middleNodeId = UUID.randomUUID();
+        UUID destinationNodeId = UUID.randomUUID();
+        UUID floorId = UUID.randomUUID();
+        Long startPoiId = 2001L;
+        Long destinationPoiId = 1001L;
+
+        when(mapQueryFacade.findIndoorPoiDestination(startPoiId))
+                .thenReturn(Optional.of(IndoorPoiDestination.builder()
+                        .publicId(startPoiId)
+                        .poiId(UUID.randomUUID())
+                        .name("출발 POI")
+                        .anchorNodeId(sourceNodeId)
+                        .floorId(floorId)
+                        .floorName("1F")
+                        .buildingId(buildingId)
+                        .buildingName("테스트 건물")
+                        .build()));
+        when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
+                .thenReturn(Optional.of(IndoorPoiDestination.builder()
+                        .publicId(destinationPoiId)
+                        .poiId(UUID.randomUUID())
+                        .name("목적지 POI")
+                        .anchorNodeId(destinationNodeId)
+                        .floorId(floorId)
+                        .floorName("1F")
+                        .buildingId(buildingId)
+                        .buildingName("테스트 건물")
+                        .build()));
+        when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
+                .thenReturn(Optional.of(RoutingGraph.builder()
+                        .mapVersionId(mapVersionId)
+                        .mapType(MapType.BUILDING)
+                        .mapImageUrl("https://signed.example/fallback.png")
+                        .nodes(List.of(
+                                routingNode(sourceNodeId, "poi", "출발 POI", floorId, "1F", 10, 10),
+                                routingNode(middleNodeId, "corridor", "복도", floorId, "1F", 20, 20),
+                                routingNode(destinationNodeId, "poi", "목적지 POI", floorId, "1F", 30, 30)
+                        ))
+                        .edges(List.of(
+                                routingEdge(sourceNodeId, middleNodeId),
+                                routingEdge(middleNodeId, destinationNodeId)
+                        ))
+                        .verticalLinks(List.of())
+                        .obstacles(List.of())
+                        .build()));
+        when(mapQueryFacade.findCurrentFloorplanImageUrl(floorId))
+                .thenReturn(Optional.of("https://signed.example/1f.png"));
+        when(mapQueryFacade.findCurrentBuildingFloorplans(buildingId))
+                .thenReturn(List.of(new PublishedFloorplan(floorId, "1F", "https://signed.example/1f.png")));
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발 POI",
+                "목적지 POI",
+                startPoiId,
+                buildingId,
+                destinationPoiId,
+                true,
+                List.of(RouteType.WALK)
+        ));
+
+        assertThat(response.routes()).hasSize(2);
+        assertThat(response.routes())
+                .extracting(RouteDto::routeOption)
+                .containsExactly(RouteOption.SHORTEST, RouteOption.COMFORTABLE);
+        assertThat(response.routes())
+                .allSatisfy(route -> assertThat(route.legs())
+                        .extracting(LegDto::mode)
+                        .containsExactly(LegMode.INDOOR));
+
+        LegDto indoorLeg = response.routes().get(0).legs().get(0);
+        assertThat(indoorLeg.startName()).isEqualTo("출발 POI");
+        assertThat(indoorLeg.endName()).isEqualTo("목적지 POI");
+        assertThat(indoorLeg.steps())
+                .extracting(StepDto::instruction)
+                .startsWith("출발 POI에서 출발")
+                .endsWith("목적지 POI 도착");
+        assertThat(response.indoor().buildingName()).isEqualTo("테스트 건물");
+        assertThat(response.indoor().floorplans())
+                .extracting(NavigationResponseDto.FloorplanDto::floorName)
+                .containsExactly("1F");
+        verify(restTemplate, never()).postForObject(
+                any(String.class),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        );
+    }
+
+    @Test
     void routeLookupFailureIsIsolatedByRouteMode() throws Exception {
         when(restTemplate.postForObject(
                 eq("https://apis.openapi.sk.com/tmap/routes?version=1&format=json"),

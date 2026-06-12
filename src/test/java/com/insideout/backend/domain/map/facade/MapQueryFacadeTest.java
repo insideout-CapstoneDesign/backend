@@ -217,7 +217,7 @@ class MapQueryFacadeTest {
                 .mapVersion(mapVersion)
                 .floor(floor)
                 .kindCode("corridor")
-                .geomPx(geometryFactory.createPoint(new Coordinate(121, 0)))
+                .geomPx(geometryFactory.createPoint(new Coordinate(151, 0)))
                 .build();
         ReflectionTestUtils.setField(farNode, "id", UUID.randomUUID());
 

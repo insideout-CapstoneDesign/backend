@@ -668,7 +668,7 @@ public class NavigationService {
     }
 
     private List<StepDto> rewriteOutdoorArrivalSteps(List<StepDto> steps, RouteTarget target) {
-        if (!target.includesIndoor() || target.startsIndoor() || target.buildingName() == null || steps.isEmpty()) {
+        if (!target.includesIndoor() || target.startsIndoor() || steps.isEmpty()) {
             return steps;
         }
 

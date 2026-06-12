@@ -388,7 +388,7 @@ public class MapQueryFacade {
                     return new MappedEntranceCandidate(
                             mapping,
                             gate,
-                            geographicDistanceSquared(outdoorReferenceX, outdoorReferenceY, gate.x(), gate.y())
+                            geographicDistanceMeters(outdoorReferenceX, outdoorReferenceY, gate.x(), gate.y())
                     );
                 })
                 .filter(Objects::nonNull)
@@ -459,10 +459,16 @@ public class MapQueryFacade {
         return null;
     }
 
-    private double geographicDistanceSquared(double firstX, double firstY, double secondX, double secondY) {
-        double dx = firstX - secondX;
-        double dy = firstY - secondY;
-        return dx * dx + dy * dy;
+    private double geographicDistanceMeters(double firstX, double firstY, double secondX, double secondY) {
+        double lat1 = Math.toRadians(firstY);
+        double lat2 = Math.toRadians(secondY);
+        double dLat = Math.toRadians(secondY - firstY);
+        double dLon = Math.toRadians(secondX - firstX);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return 6_371_000.0 * c;
     }
 
     private Optional<IndoorDestinationAnchor> toIndoorDestinationAnchor(BuildingDirectory building, Node node) {

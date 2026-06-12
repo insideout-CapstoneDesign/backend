@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.insideout.backend.domain.building.entity.Building;
+import com.insideout.backend.domain.building.entity.BuildingDirectory;
+import com.insideout.backend.domain.building.entity.BuildingEntranceMapping;
+import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.Floor;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
 import com.insideout.backend.domain.building.repository.BuildingEntranceMappingRepository;
@@ -21,7 +24,9 @@ import com.insideout.backend.domain.map.repository.PoiRepository;
 import com.insideout.backend.domain.map.repository.VerticalConnectorNodeRepository;
 import com.insideout.backend.domain.map.storage.MapAssetDescriptor;
 import com.insideout.backend.domain.map.storage.MapAssetStorage;
+import com.insideout.backend.domain.tenant.entity.Tenant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
@@ -231,5 +236,116 @@ class MapQueryFacadeTest {
                 .thenReturn(Optional.of(farNode));
 
         assertThat(mapQueryFacade.findIndoorPoiDestination(publicId)).isEmpty();
+    }
+
+    @Test
+    void findIndoorDestinationAnchorChoosesMappedGateByMeterDistance() {
+        UUID tenantId = UUID.randomUUID();
+        UUID campusId = UUID.randomUUID();
+        UUID buildingId = UUID.randomUUID();
+        UUID mapVersionId = UUID.randomUUID();
+        UUID eastNodeId = UUID.randomUUID();
+        UUID northNodeId = UUID.randomUUID();
+
+        Tenant tenant = Tenant.builder()
+                .slug("tenant")
+                .displayName("Tenant")
+                .build();
+        ReflectionTestUtils.setField(tenant, "id", tenantId);
+
+        Campus campus = Campus.builder()
+                .tenant(tenant)
+                .name("테스트 캠퍼스")
+                .meta(Map.of("gates", List.of(
+                        Map.of(
+                                "id", "east",
+                                "name", "동문",
+                                "location", Map.of("longitude", 127.0020, "latitude", 60.0000)
+                        ),
+                        Map.of(
+                                "id", "north",
+                                "name", "북문",
+                                "location", Map.of("longitude", 127.0000, "latitude", 60.0011)
+                        )
+                )))
+                .build();
+        ReflectionTestUtils.setField(campus, "id", campusId);
+
+        Building building = Building.builder()
+                .tenant(tenant)
+                .campus(campus)
+                .name("테스트 건물")
+                .build();
+        ReflectionTestUtils.setField(building, "id", buildingId);
+
+        MapVersion publishedVersion = MapVersion.builder()
+                .tenantId(tenantId)
+                .mapType(MapType.BUILDING)
+                .building(building)
+                .status("published")
+                .label("published")
+                .build();
+        ReflectionTestUtils.setField(publishedVersion, "id", mapVersionId);
+
+        BuildingDirectory directory = BuildingDirectory.builder()
+                .id(buildingId)
+                .tenant(tenant)
+                .campus(campus)
+                .name("테스트 건물")
+                .isPublic(true)
+                .publishedVersion(publishedVersion)
+                .build();
+
+        BuildingEntranceMapping eastMapping = BuildingEntranceMapping.builder()
+                .tenantId(tenantId)
+                .campusId(campusId)
+                .buildingId(buildingId)
+                .mapVersion(publishedVersion)
+                .campusGateId("east")
+                .entranceNodeId(eastNodeId)
+                .build();
+        BuildingEntranceMapping northMapping = BuildingEntranceMapping.builder()
+                .tenantId(tenantId)
+                .campusId(campusId)
+                .buildingId(buildingId)
+                .mapVersion(publishedVersion)
+                .campusGateId("north")
+                .entranceNodeId(northNodeId)
+                .build();
+
+        Node eastNode = Node.builder()
+                .tenantId(tenantId)
+                .mapVersion(publishedVersion)
+                .kindCode("entrance")
+                .nameKo("동문 출입구")
+                .geomPx(geometryFactory.createPoint(new Coordinate(0, 0)))
+                .geomWgs84(geometryFactory.createPoint(new Coordinate(127.0020, 60.0000)))
+                .build();
+        ReflectionTestUtils.setField(eastNode, "id", eastNodeId);
+        Node northNode = Node.builder()
+                .tenantId(tenantId)
+                .mapVersion(publishedVersion)
+                .kindCode("entrance")
+                .nameKo("북문 출입구")
+                .geomPx(geometryFactory.createPoint(new Coordinate(0, 0)))
+                .geomWgs84(geometryFactory.createPoint(new Coordinate(127.0000, 60.0011)))
+                .build();
+        ReflectionTestUtils.setField(northNode, "id", northNodeId);
+
+        when(buildingDirectoryRepository.findByIdAndIsPublicTrue(buildingId)).thenReturn(Optional.of(directory));
+        when(buildingRepository.findById(buildingId)).thenReturn(Optional.of(building));
+        when(buildingEntranceMappingRepository.findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(
+                tenantId,
+                buildingId,
+                mapVersionId
+        )).thenReturn(List.of(eastMapping, northMapping));
+        when(nodeRepository.findById(eastNodeId)).thenReturn(Optional.of(eastNode));
+
+        MapQueryFacade.IndoorDestinationAnchor anchor = mapQueryFacade
+                .findIndoorDestinationAnchor(buildingId, 127.0000, 60.0000)
+                .orElseThrow();
+
+        assertThat(anchor.entranceNodeId()).isEqualTo(eastNodeId);
+        assertThat(anchor.campusEntranceName()).isEqualTo("동문");
     }
 }

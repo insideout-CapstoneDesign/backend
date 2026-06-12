@@ -706,6 +706,80 @@ class NavigationServiceTest {
         assertThat(outdoorLeg.steps().get(outdoorLeg.steps().size() - 1).y()).isEqualTo(37.6000);
     }
 
+    @Test
+    void outdoorToIndoorRewritesOutdoorArrivalStepWhenBuildingNameIsMissing() throws Exception {
+        UUID buildingId = UUID.randomUUID();
+        UUID mapVersionId = UUID.randomUUID();
+        UUID entranceNodeId = UUID.randomUUID();
+        UUID destinationNodeId = UUID.randomUUID();
+        UUID floorId = UUID.randomUUID();
+        Long destinationPoiId = 1001L;
+
+        when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
+        when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
+                .thenReturn(Optional.of(IndoorPoiDestination.builder()
+                        .publicId(destinationPoiId)
+                        .poiId(UUID.randomUUID())
+                        .name("목적지 POI")
+                        .anchorNodeId(destinationNodeId)
+                        .floorId(floorId)
+                        .floorName("1F")
+                        .buildingId(buildingId)
+                        .build()));
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 126.9000, 37.4000))
+                .thenReturn(Optional.of(IndoorDestinationAnchor.builder()
+                        .buildingId(buildingId)
+                        .entranceNodeId(entranceNodeId)
+                        .entranceName("정문")
+                        .x(127.2000)
+                        .y(37.6000)
+                        .build()));
+        when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
+                .thenReturn(Optional.of(RoutingGraph.builder()
+                        .mapVersionId(mapVersionId)
+                        .mapType(MapType.BUILDING)
+                        .mapImageUrl("https://signed.example/fallback.png")
+                        .nodes(List.of(
+                                routingNode(entranceNodeId, "entrance", "정문", floorId, "1F", 10, 10),
+                                routingNode(destinationNodeId, "poi", "목적지 POI", floorId, "1F", 20, 20)
+                        ))
+                        .edges(List.of(routingEdge(entranceNodeId, destinationNodeId)))
+                        .verticalLinks(List.of())
+                        .obstacles(List.of())
+                        .build()));
+        when(mapQueryFacade.findCurrentFloorplanImageUrl(floorId))
+                .thenReturn(Optional.of("https://signed.example/1f.png"));
+        when(restTemplate.postForObject(
+                eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        )).thenReturn(walkRouteResponse());
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                buildingId,
+                destinationPoiId,
+                true,
+                List.of(RouteType.WALK)
+        ));
+
+        LegDto outdoorLeg = response.routes().get(0).legs().stream()
+                .filter(leg -> leg.mode() == LegMode.WALK)
+                .findFirst()
+                .orElseThrow();
+        StepDto arrivalStep = outdoorLeg.steps().get(outdoorLeg.steps().size() - 1);
+
+        assertThat(arrivalStep.instruction()).isEqualTo("정문 도착");
+        assertThat(arrivalStep.mode()).isEqualTo("BUILDING");
+        assertThat(arrivalStep.x()).isEqualTo(127.2000);
+        assertThat(arrivalStep.y()).isEqualTo(37.6000);
+    }
+
     private JsonNode walkRouteResponse() throws Exception {
         return OBJECT_MAPPER.readTree("""
                 {

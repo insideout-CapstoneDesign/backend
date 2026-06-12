@@ -4,8 +4,10 @@ import com.insideout.backend.domain.building.entity.Floor;
 import com.insideout.backend.domain.building.entity.Building;
 import com.insideout.backend.domain.building.entity.Campus;
 import com.insideout.backend.domain.building.entity.BuildingDirectory;
+import com.insideout.backend.domain.building.entity.BuildingEntranceMapping;
 import com.insideout.backend.domain.building.repository.BuildingRepository;
 import com.insideout.backend.domain.building.repository.BuildingDirectoryRepository;
+import com.insideout.backend.domain.building.repository.BuildingEntranceMappingRepository;
 import com.insideout.backend.domain.building.repository.FloorRepository;
 import com.insideout.backend.domain.map.entity.Edge;
 import com.insideout.backend.domain.map.entity.MapVersion;
@@ -58,6 +60,7 @@ public class MapQueryFacade {
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
     private final BuildingRepository buildingRepository;
+    private final BuildingEntranceMappingRepository buildingEntranceMappingRepository;
     private final FloorRepository floorRepository;
     private final PoiRepository poiRepository;
     private final EdgeRepository edgeRepository;
@@ -71,6 +74,22 @@ public class MapQueryFacade {
             double destinationX,
             double destinationY
     ) {
+        return findIndoorDestinationAnchor(
+                destinationBuildingId,
+                destinationX,
+                destinationY,
+                destinationX,
+                destinationY
+        );
+    }
+
+    public Optional<IndoorDestinationAnchor> findIndoorDestinationAnchor(
+            UUID destinationBuildingId,
+            double destinationX,
+            double destinationY,
+            double outdoorReferenceX,
+            double outdoorReferenceY
+    ) {
         Optional<BuildingDirectory> building = destinationBuildingId != null
                 ? buildingDirectoryRepository.findByIdAndIsPublicTrue(destinationBuildingId)
                 : buildingDirectoryRepository.findNearestPublicBuilding(
@@ -79,9 +98,10 @@ public class MapQueryFacade {
                         REGISTERED_BUILDING_SEARCH_RADIUS_METERS
                 );
 
-        return building.flatMap(directory -> nodeRepository
-                .findNearestEntranceByBuildingId(directory.getId(), destinationX, destinationY)
-                .flatMap(node -> toIndoorDestinationAnchor(directory, node)));
+        return building.flatMap(directory -> findMappedEntranceAnchor(directory, outdoorReferenceX, outdoorReferenceY)
+                .or(() -> nodeRepository
+                        .findNearestEntranceByBuildingId(directory.getId(), destinationX, destinationY)
+                        .flatMap(node -> toIndoorDestinationAnchor(directory, node))));
     }
 
     public Optional<IndoorPoiDestination> findIndoorPoiDestination(Long destinationPoiId) {
@@ -331,6 +351,120 @@ public class MapQueryFacade {
         return value == null ? 0.0 : value.doubleValue();
     }
 
+    private Optional<IndoorDestinationAnchor> findMappedEntranceAnchor(
+            BuildingDirectory directory,
+            double outdoorReferenceX,
+            double outdoorReferenceY
+    ) {
+        if (directory.getPublishedVersion() == null) {
+            return Optional.empty();
+        }
+
+        Optional<Building> buildingEntity = buildingRepository.findById(directory.getId());
+        Campus campus = buildingEntity.map(Building::getCampus).orElse(null);
+        if (campus == null) {
+            return Optional.empty();
+        }
+
+        Map<String, CampusGate> gatesById = extractCampusGates(campus).stream()
+                .collect(Collectors.toMap(CampusGate::id, gate -> gate, (first, ignored) -> first));
+        if (gatesById.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<BuildingEntranceMapping> mappings = buildingEntranceMappingRepository
+                .findAllByTenantIdAndBuildingIdAndMapVersionIdOrderByCreatedAtAsc(
+                        directory.getTenant().getId(),
+                        directory.getId(),
+                        directory.getPublishedVersion().getId()
+                );
+
+        return mappings.stream()
+                .map(mapping -> {
+                    CampusGate gate = gatesById.get(mapping.getCampusGateId());
+                    if (gate == null) {
+                        return null;
+                    }
+                    return new MappedEntranceCandidate(
+                            mapping,
+                            gate,
+                            geographicDistanceSquared(outdoorReferenceX, outdoorReferenceY, gate.x(), gate.y())
+                    );
+                })
+                .filter(Objects::nonNull)
+                .min(Comparator.comparingDouble(MappedEntranceCandidate::distance))
+                .flatMap(candidate -> nodeRepository.findById(candidate.mapping().getEntranceNodeId())
+                        .flatMap(node -> toIndoorDestinationAnchor(directory, node, campus, candidate.gate())));
+    }
+
+    private boolean hasPublishedCampusMap(Campus campus) {
+        return campus != null && mapVersionRepository
+                .findFirstByCampusIdAndMapTypeAndStatusOrderByCreatedAtDesc(
+                        campus.getId(),
+                        MapType.CAMPUS,
+                        "published"
+                )
+                .isPresent();
+    }
+
+    private List<CampusGate> extractCampusGates(Campus campus) {
+        Object gatesValue = campus.getMeta() == null ? null : campus.getMeta().get("gates");
+        if (!(gatesValue instanceof List<?> gates)) {
+            return List.of();
+        }
+
+        return gates.stream()
+                .map(this::toCampusGate)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<CampusGate> toCampusGate(Object value) {
+        if (!(value instanceof Map<?, ?> gate)) {
+            return Optional.empty();
+        }
+
+        Object locationValue = gate.get("location");
+        if (!(locationValue instanceof Map<?, ?> location)) {
+            return Optional.empty();
+        }
+
+        String id = asString(gate.get("id"));
+        String name = asString(gate.get("name"));
+        Double x = asDouble(location.get("longitude"));
+        Double y = asDouble(location.get("latitude"));
+        if (id == null || id.isBlank() || x == null || y == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new CampusGate(id, name, x, y));
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Double asDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Double.parseDouble(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private double geographicDistanceSquared(double firstX, double firstY, double secondX, double secondY) {
+        double dx = firstX - secondX;
+        double dy = firstY - secondY;
+        return dx * dx + dy * dy;
+    }
+
     private Optional<IndoorDestinationAnchor> toIndoorDestinationAnchor(BuildingDirectory building, Node node) {
         Point point = node.getGeomWgs84();
         if (point == null) {
@@ -339,13 +473,7 @@ public class MapQueryFacade {
 
         Optional<Building> buildingEntity = buildingRepository.findById(building.getId());
         Campus campus = buildingEntity.map(Building::getCampus).orElse(null);
-        boolean hasPublishedCampusMap = campus != null && mapVersionRepository
-                .findFirstByCampusIdAndMapTypeAndStatusOrderByCreatedAtDesc(
-                        campus.getId(),
-                        MapType.CAMPUS,
-                        "published"
-                )
-                .isPresent();
+        boolean hasPublishedCampusMap = hasPublishedCampusMap(campus);
         Point campusEntrance = campus == null ? null : campus.getPrimaryEntrance();
 
         return Optional.of(IndoorDestinationAnchor.builder()
@@ -361,6 +489,36 @@ public class MapQueryFacade {
                 .x(point.getX())
                 .y(point.getY())
                 .build());
+    }
+
+    private Optional<IndoorDestinationAnchor> toIndoorDestinationAnchor(
+            BuildingDirectory building,
+            Node node,
+            Campus campus,
+            CampusGate gate
+    ) {
+        Point point = node.getGeomWgs84();
+        if (point == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(IndoorDestinationAnchor.builder()
+                .campusId(hasPublishedCampusMap(campus) ? campus.getId() : null)
+                .campusName(hasPublishedCampusMap(campus) ? campus.getName() : null)
+                .campusEntranceName(gate.name())
+                .campusEntranceX(gate.x())
+                .campusEntranceY(gate.y())
+                .buildingId(building.getId())
+                .buildingName(building.getName())
+                .entranceNodeId(node.getId())
+                .entranceName(defaultText(node.getNameKo(), gate.name()))
+                .x(point.getX())
+                .y(point.getY())
+                .build());
+    }
+
+    private String defaultText(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 
     private Optional<IndoorPoiDestination> toIndoorPoiDestination(Poi poi) {
@@ -447,19 +605,23 @@ public class MapQueryFacade {
             return campusId != null && campusEntranceX != null && campusEntranceY != null;
         }
 
+        public boolean hasOutdoorGate() {
+            return campusEntranceX != null && campusEntranceY != null;
+        }
+
         public double outdoorTargetX() {
-            return hasCampus() ? campusEntranceX : x;
+            return hasOutdoorGate() ? campusEntranceX : x;
         }
 
         public double outdoorTargetY() {
-            return hasCampus() ? campusEntranceY : y;
+            return hasOutdoorGate() ? campusEntranceY : y;
         }
 
         public String outdoorTargetName() {
-            if (hasCampus() && campusEntranceName != null && !campusEntranceName.isBlank()) {
+            if (hasOutdoorGate() && campusEntranceName != null && !campusEntranceName.isBlank()) {
                 return campusEntranceName;
             }
-            if (hasCampus()) {
+            if (hasOutdoorGate() && campusName != null && !campusName.isBlank()) {
                 return campusName;
             }
             if (entranceName != null && !entranceName.isBlank()) {
@@ -491,6 +653,21 @@ public class MapQueryFacade {
             UUID floorId,
             String floorName,
             String mapImageUrl
+    ) {
+    }
+
+    private record CampusGate(
+            String id,
+            String name,
+            double x,
+            double y
+    ) {
+    }
+
+    private record MappedEntranceCandidate(
+            BuildingEntranceMapping mapping,
+            CampusGate gate,
+            double distance
     ) {
     }
 

@@ -233,6 +233,8 @@ public class NavigationService {
             Optional<IndoorDestinationAnchor> exitAnchor = mapQueryFacade.findIndoorDestinationAnchor(
                     source.get().buildingId(),
                     request.endX(),
+                    request.endY(),
+                    request.endX(),
                     request.endY()
             );
 
@@ -255,7 +257,9 @@ public class NavigationService {
         Optional<IndoorDestinationAnchor> anchor = mapQueryFacade.findIndoorDestinationAnchor(
                 destination.get().buildingId(),
                 request.endX(),
-                request.endY()
+                request.endY(),
+                request.startX(),
+                request.startY()
         );
 
         return anchor
@@ -394,7 +398,7 @@ public class NavigationService {
         for (JsonNode itinerary : itineraries) {
             Integer totalTimeSeconds = getNullableInt(itinerary.path("totalTime"));
             Integer totalDistanceMeters = getNullableInt(itinerary.path("totalDistance"));
-            List<LegDto> legs = parseTransitLegs(itinerary.path("legs"));
+            List<LegDto> legs = normalizeOutdoorBoundaryLegs(parseTransitLegs(itinerary.path("legs")), target);
             List<RouteFailureDto> failures = new ArrayList<>();
             applyHybridLegs(legs, failures, target, RouteMode.TRANSIT, RouteOption.TRANSIT_CANDIDATE);
 
@@ -593,7 +597,7 @@ public class NavigationService {
         Integer totalTimeSeconds = getNullableInt(summary.path("totalTime"));
         Integer totalDistanceMeters = getNullableInt(summary.path("totalDistance"));
         List<StepDto> steps = rewriteOutdoorArrivalSteps(parseFeatureSteps(features), target);
-        List<CoordinateDto> path = parseFeaturePath(features);
+        List<CoordinateDto> path = normalizeOutdoorBoundaryPath(parseFeaturePath(features), target);
         List<LegDto> legs = new ArrayList<>();
         List<RouteFailureDto> failures = new ArrayList<>();
         prependExitLegsIfNeeded(legs, failures, target, routeMode, routeOption);
@@ -674,22 +678,28 @@ public class NavigationService {
             if (!normalizeInstruction(step.instruction()).contains("도착")) {
                 continue;
             }
-            rewritten.set(index, new StepDto(
-                    buildingArrivalInstruction(target),
-                    step.distanceMeters(),
-                    step.durationSeconds(),
-                    step.x(),
-                    step.y(),
-                    step.turnType(),
-                    "BUILDING",
-                    step.streetName(),
-                    step.pathStartIndex(),
-                    step.pathEndIndex()
-            ));
+            rewritten.set(index, rewriteOutdoorBoundaryArrivalStep(step, target));
             return rewritten;
         }
 
+        int lastIndex = rewritten.size() - 1;
+        rewritten.set(lastIndex, rewriteOutdoorBoundaryArrivalStep(rewritten.get(lastIndex), target));
         return rewritten;
+    }
+
+    private StepDto rewriteOutdoorBoundaryArrivalStep(StepDto step, RouteTarget target) {
+        return new StepDto(
+                outdoorBoundaryArrivalInstruction(target),
+                step.distanceMeters(),
+                step.durationSeconds(),
+                target.endX(),
+                target.endY(),
+                step.turnType(),
+                "BUILDING",
+                target.endName(),
+                step.pathStartIndex(),
+                step.pathEndIndex()
+        );
     }
 
     private String indoorEntryInstruction(RouteTarget target) {
@@ -697,9 +707,28 @@ public class NavigationService {
         return (buildingName == null || buildingName.isBlank() ? "건물" : buildingName) + " 입구 진입";
     }
 
-    private String buildingArrivalInstruction(RouteTarget target) {
+    private String outdoorBoundaryArrivalInstruction(RouteTarget target) {
+        String entranceName = target.entranceName();
         String buildingName = target.buildingName();
-        return (buildingName == null || buildingName.isBlank() ? "건물" : buildingName) + " 도착";
+        if (entranceName != null && !entranceName.isBlank()) {
+            if (buildingName != null && !buildingName.isBlank() && !sameText(buildingName, entranceName)) {
+                return buildingName + " " + entranceName + " 도착";
+            }
+            return entranceName + " 도착";
+        }
+
+        String boundaryName = target.endName();
+        if (boundaryName == null || boundaryName.isBlank()) {
+            boundaryName = buildingName;
+        }
+        if (sameText(boundaryName, buildingName)) {
+            boundaryName = boundaryName + " 출입구";
+        }
+        return (boundaryName == null || boundaryName.isBlank() ? "출입구" : boundaryName) + " 도착";
+    }
+
+    private boolean sameText(String first, String second) {
+        return normalizeInstruction(first).equals(normalizeInstruction(second));
     }
 
     private String indoorExitInstruction(RouteTarget target) {
@@ -716,6 +745,99 @@ public class NavigationService {
         }
 
         return path;
+    }
+
+    private List<LegDto> normalizeOutdoorBoundaryLegs(List<LegDto> legs, RouteTarget target) {
+        if (legs.isEmpty() || !target.includesIndoor()) {
+            return legs;
+        }
+
+        List<LegDto> normalized = new ArrayList<>(legs);
+        if (target.startsIndoor()) {
+            int firstOutdoorLegIndex = firstOutdoorLegIndex(normalized);
+            if (firstOutdoorLegIndex >= 0) {
+                LegDto leg = normalized.get(firstOutdoorLegIndex);
+                normalized.set(firstOutdoorLegIndex, withPath(leg, normalizeOutdoorBoundaryPath(leg.path(), target)));
+            }
+            return normalized;
+        }
+
+        int lastOutdoorLegIndex = lastOutdoorLegIndex(normalized);
+        if (lastOutdoorLegIndex >= 0) {
+            LegDto leg = normalized.get(lastOutdoorLegIndex);
+            normalized.set(lastOutdoorLegIndex, withPath(leg, normalizeOutdoorBoundaryPath(leg.path(), target)));
+        }
+        return normalized;
+    }
+
+    private int firstOutdoorLegIndex(List<LegDto> legs) {
+        for (int index = 0; index < legs.size(); index++) {
+            if (isOutdoorLeg(legs.get(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private int lastOutdoorLegIndex(List<LegDto> legs) {
+        for (int index = legs.size() - 1; index >= 0; index--) {
+            if (isOutdoorLeg(legs.get(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isOutdoorLeg(LegDto leg) {
+        return leg != null && leg.coordinateType() == CoordinateType.WGS84;
+    }
+
+    private LegDto withPath(LegDto leg, List<CoordinateDto> path) {
+        return new LegDto(
+                leg.mode(),
+                leg.routeName(),
+                leg.transitType(),
+                leg.durationSeconds(),
+                leg.distanceMeters(),
+                leg.stationCount(),
+                leg.stops(),
+                leg.startName(),
+                leg.endName(),
+                leg.mapType(),
+                leg.mapImageUrl(),
+                leg.floorId(),
+                leg.floorName(),
+                leg.coordinateType(),
+                path,
+                leg.floorSegments(),
+                leg.steps()
+        );
+    }
+
+    private List<CoordinateDto> normalizeOutdoorBoundaryPath(List<CoordinateDto> path, RouteTarget target) {
+        if (!target.includesIndoor()) {
+            return path;
+        }
+
+        CoordinateDto boundary = target.startsIndoor()
+                ? new CoordinateDto(target.resolvedOutdoorStartX(), target.resolvedOutdoorStartY(), target.resolvedOutdoorStartName())
+                : new CoordinateDto(target.endX(), target.endY(), target.endName());
+        if (boundary.x() == null || boundary.y() == null) {
+            return path;
+        }
+
+        List<CoordinateDto> normalized = path == null ? new ArrayList<>() : new ArrayList<>(path);
+        if (normalized.isEmpty()) {
+            normalized.add(boundary);
+            return normalized;
+        }
+
+        if (target.startsIndoor()) {
+            normalized.set(0, boundary);
+        } else {
+            normalized.set(normalized.size() - 1, boundary);
+        }
+        return normalized;
     }
 
     private void appendGeometryCoordinates(List<CoordinateDto> path, JsonNode coordinates) {
@@ -2115,6 +2237,10 @@ public class NavigationService {
 
         private double resolvedOutdoorStartY() {
             return outdoorStartY == null ? endY : outdoorStartY;
+        }
+
+        private String resolvedOutdoorStartName() {
+            return outdoorStartName == null ? endName : outdoorStartName;
         }
     }
 }

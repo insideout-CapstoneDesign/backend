@@ -272,7 +272,7 @@ class NavigationServiceTest {
                         "1F",
                         buildingId
                 )));
-        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 127.1000, 37.5000))
                 .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
         when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
                 .thenReturn(Optional.of(RoutingGraph.builder()
@@ -334,6 +334,12 @@ class NavigationServiceTest {
                 .extracting(StepDto::instruction)
                 .contains("테스트 건물 출구로 나가기")
                 .doesNotContain("테스트 건물 도착");
+        LegDto outdoorLeg = response.routes().get(0).legs().stream()
+                .filter(leg -> leg.mode() == LegMode.WALK)
+                .findFirst()
+                .orElseThrow();
+        assertThat(outdoorLeg.path().get(0).x()).isEqualTo(127.2000);
+        assertThat(outdoorLeg.path().get(0).y()).isEqualTo(37.6000);
         assertThat(response.indoor().floorplans())
                 .extracting(NavigationResponseDto.FloorplanDto::floorName)
                 .containsExactly("1F", "2F");
@@ -388,7 +394,7 @@ class NavigationServiceTest {
                         "1F",
                         buildingId
                 )));
-        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 126.9000, 37.4000))
                 .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
         when(restTemplate.postForObject(
                 eq("https://apis.openapi.sk.com/transit/routes"),
@@ -478,7 +484,7 @@ class NavigationServiceTest {
                         "2F",
                         buildingId
                 )));
-        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 126.9000, 37.4000))
                 .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
         when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
                 .thenReturn(Optional.of(RoutingGraph.builder()
@@ -571,7 +577,7 @@ class NavigationServiceTest {
                         "1F",
                         buildingId
                 )));
-        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000))
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 126.9000, 37.4000))
                 .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
         when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
                 .thenReturn(Optional.of(RoutingGraph.builder()
@@ -630,6 +636,74 @@ class NavigationServiceTest {
         StepDto arrivalStep = indoorLeg.floorSegments().get(0).steps().get(3);
         assertThat(arrivalStep.pathStartIndex()).isEqualTo(2);
         assertThat(arrivalStep.pathEndIndex()).isEqualTo(2);
+    }
+
+    @Test
+    void outdoorToIndoorOutdoorLegEndsAtSelectedEntrance() throws Exception {
+        UUID buildingId = UUID.randomUUID();
+        UUID mapVersionId = UUID.randomUUID();
+        UUID entranceNodeId = UUID.randomUUID();
+        UUID destinationNodeId = UUID.randomUUID();
+        UUID floorId = UUID.randomUUID();
+        Long destinationPoiId = 1001L;
+
+        when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
+        when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
+                .thenReturn(Optional.of(indoorPoiDestination(
+                        destinationPoiId,
+                        destinationNodeId,
+                        floorId,
+                        "1F",
+                        buildingId
+                )));
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 126.9000, 37.4000))
+                .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
+        when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
+                .thenReturn(Optional.of(RoutingGraph.builder()
+                        .mapVersionId(mapVersionId)
+                        .mapType(MapType.BUILDING)
+                        .mapImageUrl("https://signed.example/fallback.png")
+                        .nodes(List.of(
+                                routingNode(entranceNodeId, "entrance", "정문", floorId, "1F", 10, 10),
+                                routingNode(destinationNodeId, "poi", "목적지 POI", floorId, "1F", 20, 20)
+                        ))
+                        .edges(List.of(routingEdge(entranceNodeId, destinationNodeId)))
+                        .verticalLinks(List.of())
+                        .obstacles(List.of())
+                        .build()));
+        when(mapQueryFacade.findCurrentFloorplanImageUrl(floorId))
+                .thenReturn(Optional.of("https://signed.example/1f.png"));
+        when(restTemplate.postForObject(
+                eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        )).thenReturn(walkRouteResponse());
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발지",
+                "목적지",
+                buildingId,
+                destinationPoiId,
+                true,
+                List.of(RouteType.WALK)
+        ));
+
+        LegDto outdoorLeg = response.routes().get(0).legs().stream()
+                .filter(leg -> leg.mode() == LegMode.WALK)
+                .findFirst()
+                .orElseThrow();
+        NavigationResponseDto.CoordinateDto lastOutdoorPoint = outdoorLeg.path().get(outdoorLeg.path().size() - 1);
+
+        assertThat(lastOutdoorPoint.x()).isEqualTo(127.2000);
+        assertThat(lastOutdoorPoint.y()).isEqualTo(37.6000);
+        assertThat(outdoorLeg.steps().get(outdoorLeg.steps().size() - 1).instruction()).isEqualTo("테스트 건물 정문 도착");
+        assertThat(outdoorLeg.steps().get(outdoorLeg.steps().size() - 1).mode()).isEqualTo("BUILDING");
+        assertThat(outdoorLeg.steps().get(outdoorLeg.steps().size() - 1).x()).isEqualTo(127.2000);
+        assertThat(outdoorLeg.steps().get(outdoorLeg.steps().size() - 1).y()).isEqualTo(37.6000);
     }
 
     private JsonNode walkRouteResponse() throws Exception {

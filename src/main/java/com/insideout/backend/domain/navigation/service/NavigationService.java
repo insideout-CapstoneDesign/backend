@@ -229,7 +229,7 @@ public class NavigationService {
 
     private RouteTarget resolveRouteTarget(NavigationRequestDto request) {
         if (Boolean.FALSE.equals(request.includeIndoor())) {
-            return RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName());
+            return outdoorOnlyTarget(request);
         }
 
         Optional<IndoorPoiDestination> source = mapQueryFacade.findIndoorPoiDestination(request.startPoiId());
@@ -247,28 +247,29 @@ public class NavigationService {
                 );
             }
 
+            OutdoorDestination outdoorDestination = resolveOutdoorDestination(request, destination.isEmpty());
             Optional<IndoorDestinationAnchor> exitAnchor = mapQueryFacade.findIndoorDestinationAnchor(
                     source.get().buildingId(),
-                    request.endX(),
-                    request.endY(),
-                    request.endX(),
-                    request.endY()
+                    outdoorDestination.x(),
+                    outdoorDestination.y(),
+                    outdoorDestination.x(),
+                    outdoorDestination.y()
             );
 
             return exitAnchor
                     .map(value -> RouteTarget.fromIndoorToOutdoor(
                             value,
                             source.get(),
-                            request.endX(),
-                            request.endY(),
-                            request.endName()
+                            outdoorDestination.x(),
+                            outdoorDestination.y(),
+                            outdoorDestination.name()
                     ))
-                    .orElseGet(() -> RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName()));
+                    .orElseGet(() -> RouteTarget.outdoorOnly(outdoorDestination.x(), outdoorDestination.y(), outdoorDestination.name()));
         }
 
         Optional<IndoorPoiDestination> destination = mapQueryFacade.findIndoorPoiDestination(request.destinationPoiId());
         if (destination.isEmpty()) {
-            return RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName());
+            return outdoorOnlyTarget(request);
         }
 
         Optional<IndoorDestinationAnchor> anchor = mapQueryFacade.findIndoorDestinationAnchor(
@@ -288,6 +289,43 @@ public class NavigationService {
                         request.endName()
                 ))
                 .orElseGet(() -> RouteTarget.outdoorOnly(request.endX(), request.endY(), request.endName()));
+    }
+
+    private RouteTarget outdoorOnlyTarget(NavigationRequestDto request) {
+        OutdoorDestination destination = resolveOutdoorDestination(request, true);
+        return RouteTarget.outdoorOnly(destination.x(), destination.y(), destination.name());
+    }
+
+    private OutdoorDestination resolveOutdoorDestination(NavigationRequestDto request, boolean useBuildingAnchor) {
+        if (!useBuildingAnchor) {
+            return originalOutdoorDestination(request);
+        }
+
+        return findBuildingDestinationAnchor(request)
+                .map(this::toOutdoorDestination)
+                .orElseGet(() -> originalOutdoorDestination(request));
+    }
+
+    private OutdoorDestination originalOutdoorDestination(NavigationRequestDto request) {
+        return new OutdoorDestination(request.endX(), request.endY(), request.endName());
+    }
+
+    private OutdoorDestination toOutdoorDestination(IndoorDestinationAnchor anchor) {
+        return new OutdoorDestination(anchor.outdoorTargetX(), anchor.outdoorTargetY(), anchor.outdoorTargetName());
+    }
+
+    private Optional<IndoorDestinationAnchor> findBuildingDestinationAnchor(NavigationRequestDto request) {
+        if (request.destinationBuildingId() == null) {
+            return Optional.empty();
+        }
+
+        return mapQueryFacade.findIndoorDestinationAnchor(
+                request.destinationBuildingId(),
+                request.endX(),
+                request.endY(),
+                request.startX(),
+                request.startY()
+        );
     }
 
     private NavigationResponseDto findIndoorOnlyRoutes(
@@ -2255,6 +2293,13 @@ public class NavigationService {
             List<StepDto> steps,
             List<StepDto> rawSteps,
             List<RoutingNode> nodes
+    ) {
+    }
+
+    private record OutdoorDestination(
+            double x,
+            double y,
+            String name
     ) {
     }
 

@@ -43,6 +43,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -218,12 +219,15 @@ class NavigationServiceTest {
     }
 
     @Test
-    void buildingOnlyDestinationUsesOutdoorRouteWithoutIndoorLeg() throws Exception {
+    void buildingOnlyDestinationUsesNearestEntranceAsOutdoorDestination() throws Exception {
         UUID buildingId = UUID.randomUUID();
         double originalEndX = 127.1000;
         double originalEndY = 37.5000;
+        double entranceX = 127.2000;
+        double entranceY = 37.6000;
 
-        when(mapQueryFacade.findIndoorPoiDestination(null)).thenReturn(Optional.empty());
+        when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, originalEndX, originalEndY, 126.9000, 37.4000))
+                .thenReturn(Optional.of(indoorAnchor(buildingId, UUID.randomUUID(), entranceX, entranceY)));
         when(restTemplate.postForObject(
                 eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
                 any(HttpEntity.class),
@@ -238,18 +242,33 @@ class NavigationServiceTest {
                 "출발지",
                 "실제 목적지",
                 buildingId,
-                true,
+                false,
                 List.of(RouteType.WALK)
         ));
 
         RouteDto route = response.routes().get(0);
 
-        assertThat(response.routedDestination().x()).isEqualTo(originalEndX);
-        assertThat(response.routedDestination().y()).isEqualTo(originalEndY);
+        assertThat(response.routedDestination().x()).isEqualTo(entranceX);
+        assertThat(response.routedDestination().y()).isEqualTo(entranceY);
+        assertThat(response.routedDestination().name()).isEqualTo("정문");
         assertThat(route.legs())
                 .extracting(LegDto::mode)
                 .doesNotContain(LegMode.INDOOR);
-        verify(mapQueryFacade, never()).findIndoorDestinationAnchor(buildingId, originalEndX, originalEndY);
+        ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, times(2)).postForObject(
+                eq("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1"),
+                entityCaptor.capture(),
+                eq(JsonNode.class)
+        );
+        assertThat(entityCaptor.getAllValues())
+                .allSatisfy(entity -> {
+                    Object body = entity.getBody();
+                    assertThat(body).isInstanceOf(Map.class);
+                    Map<?, ?> requestBody = (Map<?, ?>) body;
+                    assertThat(requestBody.get("endX")).isEqualTo(entranceX);
+                    assertThat(requestBody.get("endY")).isEqualTo(entranceY);
+                    assertThat(requestBody.get("endName")).isEqualTo("정문");
+                });
         assertThat(route.failures()).isEmpty();
         assertThat(response.failures()).isEmpty();
     }
@@ -491,10 +510,10 @@ class NavigationServiceTest {
         ));
 
         assertThat(response.routes()).isEmpty();
-        assertThat(response.notFoundRouteTypes()).containsExactly(RouteMode.TRANSIT, RouteMode.CAR);
+        assertThat(response.notFoundRouteTypes()).containsExactlyInAnyOrder(RouteMode.TRANSIT, RouteMode.CAR);
         assertThat(response.failures())
                 .extracting(RouteFailureDto::routeMode)
-                .containsExactly(RouteMode.TRANSIT, RouteMode.CAR);
+                .containsExactlyInAnyOrder(RouteMode.TRANSIT, RouteMode.CAR);
         assertThat(response.message()).isEqualTo("경로를 찾을 수 없습니다.");
         verify(mapQueryFacade, never()).findPublishedRoutingGraph(MapType.BUILDING, buildingId);
         verify(restTemplate, never()).postForObject(

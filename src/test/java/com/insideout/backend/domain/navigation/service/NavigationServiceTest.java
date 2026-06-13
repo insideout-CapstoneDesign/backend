@@ -273,7 +273,14 @@ class NavigationServiceTest {
                         buildingId
                 )));
         when(mapQueryFacade.findIndoorDestinationAnchor(buildingId, 127.1000, 37.5000, 127.1000, 37.5000))
-                .thenReturn(Optional.of(indoorAnchor(buildingId, entranceNodeId, 127.2000, 37.6000)));
+                .thenReturn(Optional.of(IndoorDestinationAnchor.builder()
+                        .buildingId(buildingId)
+                        .buildingName("테스트 건물")
+                        .entranceNodeId(entranceNodeId)
+                        .entranceName("입구")
+                        .x(127.2000)
+                        .y(37.6000)
+                        .build()));
         when(mapQueryFacade.findPublishedRoutingGraph(MapType.BUILDING, buildingId))
                 .thenReturn(Optional.of(RoutingGraph.builder()
                         .mapVersionId(mapVersionId)
@@ -282,7 +289,7 @@ class NavigationServiceTest {
                         .nodes(List.of(
                                 routingNode(sourceNodeId, "poi", "출발 POI", floorId, "1F", 10, 10),
                                 routingNode(middleNodeId, "corridor", "복도", floorId, "1F", 20, 20),
-                                routingNode(entranceNodeId, "entrance", "정문", floorId, "1F", 30, 30)
+                                routingNode(entranceNodeId, "entrance", "입구", floorId, "1F", 30, 30)
                         ))
                         .edges(List.of(
                                 routingEdge(sourceNodeId, middleNodeId),
@@ -328,11 +335,11 @@ class NavigationServiceTest {
                 .containsExactly(LegMode.INDOOR, LegMode.WALK);
         assertThat(indoorLeg.steps())
                 .extracting(StepDto::instruction)
-                .contains("정문으로 나가기")
+                .contains("입구로 나가기")
                 .doesNotContain("테스트 건물 도착");
         assertThat(indoorLeg.floorSegments().get(0).steps())
                 .extracting(StepDto::instruction)
-                .contains("정문으로 나가기")
+                .contains("입구로 나가기")
                 .doesNotContain("테스트 건물 도착");
         LegDto outdoorLeg = response.routes().get(0).legs().stream()
                 .filter(leg -> leg.mode() == LegMode.WALK)
@@ -434,6 +441,62 @@ class NavigationServiceTest {
         assertThat(response.indoor().floorplans())
                 .extracting(NavigationResponseDto.FloorplanDto::floorName)
                 .containsExactly("1F");
+        verify(restTemplate, never()).postForObject(
+                any(String.class),
+                any(HttpEntity.class),
+                eq(JsonNode.class)
+        );
+    }
+
+    @Test
+    void indoorOnlyWithoutWalkReturnsRequestedModesAsNotFoundWithoutWalkRoute() {
+        UUID buildingId = UUID.randomUUID();
+        UUID sourceNodeId = UUID.randomUUID();
+        UUID destinationNodeId = UUID.randomUUID();
+        UUID floorId = UUID.randomUUID();
+        Long startPoiId = 2001L;
+        Long destinationPoiId = 1001L;
+
+        when(mapQueryFacade.findIndoorPoiDestination(startPoiId))
+                .thenReturn(Optional.of(indoorPoiDestination(
+                        startPoiId,
+                        sourceNodeId,
+                        floorId,
+                        "1F",
+                        buildingId
+                )));
+        when(mapQueryFacade.findIndoorPoiDestination(destinationPoiId))
+                .thenReturn(Optional.of(indoorPoiDestination(
+                        destinationPoiId,
+                        destinationNodeId,
+                        floorId,
+                        "1F",
+                        buildingId
+                )));
+        when(mapQueryFacade.findCurrentBuildingFloorplans(buildingId))
+                .thenReturn(List.of(new PublishedFloorplan(floorId, "1F", "https://signed.example/1f.png")));
+
+        NavigationResponseDto response = navigationService.findRoutes(new NavigationRequestDto(
+                126.9000,
+                37.4000,
+                127.1000,
+                37.5000,
+                "출발 POI",
+                "목적지 POI",
+                startPoiId,
+                buildingId,
+                destinationPoiId,
+                true,
+                List.of(RouteType.CAR, RouteType.TRANSIT)
+        ));
+
+        assertThat(response.routes()).isEmpty();
+        assertThat(response.notFoundRouteTypes()).containsExactly(RouteMode.TRANSIT, RouteMode.CAR);
+        assertThat(response.failures())
+                .extracting(RouteFailureDto::routeMode)
+                .containsExactly(RouteMode.TRANSIT, RouteMode.CAR);
+        assertThat(response.message()).isEqualTo("경로를 찾을 수 없습니다.");
+        verify(mapQueryFacade, never()).findPublishedRoutingGraph(MapType.BUILDING, buildingId);
         verify(restTemplate, never()).postForObject(
                 any(String.class),
                 any(HttpEntity.class),

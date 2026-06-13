@@ -302,14 +302,21 @@ public class NavigationService {
             createIndoorOnlyRouteDto(target, RouteOption.SHORTEST, failures).ifPresent(routes::add);
             createIndoorOnlyRouteDto(target, RouteOption.COMFORTABLE, failures).ifPresent(routes::add);
         } else {
-            createIndoorOnlyRouteDto(target, RouteOption.SHORTEST, failures).ifPresent(routes::add);
+            routeTypes.stream()
+                    .map(this::toRouteMode)
+                    .forEach(routeMode -> failures.add(routeFailure(NavigationErrorCode.ROUTE_NOT_FOUND, routeMode, null, null, null)));
         }
 
         if (routes.isEmpty() && failures.isEmpty()) {
             failures.add(routeFailure(NavigationErrorCode.INDOOR_ROUTE_NOT_FOUND, RouteMode.WALK, RouteOption.SHORTEST, LegMode.INDOOR, MapType.BUILDING));
         }
 
-        List<RouteMode> notFoundRouteTypes = routes.isEmpty() ? List.of(RouteMode.WALK) : List.of();
+        List<RouteMode> notFoundRouteTypes = routes.isEmpty()
+                ? failures.stream()
+                .map(RouteFailureDto::routeMode)
+                .distinct()
+                .toList()
+                : List.of();
         return new NavigationResponseDto(
                 new CoordinateDto(request.endX(), request.endY(), request.endName()),
                 new CoordinateDto(request.endX(), request.endY(), target.destination().name()),
@@ -319,6 +326,14 @@ public class NavigationService {
                 failures,
                 resolveRouteMessage(routes, notFoundRouteTypes, failures)
         );
+    }
+
+    private RouteMode toRouteMode(RouteType routeType) {
+        return switch (routeType) {
+            case TRANSIT -> RouteMode.TRANSIT;
+            case CAR -> RouteMode.CAR;
+            case WALK -> RouteMode.WALK;
+        };
     }
 
     private Optional<RouteDto> createIndoorOnlyRouteDto(
@@ -807,7 +822,16 @@ public class NavigationService {
     private String indoorExitInstruction(RouteTarget target) {
         String entranceName = target.entranceName();
         String safeEntranceName = entranceName == null || entranceName.isBlank() ? "출입구" : entranceName;
-        return safeEntranceName + "으로 나가기";
+        return safeEntranceName + koreanDirectionalParticle(safeEntranceName) + " 나가기";
+    }
+
+    private String koreanDirectionalParticle(String value) {
+        char lastChar = value.charAt(value.length() - 1);
+        if (lastChar < 0xAC00 || lastChar > 0xD7A3) {
+            return "으로";
+        }
+
+        return (lastChar - 0xAC00) % 28 == 0 ? "로" : "으로";
     }
 
     private List<CoordinateDto> parseFeaturePath(JsonNode features) {

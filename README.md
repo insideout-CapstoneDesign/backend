@@ -60,29 +60,49 @@
 
 ## 🛠️ 기술 스택 (Tech Stack)
 
+## 🛠️ 기술 스택 (Tech Stack)
+
 ### Core & Framework
 <div>
   <img src="https://img.shields.io/badge/Java%2017-007396?style=for-the-badge&logo=openjdk&logoColor=white">
-  <img src="https://img.shields.io/badge/Spring%20Boot%203.x-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
-  <img src="https://img.shields.io/badge/Gradle-02303A?style=for-the-badge&logo=gradle&logoColor=white">
+  <img src="https://img.shields.io/badge/Spring%20Boot-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
 </div>
 
-### Database & Search Engine
+### Security
 <div>
-  <img src="https://img.shields.io/badge/MySQL%208.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white">
-  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white">
-  <img src="https://img.shields.io/badge/Elasticsearch%208.x-005571?style=for-the-badge&logo=elasticsearch&logoColor=white">
+  <img src="https://img.shields.io/badge/Spring%20Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white">
+  <img src="https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white">
 </div>
 
-### Infrastructure & DevOps
+### ORM / Data Access
 <div>
-  <img src="https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white">
-  <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white">
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img src="https://img.shields.io/badge/Spring%20Data%20JPA-6DB33F?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Hibernate-59666C?style=for-the-badge&logo=hibernate&logoColor=white">
+</div>
+
+### Database / Search
+<div>
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img src="https://img.shields.io/badge/PostGIS-2596BE?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white">
+</div>
+
+### Storage
+<div>
+  <img src="https://img.shields.io/badge/MinIO-C72E49?style=for-the-badge">
+  <img src="https://img.shields.io/badge/S3%20Compatible%20API-569A31?style=for-the-badge&logo=amazons3&logoColor=white">
+</div>
+
+### API / External API
+<div>
+  <img src="https://img.shields.io/badge/REST%20API-FF6B6B?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Kakao%20Map%20API-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000">
+  <img src="https://img.shields.io/badge/Tmap%20API-005BAC?style=for-the-badge">
 </div>
 
 
 ## 🏗️ 시스템 아키텍처 (System Architecture)
+<img width="1284" height="1346" alt="image" src="https://github.com/user-attachments/assets/f370cdcf-9326-4523-aab4-935b1c500cef" />
 
 
 

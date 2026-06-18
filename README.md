@@ -1,64 +1,336 @@
-# Git Flow & Convention
-간소화된 GitHub Flow를 기반으로, Issue를 먼저 생성하고 이를 해결하기 위해 Branch를 파고 PR을 보내는 순서로 개발합니다.
+# 📍 Insideout - AI 기반 실내외 통합 내비게이션 (Backend API Server)
 
-## ⚠️ 중요 규칙
-- main: 실제 서비스가 배포되는 최종 운영 코드 (직접 Push 절대 금지 ❌)
-- dev: 개발 중인 코드의 중심 (Base Branch)
-- feat/...: 실제 작업 브랜치 (develop에서 분기점 생성 후 다시 dev으로 머지)
+> **"외부 지도와 실내 도면을 하나의 길찾기 경험으로 연결하는 백엔드."**
+> Insideout Backend는 사용자 웹앱과 관리자 웹앱이 공통으로 사용하는 API 서버입니다. 장소 검색, 실내외 통합 경로 탐색, AI 도면 분석 결과 관리, 지도 편집 Draft/Publish 파이프라인, 건물·층·출입구·POI 데이터 관리를 담당하며 상용 지도 API와 자체 실내 그래프 데이터를 연결해 최종 목적지까지 이어지는 하이브리드 내비게이션 서비스를 제공합니다.
 
-## 1️⃣ Commit Message Convention
-### Prefix: <subject> (#<issue_number>)
-예시)
-- feat: 구글 로그인 API 기능 구현 (#11)
-- fix: A* 알고리즘 무한 루프 버그 수정 (#10)
-- refactor: POI 검색 쿼리 성능 개선 (#3)
-- chore: lombok 의존성 추가 (#5)
-- docs: API 명세서 최신화 (#4)
+---
 
-## 🏷 prefix 목록
-- **feat** : 새로운 기능 구현 `[feat] 구글 로그인 API 기능 구현 (#11)`
-- **fix** : 코드 오류 수정 `[fix] 회원가입 비즈니스 로직 오류 수정 (#10)`
-- **design** : CSS, UI/UX 레이아웃 변경 `[design] 메인 화면 로그인 버튼 위치 변경 (#9)`
-- **del** : 쓸모없는 코드 삭제 `[del] 불필요한 import 제거 (#12)`
-- **docs** : README나 wiki 등의 문서 개정 `[docs] 리드미 수정(#14)`
-- **refactor** : 내부 로직은 변경 하지 않고 기존의 코드를 개선하는 리팩터링 `[refactor] 코드 로직 개선(#15)`
-- **chore** : 의존성 추가, yml 추가와 수정, 패키지 구조 변경, 파일 이동 `[chore] yml 수정(#21)`, `[chore] MAC-8 lombok 의존성 추가(#22)`
-- **test**: 테스트 코드 작성, 수정 `[test] 로그인 API 테스트 코드 작성(#20)`
-- **style** : 코드에 관련 없는 주석 달기, 줄바꿈
+## 🔗 API 문서 및 운영 엔드포인트
 
-## 2️⃣ Issue Creation Rules
-기능 구현 전, 반드시 이슈를 먼저 생성합니다.
-1. 템플릿 선택: New Issue 버튼을 누르고 Feature 또는 Bug 템플릿을 선택합니다.
-2. 제목 작성: [Prefix] 명확한 작업 내용 형태로 작성합니다.
-   - 예: [feat] 엘리베이터 가중치 반영 API
-3. 개발라벨(Label) 설정: Feature, Bug, Refactor 등 작업의 성격을 지정합니다.
-4. Assignees 설정: 작업을 담당할 본인을 지정합니다.
+Springdoc OpenAPI 기반의 Swagger UI를 통해 서버 실행 후 API 명세를 확인할 수 있습니다.
 
-## 3️⃣ Issue Hierarchy (Parent-Child Structure)
-우리는 큰 단위의 작업(Epic)에 세부 구현 작업(Task)을 링크하여 진행률을 관리합니다.
-1. 상위 이슈(Epic) 생성먼저 며칠에 걸쳐 진행할 큰 단위의 기능(Epic)을 생성합니다. (예: [Epic] 하이브리드 길 찾기 엔진 구축)
-2. 하위 이슈(Task) 생성실제 하루 단위로 끝낼 수 있는 세부 구현 작업들을 생성합니다. (예: [feat] 노드 조회 레포지토리 로직 작성 (#12))
-3. 링크 연결 (Tracking)상위 이슈(Epic)의 본문에 하위 이슈 번호를 체크리스트 문법으로 작성하여 진행도를 한눈에 파악합니다.
+* **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
+* **OpenAPI JSON:** `http://localhost:8080/v3/api-docs`
+* **Health Check:** `http://localhost:8080/actuator/health`
 
-## 🎯 하위 작업 목록 (Tasks)
-- [x] #12  <-- 이슈 번호만 적으면 GitHub가 제목을 자동 완성해 줍니다.
-- [ ] #13
+> 운영 환경에서는 Caddy Reverse Proxy를 통해 애플리케이션 컨테이너의 `8080` 포트를 외부 HTTPS 엔드포인트로 프록시합니다.
 
-## 4️⃣ Branch & PR Rules
-이슈가 생성되면 해당 이슈 번호를 기반으로 브랜치를 생성합니다.
-### 🌱 Branch Naming
-타입/#이슈번호-영문설명
-- feat/#12-jwt-login
-- fix/#15-astar-timeout
-### 🚀 Pull Request (PR) 
-1. Process작업 전 최신화: 작업 시작 전 항상 dev 브랜치를 pull 받아서 최신 상태를 유지합니다.
-2. PR 제목: 이슈 제목과 동일하게 맞추거나 작업 성격이 한눈에 보이게 작성합니다.예: feat: 건물 관리자 JWT 로그인 구현 (#12)이슈 연결:
-3. PR 내용(Description) 상단에 Closes #이슈번호를 반드시 적어 머지 시 이슈가 자동 종료되도록 합니다.
-4. 코드 리뷰: 최소 **1명 이상의 팀원에게 Approve(승인)**를 받아야하며 리뷰를 모두 resolve해야 Merge 할 수 있습니다.
+---
+
+## 🚀 백엔드 핵심 역할 (Core Responsibilities)
+
+### 🔍 1. 등록 장소와 외부 장소를 통합하는 검색 API
+
+사용자가 입력한 키워드를 기준으로 Insideout에 실내 지도가 구축된 등록 건물/POI와 Kakao Local 기반 외부 장소를 함께 조회합니다. 등록된 장소는 `placeId`, `buildingId`, `poiId`, `isRegistered` 메타데이터를 포함해 프론트엔드가 곧바로 실내 목적지 길찾기로 이어갈 수 있도록 설계했습니다.
+
+* 키워드 검색: 등록 장소 우선 조회 후 외부 장소 병합
+* 자동완성: Elasticsearch 결과를 우선 사용하고 부족한 경우 Kakao Local fallback
+* 지도 클릭 조회: 좌표 기반 가장 가까운 등록 장소 또는 외부 장소 탐색
+* 상세 조회: `placeId` 또는 `externalApiId` 기반 건물/실내 POI 정보 제공
+
+---
+
+### 🧭 2. 실외-실내 하이브리드 경로 탐색 엔진
+
+Tmap의 도보·자동차·대중교통 경로와 자체 실내 그래프 라우팅을 결합해 하나의 응답으로 제공합니다. 목적지가 실내 POI인 경우 건물 출입구 매핑 정보를 기준으로 외부 경로의 도착점을 보정하고, 이후 실내 노드/엣지 그래프를 따라 최종 목적지까지의 경로를 이어 붙입니다.
+
+* `WGS84` 좌표 기반 외부 경로와 픽셀 좌표 기반 실내 경로를 하나의 `Leg` 목록으로 반환
+* 도보, 자동차, 대중교통 옵션을 동일한 응답 구조로 제공
+* 실내-only, 실외-to-실내, 실내-to-실외, 실내-to-실내 시나리오 지원
+* 계단/장애물 가중치 조정을 통한 `최단 거리` 및 `편안한 길` 옵션 제공
+* 층 이동 시 엘리베이터/계단 등 수직 이동수단을 별도 단계로 표현
+
+---
+
+### 🗺️ 3. 관리자 지도 편집 Draft/Publish 파이프라인
+
+관리자 웹앱에서 AI가 추출한 도면 객체를 바탕으로 실내 지도 데이터를 편집하고, 검수 완료 후 사용자 서비스에 노출 가능한 Published Map으로 전환합니다.
+
+* 건물 단위 Draft 초기화 및 층별 편집 데이터 조회
+* Node, Edge, Zone, POI, Floorplan Object 저장
+* 엘리베이터/계단 등 수직 이동수단 생성·수정·삭제·층별 노드 매핑
+* POI와 Kakao 장소 ID 및 위경도 좌표 매핑
+* Draft 검증 후 Published 버전으로 배포
+
+---
+
+### 🤖 4. AI 도면 분석 서비스 연동
+
+별도 AI 서버와 통신해 실내 도면 및 캠퍼스 지도 이미지 분석을 요청하고, 감지된 객체를 백엔드 데이터 모델에 저장합니다. 이후 지도 편집기는 저장된 detection 결과를 기반으로 Draft 맵을 초기화합니다.
+
+* 층별 실내 도면 분석 요청 및 detection 결과 조회
+* 캠퍼스 지도 분석 요청 및 detection 결과 조회
+* AI 서버 API Key 헤더 기반 내부 서비스 인증
+* AI 분석 결과를 관리자 편집 플로우의 초기 데이터로 활용
+
+---
+
+### 🏢 5. 멀티 테넌트 기반 건물·캠퍼스 운영 관리
+
+관리자는 본인이 소속된 Tenant 범위 안에서 캠퍼스, 건물, 층, 도면, 출입구, 출입구-노드 매핑을 관리합니다. 주요 관리자 API는 JWT 인증 사용자와 `tenantId` 소속 관계를 검증한 뒤 실행됩니다.
+
+* Tenant 생성 및 활성/비활성 상태 관리
+* 건물, 층, 도면, 출입구 생성 및 조회
+* 캠퍼스 지도 업로드 및 관리
+* S3 호환 스토리지에 도면/지도 이미지 저장
+* JWT 기반 사용자/관리자 인증
+
+---
+
+## 📌 주요 API 명세 요약
+
+### Place API
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/places/search` | 키워드 기반 장소 검색 |
+| `GET` | `/api/v1/places/suggest` | 검색어 자동완성 |
+| `GET` | `/api/v1/places/nearest` | 좌표 기준 가장 가까운 장소 조회 |
+| `GET` | `/api/v1/places/detail` | `placeId` 또는 `externalApiId` 기반 상세 조회 |
+
+### Navigation API
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/navigation/routes` | 도보/자동차/대중교통 및 실내 경로 통합 조회 |
+| `POST` | `/api/v1/navigation/transit/routes` | 대중교통 중심 경로 조회 |
+
+### Map Editor API
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/map-editor/buildings/{buildingId}/floors/{floorId}` | 층별 에디터 초기 데이터 조회 |
+| `POST` | `/api/v1/map-editor/buildings/{buildingId}/initialize-draft` | 건물 Draft 일괄 초기화 |
+| `PUT` | `/api/v1/map-editor/buildings/{buildingId}/floors/{floorId}/draft` | 층별 Draft 저장 |
+| `POST` | `/api/v1/map-editor/buildings/{buildingId}/publish` | Draft 최종 배포 |
+| `GET` | `/api/v1/map-editor/buildings/{buildingId}/vertical-connectors` | 수직 이동수단 목록 조회 |
+| `POST` | `/api/v1/map-editor/buildings/{buildingId}/vertical-connectors` | 수직 이동수단 생성 |
+| `PATCH` | `/api/v1/map-editor/buildings/{buildingId}/vertical-connectors/{connectorId}` | 수직 이동수단 수정 |
+| `DELETE` | `/api/v1/map-editor/buildings/{buildingId}/vertical-connectors/{connectorId}` | 수직 이동수단 삭제 |
+| `PUT` | `/api/v1/map-editor/buildings/{buildingId}/poi-mappings` | POI 외부 장소 매핑 저장 |
+
+### AI API
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/ai/floorplans/{floorplanId}/analyze` | 실내 도면 AI 분석 요청 |
+| `GET` | `/api/v1/ai/floorplans/{floorplanId}/detections` | 실내 도면 분석 결과 조회 |
+| `POST` | `/api/v1/ai/campuses/{campusMapId}/analyze` | 캠퍼스 지도 AI 분석 요청 |
+| `GET` | `/api/v1/ai/campuses/{campusMapId}/detections` | 캠퍼스 지도 분석 결과 조회 |
+
+### Building / Campus / Tenant API
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/buildings` | 건물 목록 조회 |
+| `POST` | `/api/v1/buildings` | 건물 생성 |
+| `POST` | `/api/v1/buildings/{buildingId}/floors` | 층 생성 |
+| `POST` | `/api/v1/buildings/{buildingId}/floors/{floorId}/floorplans` | 층 도면 업로드 |
+| `GET` | `/api/v1/buildings/{buildingId}/entrances` | 건물 출입구 조회 |
+| `POST` | `/api/v1/buildings/{buildingId}/entrances` | 건물 출입구 생성 |
+| `POST` | `/api/v1/buildings/{buildingId}/entrance-mappings` | 출입구와 실내 노드 매핑 |
+| `GET` | `/api/v1/campuses` | 캠퍼스 목록 조회 |
+| `POST` | `/api/v1/campuses` | 캠퍼스 생성 |
+| `POST` | `/api/v1/campuses/{campusId}/maps` | 캠퍼스 지도 업로드 |
+| `GET` | `/api/v1/tenants/me` | 내 Tenant 목록 조회 |
+| `POST` | `/api/v1/tenants/create` | Tenant 생성 |
+
+---
+
+## 🧪 로컬 실행 방법 (Local Development)
+
+### 1. 필수 환경
+
+* Java 17
+* Docker / Docker Compose
+* PostgreSQL + PostGIS
+* Elasticsearch 8.x
+* S3 호환 스토리지(MinIO 또는 AWS S3)
+* Kakao Local REST API Key
+* Tmap API Key
+
+### 2. 환경 변수 파일 준비
+
+로컬 실행에는 `.env`, DB 컨테이너 실행에는 `.db.local.env` 파일이 필요합니다. 실제 키 값은 커밋하지 않고 로컬 또는 배포 환경에서만 관리합니다.
+
+```properties
+POSTGRES_DB=insideout_db
+POSTGRES_USER=insideout_admin
+POSTGRES_PASSWORD=replace-with-local-password
+DB_PORT=5432
+
+S3_ENDPOINT=http://localhost:9000
+S3_PUBLIC_ENDPOINT=http://localhost:9000
+S3_REGION=ap-northeast-2
+S3_ACCESS_KEY=replace-with-access-key
+S3_SECRET_KEY=replace-with-secret-key
+S3_BUCKET=insideout-floorplan
+
+TMAP_API_KEY=replace-with-tmap-key
+KAKAO_REST_API_KEY=replace-with-kakao-key
+
+AI_SERVICE_URL=http://localhost:8000
+AI_API_KEY_HEADER=x-api-key
+AI_API_KEY=replace-with-local-ai-key
+```
+
+### 3. 인프라 실행
+
+PostGIS DB만 실행할 경우:
+
+```bash
+docker compose up -d db
+```
+
+Elasticsearch/Kibana를 별도로 실행할 경우:
+
+```bash
+docker compose -f docker-compose.search.yml up -d
+```
+
+### 4. 애플리케이션 실행
+
+```bash
+./gradlew bootRun
+```
+
+테스트 실행:
+
+```bash
+./gradlew test
+```
+
+빌드:
+
+```bash
+./gradlew bootJar
+```
+
+---
+
+## 🔎 Elasticsearch 초기 적재
+
+장소 자동완성 인덱스는 등록된 건물 데이터를 기반으로 `places_v1` 인덱스에 초기 적재할 수 있습니다. 최초 배포 또는 재색인 시에만 활성화하는 것을 권장합니다.
+
+```bash
+PLACE_SEARCH_BOOTSTRAP_ENABLED=true PLACE_SEARCH_BOOTSTRAP_BATCH_SIZE=500 ./gradlew bootRun
+```
+
+동작 특징:
+
+* PostgreSQL advisory lock으로 다중 인스턴스 중복 실행 방지
+* Bulk upsert 방식으로 멱등 실행 가능
+* 기본 실행 시에는 `PLACE_SEARCH_BOOTSTRAP_ENABLED=false` 유지
+
+자세한 내용은 [`docs/PLACE_SEARCH_BOOTSTRAP.md`](docs/PLACE_SEARCH_BOOTSTRAP.md)를 참고하세요.
+
+---
+
+## 🚢 배포 구성
+
+운영 배포는 Docker Compose 기반으로 구성되어 있습니다.
+
+| Service | Role |
+| :--- | :--- |
+| `app` | Spring Boot API Server |
+| `caddy` | HTTPS Reverse Proxy |
+| `db` | PostgreSQL + PostGIS |
+| `elasticsearch` | 장소 검색/자동완성 인덱스 |
+| `minio` | 도면 및 지도 이미지 저장소 |
+| `minio-init` | 배포 시 버킷 초기화 |
+
+배포 실행:
+
+```bash
+docker compose -f docker-compose.deploy.yml up -d --build
+```
+
+AI 서버를 같은 Compose 네트워크에서 함께 실행하는 경우:
+
+```bash
+docker compose -f docker-compose.deploy.yml -f docker-compose.deploy.ai.yml up -d --build
+```
+
+---
+
+## 📂 프로젝트 구조
+
+```text
+src/main/java/com/insideout/backend
+├── domain
+│   ├── ai            # AI 도면/캠퍼스 분석 연동
+│   ├── building      # 캠퍼스, 건물, 층, 도면, 출입구 관리
+│   ├── map           # 실내 지도 편집, Draft/Publish, Published Map 조회
+│   ├── navigation    # 실내외 통합 경로 탐색
+│   ├── place         # 장소 검색, 자동완성, 상세/근접 조회
+│   ├── tenant        # 멀티 테넌트 관리
+│   └── user          # 인증 및 사용자 조회
+├── global
+│   ├── apiPayload    # 공통 응답/예외 포맷
+│   ├── config        # OpenAPI, RestTemplate 등 공통 설정
+│   ├── infra         # Kakao, AI, S3 외부 인프라 설정
+│   └── security      # Spring Security + JWT
+└── resources
+    ├── db/migration  # Flyway migration
+    └── application*.yml
+```
+
+---
+
+## 🔥 기술적 도전 및 해결 과제 (Technical Challenges)
+
+### 1. 외부 장소와 등록 실내 POI의 단일 검색 응답 모델 구성
+
+* **문제:** Kakao Local 검색 결과와 Insideout 등록 건물/POI는 식별자, 좌표, 실내 지도 보유 여부가 서로 다릅니다.
+* **해결:** 검색 응답에 `externalApiId`, `buildingId`, `poiId`, `isRegistered`를 함께 내려주는 단일 DTO를 구성했습니다. 프론트엔드는 동일한 검색 목록에서 일반 장소와 실내 경로 탐색 가능한 장소를 구분하고, 상세 조회 및 길찾기 요청까지 같은 파이프라인으로 이어갈 수 있습니다.
+
+---
+
+### 2. 외부 경로 API 실패에도 가능한 경로를 반환하는 부분 성공 전략
+
+* **문제:** 도보, 자동차, 대중교통, 실내 라우팅은 각각 다른 외부/내부 데이터에 의존하므로 일부 수단만 실패할 수 있습니다.
+* **해결:** `routes`, `notFoundRouteTypes`, `failures`, `routeMessage`를 분리해 응답합니다. 하나의 이동 수단이 실패해도 전체 요청을 실패시키지 않고, 가능한 경로와 실패 사유를 함께 제공해 사용자 화면에서 자연스럽게 fallback UI를 구성할 수 있게 했습니다.
+
+---
+
+### 3. Draft 지도와 Published 지도의 분리
+
+* **문제:** 관리자가 편집 중인 지도 데이터가 즉시 사용자 서비스에 노출되면 검수 전 경로 오류가 발생할 수 있습니다.
+* **해결:** 편집 중인 데이터는 Draft MapVersion에 저장하고, 검수 완료 시 Published MapVersion으로 전환합니다. 사용자 앱은 Published 데이터만 조회하고, 관리자 앱은 Draft를 초기화·수정·배포하는 별도 플로우를 사용합니다.
+
+---
+
+### 4. 층간 이동을 포함한 그래프 라우팅 가중치 설계
+
+* **문제:** 실내 경로는 단순 2D 최단 거리뿐 아니라 엘리베이터, 계단, 장애물, 층 이동 비용을 함께 고려해야 합니다.
+* **해결:** 노드/엣지 그래프에 수직 이동수단과 장애물 가중치를 반영하고, 경로 옵션에 따라 계단/장애물 패널티를 다르게 적용했습니다. 이를 통해 빠른 길과 편안한 길을 같은 그래프 구조 위에서 계산할 수 있습니다.
+
+---
+
+### 5. AI 분석 결과를 운영 가능한 지도 데이터로 전환
+
+* **문제:** AI detection 결과는 그대로 사용자 길찾기에 사용할 수 있는 정제된 지도 데이터가 아닙니다.
+* **해결:** AI 결과를 Draft 초기 데이터로 변환하고, 관리자가 Node/Edge/POI/Zone을 직접 검수·보정한 뒤 Published Map으로 배포하는 구조를 채택했습니다. 자동화의 속도와 운영 데이터의 신뢰성을 동시에 확보했습니다.
+
+---
+
+## 🧾 공통 응답 포맷
+
+모든 API는 `ApiResponse` 래퍼를 통해 성공/실패 응답 구조를 통일합니다.
+
+```json
+{
+  "isSuccess": true,
+  "code": "COMMON200",
+  "message": "성공입니다.",
+  "result": {}
+}
+```
+
+예외는 도메인별 ErrorCode와 `GlobalExceptionHandler`를 통해 일관된 HTTP 응답으로 변환됩니다.
 
 
-
-
+---
 ## 🛠️ 기술 스택 (Tech Stack)
 
 ## 🛠️ 백엔드 기술 스택 및 채택 목적 (Backend Tech Stack)

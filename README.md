@@ -16,7 +16,81 @@
 
 ---
 
-## 🚀 백엔드 핵심 역할 (Core Responsibilities)
+## 🛠️ 기술 스택 (Tech Stack)
+
+### Core & Framework
+<div>
+  <img src="https://img.shields.io/badge/Java%2017-007396?style=for-the-badge&logo=openjdk&logoColor=white">
+  <img src="https://img.shields.io/badge/Spring%20Boot-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
+</div>
+
+### Security
+<div>
+  <img src="https://img.shields.io/badge/Spring%20Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white">
+  <img src="https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white">
+</div>
+
+### ORM / Data Access
+<div>
+  <img src="https://img.shields.io/badge/Spring%20Data%20JPA-6DB33F?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Hibernate-59666C?style=for-the-badge&logo=hibernate&logoColor=white">
+</div>
+
+### Database / Search
+<div>
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img src="https://img.shields.io/badge/PostGIS-2596BE?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white">
+</div>
+
+### Storage
+<div>
+  <img src="https://img.shields.io/badge/MinIO-C72E49?style=for-the-badge">
+  <img src="https://img.shields.io/badge/S3%20Compatible%20API-569A31?style=for-the-badge&logo=amazons3&logoColor=white">
+</div>
+
+### API / External API
+<div>
+  <img src="https://img.shields.io/badge/REST%20API-FF6B6B?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Kakao%20Map%20API-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000">
+  <img src="https://img.shields.io/badge/Tmap%20API-005BAC?style=for-the-badge">
+</div>
+
+### Deployment / CI-CD
+<div>
+  <img src="https://img.shields.io/badge/Microsoft%20Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white">
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white">
+</div>
+
+
+---
+
+## 📂 프로젝트 구조
+
+```text
+src/main/java/com/insideout/backend
+├── domain
+│   ├── ai            # AI 도면/캠퍼스 분석 연동
+│   ├── building      # 캠퍼스, 건물, 층, 도면, 출입구 관리
+│   ├── map           # 실내 지도 편집, Draft/Publish, Published Map 조회
+│   ├── navigation    # 실내외 통합 경로 탐색
+│   ├── place         # 장소 검색, 자동완성, 상세/근접 조회
+│   ├── tenant        # 멀티 테넌트 관리
+│   └── user          # 인증 및 사용자 조회
+├── global
+│   ├── apiPayload    # 공통 응답/예외 포맷
+│   ├── config        # OpenAPI, RestTemplate 등 공통 설정
+│   ├── infra         # Kakao, AI, S3 외부 인프라 설정
+│   └── security      # Spring Security + JWT
+└── resources
+    ├── db/migration  # Flyway migration
+    └── application*.yml
+```
+
+---
+
+## 🚀 백엔드 주요 기능
 
 ### 🔍 1. 등록 장소와 외부 장소를 통합하는 검색 API
 
@@ -134,31 +208,7 @@ Tmap의 도보·자동차·대중교통 경로와 자체 실내 그래프 라우
 | `GET` | `/api/v1/tenants/me` | 내 Tenant 목록 조회 |
 | `POST` | `/api/v1/tenants/create` | Tenant 생성 |
 
----
 
-## 📂 프로젝트 구조
-
-```text
-src/main/java/com/insideout/backend
-├── domain
-│   ├── ai            # AI 도면/캠퍼스 분석 연동
-│   ├── building      # 캠퍼스, 건물, 층, 도면, 출입구 관리
-│   ├── map           # 실내 지도 편집, Draft/Publish, Published Map 조회
-│   ├── navigation    # 실내외 통합 경로 탐색
-│   ├── place         # 장소 검색, 자동완성, 상세/근접 조회
-│   ├── tenant        # 멀티 테넌트 관리
-│   └── user          # 인증 및 사용자 조회
-├── global
-│   ├── apiPayload    # 공통 응답/예외 포맷
-│   ├── config        # OpenAPI, RestTemplate 등 공통 설정
-│   ├── infra         # Kakao, AI, S3 외부 인프라 설정
-│   └── security      # Spring Security + JWT
-└── resources
-    ├── db/migration  # Flyway migration
-    └── application*.yml
-```
-
----
 
 ## 🔥 기술적 도전 및 해결 과제 (Technical Challenges)
 
@@ -214,52 +264,6 @@ src/main/java/com/insideout/backend
 
 
 ---
-## 🛠️ 기술 스택 (Tech Stack)
-
-### Core & Framework
-<div>
-  <img src="https://img.shields.io/badge/Java%2017-007396?style=for-the-badge&logo=openjdk&logoColor=white">
-  <img src="https://img.shields.io/badge/Spring%20Boot-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
-</div>
-
-### Security
-<div>
-  <img src="https://img.shields.io/badge/Spring%20Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white">
-  <img src="https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white">
-</div>
-
-### ORM / Data Access
-<div>
-  <img src="https://img.shields.io/badge/Spring%20Data%20JPA-6DB33F?style=for-the-badge">
-  <img src="https://img.shields.io/badge/Hibernate-59666C?style=for-the-badge&logo=hibernate&logoColor=white">
-</div>
-
-### Database / Search
-<div>
-  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
-  <img src="https://img.shields.io/badge/PostGIS-2596BE?style=for-the-badge">
-  <img src="https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white">
-</div>
-
-### Storage
-<div>
-  <img src="https://img.shields.io/badge/MinIO-C72E49?style=for-the-badge">
-  <img src="https://img.shields.io/badge/S3%20Compatible%20API-569A31?style=for-the-badge&logo=amazons3&logoColor=white">
-</div>
-
-### API / External API
-<div>
-  <img src="https://img.shields.io/badge/REST%20API-FF6B6B?style=for-the-badge">
-  <img src="https://img.shields.io/badge/Kakao%20Map%20API-FFCD00?style=for-the-badge&logo=kakao&logoColor=000000">
-  <img src="https://img.shields.io/badge/Tmap%20API-005BAC?style=for-the-badge">
-</div>
-
-### Deployment / CI-CD
-<div>
-  <img src="https://img.shields.io/badge/Microsoft%20Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white">
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
-  <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white">
-</div>
 
 
 

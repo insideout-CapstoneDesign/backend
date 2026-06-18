@@ -15,17 +15,6 @@
 | 🔹 **Hybrid Navigation** <br> <sub>사용자 웹 - BE, FE</sub> | 🔹 **Auth, Search, Infra** <br> <sub>사용자 웹 - BE, FE</sub> | 🔹 **AI Map Builder** <br> <sub>관리자 웹 - AI, FE</sub> | 🔹 **Map Editor** <br> <sub>관리자 웹 - BE, FE</sub> |
 
 ---
-## 🔗 API 문서 및 운영 엔드포인트
-
-Springdoc OpenAPI 기반의 Swagger UI를 통해 서버 실행 후 API 명세를 확인할 수 있습니다.
-
-* **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
-* **OpenAPI JSON:** `http://localhost:8080/v3/api-docs`
-* **Health Check:** `http://localhost:8080/actuator/health`
-
-> 운영 환경에서는 Caddy Reverse Proxy를 통해 애플리케이션 컨테이너의 `8080` 포트를 외부 HTTPS 엔드포인트로 프록시합니다.
-
----
 
 ## 🚀 백엔드 핵심 역할 (Core Responsibilities)
 

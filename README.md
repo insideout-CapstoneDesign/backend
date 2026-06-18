@@ -273,6 +273,10 @@ Tmap의 도보·자동차·대중교통 경로와 자체 실내 그래프 라우
 
 
 ## 🔄 데이터 흐름도 (Data Flow)
+<img width="6468" height="3048" alt="image" src="https://github.com/user-attachments/assets/8aa6aa78-9a77-4ac9-adad-68c05fc5f0b2" />
 
 
 ## 💾 데이터베이스 모델링 (ERD)
+<img width="1768" height="1131" alt="image" src="https://github.com/user-attachments/assets/d5da5e2a-4968-40bc-a1ae-8e38c909a352" />
+
+

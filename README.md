@@ -216,8 +216,6 @@ src/main/java/com/insideout/backend
 ---
 ## 🛠️ 기술 스택 (Tech Stack)
 
-## 🛠️ 백엔드 기술 스택 및 채택 목적 (Backend Tech Stack)
-
 ### Core & Framework
 <div>
   <img src="https://img.shields.io/badge/Java%2017-007396?style=for-the-badge&logo=openjdk&logoColor=white">

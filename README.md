@@ -4,7 +4,17 @@
 > Insideout Backend는 사용자 웹앱과 관리자 웹앱이 공통으로 사용하는 API 서버입니다. 장소 검색, 실내외 통합 경로 탐색, AI 도면 분석 결과 관리, 지도 편집 Draft/Publish 파이프라인, 건물·층·출입구·POI 데이터 관리를 담당하며 상용 지도 API와 자체 실내 그래프 데이터를 연결해 최종 목적지까지 이어지는 하이브리드 내비게이션 서비스를 제공합니다.
 
 ---
+## 👥 팀원 소개 (Contributors)
 
+> **Insideout 프로젝트를 이끈 양양양말을 소개합니다.**
+
+
+| **차승은** | **이민지** | **김민준** | **김세현** |
+| :---: | :---: | :---: | :---: |
+| [<img src="https://github.com/user-attachments/assets/35081664-ee95-49bf-9bbf-0340df69f54b" height="180" width="130" style="border-radius: 8px;"><br/>](https://github.com/cktmddms) | [<img src="https://github.com/user-attachments/assets/8d75a543-b6ef-4a57-86c2-e06d93e9376d" height="180" width="130" style="border-radius: 8px;"><br/>](https://github.com/thisminji) | [<img src="https://github.com/user-attachments/assets/d6335e5f-31a8-4ab6-9432-1269227ae012" height="180" width="130" style="border-radius: 8px;"><br/>](https://github.com/minjune0) | [<img src="https://github.com/user-attachments/assets/40120ba5-e3c7-4048-9d54-cdfa837f7a6d" height="180" width="130" style="border-radius: 8px;"><br/>](https://github.com/sekong11) |
+| 🔹 **Hybrid Navigation** <br> <sub>사용자 웹 - BE, FE</sub> | 🔹 **Auth, Search, Infra** <br> <sub>사용자 웹 - BE, FE</sub> | 🔹 **AI Map Builder** <br> <sub>관리자 웹 - AI, FE</sub> | 🔹 **Map Editor** <br> <sub>관리자 웹 - BE, FE</sub> |
+
+---
 ## 🔗 API 문서 및 운영 엔드포인트
 
 Springdoc OpenAPI 기반의 Swagger UI를 통해 서버 실행 후 API 명세를 확인할 수 있습니다.

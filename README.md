@@ -58,9 +58,10 @@
 
 
 
-## 🛠️ 기술 스택 (Tech Stack)
 
 ## 🛠️ 기술 스택 (Tech Stack)
+
+## 🛠️ 백엔드 기술 스택 및 채택 목적 (Backend Tech Stack)
 
 ### Core & Framework
 <div>
@@ -100,6 +101,14 @@
   <img src="https://img.shields.io/badge/Tmap%20API-005BAC?style=for-the-badge">
 </div>
 
+### Deployment / CI-CD
+<div>
+  <img src="https://img.shields.io/badge/Microsoft%20Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white">
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white">
+</div>
+
+
 
 ## 🏗️ 시스템 아키텍처 (System Architecture)
 <img width="1284" height="1346" alt="image" src="https://github.com/user-attachments/assets/f370cdcf-9326-4523-aab4-935b1c500cef" />
@@ -107,3 +116,6 @@
 
 
 ## 🔄 데이터 흐름도 (Data Flow)
+
+
+## 💾 데이터베이스 모델링 (ERD)

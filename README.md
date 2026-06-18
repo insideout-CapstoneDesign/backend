@@ -55,3 +55,35 @@
 2. PR 제목: 이슈 제목과 동일하게 맞추거나 작업 성격이 한눈에 보이게 작성합니다.예: feat: 건물 관리자 JWT 로그인 구현 (#12)이슈 연결:
 3. PR 내용(Description) 상단에 Closes #이슈번호를 반드시 적어 머지 시 이슈가 자동 종료되도록 합니다.
 4. 코드 리뷰: 최소 **1명 이상의 팀원에게 Approve(승인)**를 받아야하며 리뷰를 모두 resolve해야 Merge 할 수 있습니다.
+
+
+
+## 🛠️ 기술 스택 (Tech Stack)
+
+### Core & Framework
+<div>
+  <img src="https://img.shields.io/badge/Java%2017-007396?style=for-the-badge&logo=openjdk&logoColor=white">
+  <img src="https://img.shields.io/badge/Spring%20Boot%203.x-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
+  <img src="https://img.shields.io/badge/Gradle-02303A?style=for-the-badge&logo=gradle&logoColor=white">
+</div>
+
+### Database & Search Engine
+<div>
+  <img src="https://img.shields.io/badge/MySQL%208.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white">
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white">
+  <img src="https://img.shields.io/badge/Elasticsearch%208.x-005571?style=for-the-badge&logo=elasticsearch&logoColor=white">
+</div>
+
+### Infrastructure & DevOps
+<div>
+  <img src="https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white">
+  <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white">
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+</div>
+
+
+## 🏗️ 시스템 아키텍처 (System Architecture)
+
+
+
+## 🔄 데이터 흐름도 (Data Flow)

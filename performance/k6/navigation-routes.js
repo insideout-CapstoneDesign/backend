@@ -12,8 +12,8 @@ export const options = {
     baseline_navigation_routes: {
       executor: 'ramping-vus',
       stages: [
-        { duration: '30s', target: Number(__ENV.VUS || 10) },
-        { duration: __ENV.DURATION || '1m', target: Number(__ENV.VUS || 10) },
+        { duration: '30s', target: numberEnv('VUS', 10) },
+        { duration: __ENV.DURATION || '1m', target: numberEnv('VUS', 10) },
         { duration: '30s', target: 0 },
       ],
     },
@@ -41,12 +41,12 @@ export default function () {
     'status is 200': (res) => res.status === 200,
     'response is successful': (res) => {
       const body = parseJson(res.body)
-      return body?.isSuccess === true || body?.result !== undefined
+      return body?.isSuccess === true
     },
   })
 
   failureRate.add(!ok)
-  sleep(Number(__ENV.SLEEP_SECONDS || 1))
+  sleep(numberEnv('SLEEP_SECONDS', 1))
 }
 
 function buildNavigationPayload() {
@@ -74,7 +74,15 @@ function routeTypesEnv() {
 
 function numberEnv(name, fallback) {
   const value = __ENV[name]
-  return value === undefined || value === '' ? fallback : Number(value)
+  if (value === undefined || value === '') {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid numeric ENV ${name}: ${value}`)
+  }
+  return parsed
 }
 
 function booleanEnv(name, fallback) {

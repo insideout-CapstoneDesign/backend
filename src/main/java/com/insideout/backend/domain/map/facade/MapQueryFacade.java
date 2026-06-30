@@ -145,10 +145,14 @@ public class MapQueryFacade {
         MapVersion version = mapVersion.get();
         evictStaleRoutingGraphCacheEntries(mapType, ownerId, version.getId());
         RoutingGraphCacheKey cacheKey = new RoutingGraphCacheKey(mapType, ownerId, version.getId());
-        return Optional.of(routingGraphCache.computeIfAbsent(
-                cacheKey,
-                key -> toRoutingGraph(mapType, ownerId, version)
-        ));
+        RoutingGraph cachedGraph = routingGraphCache.get(cacheKey);
+        if (cachedGraph == null) {
+            RoutingGraph loadedGraph = toRoutingGraph(mapType, ownerId, version);
+            RoutingGraph existingGraph = routingGraphCache.putIfAbsent(cacheKey, loadedGraph);
+            cachedGraph = existingGraph == null ? loadedGraph : existingGraph;
+        }
+
+        return Optional.of(cachedGraph.withObstacles(findActiveObstacles(mapType, ownerId)));
     }
 
     public void evictPublishedRoutingGraphCache(MapType mapType, UUID ownerId) {
@@ -246,7 +250,7 @@ public class MapQueryFacade {
                 .nodes(nodes)
                 .edges(edges)
                 .verticalLinks(verticalLinks)
-                .obstacles(findActiveObstacles(mapType, ownerId))
+                .obstacles(List.of())
                 .build();
     }
 
@@ -723,6 +727,18 @@ public class MapQueryFacade {
     ) {
         public Map<UUID, RoutingNode> nodeIndex() {
             return nodes.stream().collect(Collectors.toMap(RoutingNode::id, node -> node));
+        }
+
+        private RoutingGraph withObstacles(List<RoutingObstacle> currentObstacles) {
+            return new RoutingGraph(
+                    mapVersionId,
+                    mapType,
+                    mapImageUrl,
+                    nodes,
+                    edges,
+                    verticalLinks,
+                    currentObstacles
+            );
         }
     }
 

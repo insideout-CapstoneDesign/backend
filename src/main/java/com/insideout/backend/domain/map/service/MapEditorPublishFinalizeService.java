@@ -25,6 +25,8 @@ import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,7 +63,21 @@ public class MapEditorPublishFinalizeService {
         mapVersionRepository.save(draftMapVersion);
 
         updateBuildingPublishState(building);
-        mapQueryFacade.evictPublishedRoutingGraphCache(MapType.BUILDING, building.getId());
+        evictPublishedRoutingGraphCacheAfterCommit(building.getId());
+    }
+
+    private void evictPublishedRoutingGraphCacheAfterCommit(UUID buildingId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            mapQueryFacade.evictPublishedRoutingGraphCache(MapType.BUILDING, buildingId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                mapQueryFacade.evictPublishedRoutingGraphCache(MapType.BUILDING, buildingId);
+            }
+        });
     }
 
     private void archiveExistingPublishedVersions(UUID buildingId) {

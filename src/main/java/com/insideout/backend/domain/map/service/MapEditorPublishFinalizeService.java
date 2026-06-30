@@ -16,6 +16,7 @@ import com.insideout.backend.domain.map.entity.Poi;
 import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.domain.map.exception.MapErrorCode;
 import com.insideout.backend.domain.map.exception.MapException;
+import com.insideout.backend.domain.map.facade.MapQueryFacade;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
@@ -24,6 +25,8 @@ import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +45,7 @@ public class MapEditorPublishFinalizeService {
     private final NodeRepository nodeRepository;
     private final PoiRepository poiRepository;
     private final BuildingDirectorySyncService buildingDirectorySyncService;
+    private final MapQueryFacade mapQueryFacade;
     @PersistenceContext
     private final EntityManager entityManager;
 
@@ -59,6 +63,21 @@ public class MapEditorPublishFinalizeService {
         mapVersionRepository.save(draftMapVersion);
 
         updateBuildingPublishState(building);
+        evictPublishedRoutingGraphCacheAfterCommit(building.getId());
+    }
+
+    private void evictPublishedRoutingGraphCacheAfterCommit(UUID buildingId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            mapQueryFacade.evictPublishedRoutingGraphCache(MapType.BUILDING, buildingId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                mapQueryFacade.evictPublishedRoutingGraphCache(MapType.BUILDING, buildingId);
+            }
+        });
     }
 
     private void archiveExistingPublishedVersions(UUID buildingId) {

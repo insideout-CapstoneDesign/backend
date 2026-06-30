@@ -40,6 +40,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 /**
@@ -56,6 +58,8 @@ public class MapQueryFacade {
     private static final double REGISTERED_BUILDING_SEARCH_RADIUS_METERS = 50.0;
     private static final double INSTRUCTION_LANDMARK_RADIUS_PX = 180.0;
     private static final double POI_ANCHOR_SNAP_RADIUS_PX = 150.0;
+
+    private final ConcurrentMap<RoutingGraphCacheKey, RoutingGraph> routingGraphCache = new ConcurrentHashMap<>();
 
     private final NodeRepository nodeRepository;
     private final BuildingDirectoryRepository buildingDirectoryRepository;
@@ -134,7 +138,27 @@ public class MapQueryFacade {
             );
         };
 
-        return mapVersion.map(version -> toRoutingGraph(mapType, ownerId, version));
+        if (mapVersion.isEmpty()) {
+            return Optional.empty();
+        }
+
+        MapVersion version = mapVersion.get();
+        evictStaleRoutingGraphCacheEntries(mapType, ownerId, version.getId());
+        RoutingGraphCacheKey cacheKey = new RoutingGraphCacheKey(mapType, ownerId, version.getId());
+        return Optional.of(routingGraphCache.computeIfAbsent(
+                cacheKey,
+                key -> toRoutingGraph(mapType, ownerId, version)
+        ));
+    }
+
+    public void evictPublishedRoutingGraphCache(MapType mapType, UUID ownerId) {
+        routingGraphCache.keySet().removeIf(key -> key.matches(mapType, ownerId));
+    }
+
+    private void evictStaleRoutingGraphCacheEntries(MapType mapType, UUID ownerId, UUID currentMapVersionId) {
+        routingGraphCache.keySet().removeIf(key ->
+                key.matches(mapType, ownerId) && !Objects.equals(key.mapVersionId(), currentMapVersionId)
+        );
     }
 
     public Optional<String> findCurrentFloorplanImageUrl(UUID floorId) {
@@ -675,6 +699,16 @@ public class MapQueryFacade {
             CampusGate gate,
             double distance
     ) {
+    }
+
+    private record RoutingGraphCacheKey(
+            MapType mapType,
+            UUID ownerId,
+            UUID mapVersionId
+    ) {
+        private boolean matches(MapType targetMapType, UUID targetOwnerId) {
+            return mapType == targetMapType && Objects.equals(ownerId, targetOwnerId);
+        }
     }
 
     @Builder

@@ -16,6 +16,7 @@ import com.insideout.backend.domain.map.entity.Poi;
 import com.insideout.backend.domain.map.enums.MapType;
 import com.insideout.backend.domain.map.exception.MapErrorCode;
 import com.insideout.backend.domain.map.exception.MapException;
+import com.insideout.backend.domain.map.facade.MapQueryFacade;
 import com.insideout.backend.domain.map.repository.MapVersionRepository;
 import com.insideout.backend.domain.map.repository.NodeRepository;
 import com.insideout.backend.domain.map.repository.PoiRepository;
@@ -42,6 +43,7 @@ public class MapEditorPublishFinalizeService {
     private final NodeRepository nodeRepository;
     private final PoiRepository poiRepository;
     private final BuildingDirectorySyncService buildingDirectorySyncService;
+    private final MapQueryFacade mapQueryFacade;
     @PersistenceContext
     private final EntityManager entityManager;
 
@@ -59,6 +61,7 @@ public class MapEditorPublishFinalizeService {
         mapVersionRepository.save(draftMapVersion);
 
         updateBuildingPublishState(building);
+        mapQueryFacade.evictPublishedRoutingGraphCache(MapType.BUILDING, building.getId());
     }
 
     private void archiveExistingPublishedVersions(UUID buildingId) {
